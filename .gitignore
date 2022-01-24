@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+*.pkl
+
+input_output_model/
+logs/
+submit.sh
