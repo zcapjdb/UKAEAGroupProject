@@ -73,7 +73,7 @@ def main():
         val_loader = DataLoader(val_data, batch_size = hyper_parameters['batch_size'], shuffle = True, num_workers = 20)
         test_loader = DataLoader(test_data, batch_size = hyper_parameters['batch_size'], shuffle = True, num_workers = 20)
 
-        early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.00, patience = 3)
+        early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.00, patience = 4)
         progress = TQDMProgressBar(refresh_rate = 50)
 
         log_dir = "logs/" + target
