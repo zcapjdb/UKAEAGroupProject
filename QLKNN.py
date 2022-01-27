@@ -1,7 +1,10 @@
+<<<<<<< HEAD
+=======
 import pandas as pd 
 import numpy as np 
 import torch.nn as nn
 import torch
+<<<<<<< HEAD
 import pytorch_lightning as pl
 
 from torch.utils.data import Dataset
@@ -104,3 +107,5 @@ target_keys = ['dfeitg_gb_div_efiitg_gb', 'dfetem_gb_div_efetem_gb',
        'vfitem_gb_div_efetem_gb', 'vriitg_gb_div_efiitg_gb',
        'vritem_gb_div_efetem_gb', 'vteitg_gb_div_efiitg_gb',
         'vtiitg_gb_div_efiitg_gb',]
+=======
+
