@@ -17,8 +17,8 @@ from sklearn.preprocessing import StandardScaler
 from QLKNN import QLKNN, QLKNN_Dataset, train_keys, target_keys
 
 hyper_parameters = {
-    'batch_size': 2048,
-    'epochs': 25,
+    'batch_size': 4096,
+    'epochs': 50,
     'learning_rate': 0.001,
 }
 
@@ -29,12 +29,14 @@ comet_api_key = os.environ['COMET_API_KEY']
 comet_workspace = os.environ['COMET_WORKSPACE']
 comet_project_name = 'QLKNN-Regressor'
 
+run = "4"
+
 train_data_path = "data/QLKNN_train_data.pkl"
 val_data_path = "data/QLKNN_validation_data.pkl"
 test_data_path = "data/QLKNN_test_data.pkl"
 
 
-def prepare_model(target):
+def prepare_model(target, experiment_name):
     train_data = QLKNN_Dataset(train_data_path, columns = train_keys + [target])
     val_data = QLKNN_Dataset(val_data_path, columns = train_keys + [target])
     test_data = QLKNN_Dataset(test_data_path, columns = train_keys + [target])
@@ -52,19 +54,31 @@ def prepare_model(target):
     test_data.data = scaler.transform(test_data.data)
     test_data.data = pd.DataFrame(test_data.data, columns = train_keys + [target])
 
-    comet_logger = CometLogger(api_key = comet_api_key, project_name = comet_project_name,
-                        workspace = comet_workspace, save_dir = './logs', experiment_name = target)
+    comet_logger = CometLogger(api_key = comet_api_key, 
+        project_name = comet_project_name,
+        workspace = comet_workspace, 
+        save_dir = './logs', 
+        experiment_name = experiment_name)
 
     comet_logger.log_hyperparams(hyper_parameters)
+
+    comet_logger.experiment.log_dataframe_profile(train_data.data, name = 'train_data', minimal = True)
 
     return comet_logger, train_data, val_data, test_data
 
 
 def main():
 
+    comet_logger_main = CometLogger(api_key = comet_api_key, 
+        project_name = comet_project_name,
+        workspace = comet_workspace,
+        save_dir = './logs',
+        experiment_name = f'Run-{run}-main')
+
     for target in target_keys:
         print(f"Training model for {target}")
-        comet_logger, train_data, val_data, test_data = prepare_model(target)
+        experiment_name = f"Run-{run}-{target}"
+        comet_logger, train_data, val_data, test_data = prepare_model(target, experiment_name)
 
         model = QLKNN(n_input = 15, **hyper_parameters)
         print(model)
@@ -73,10 +87,10 @@ def main():
         val_loader = DataLoader(val_data, batch_size = hyper_parameters['batch_size'], shuffle = True, num_workers = 20)
         test_loader = DataLoader(test_data, batch_size = hyper_parameters['batch_size'], shuffle = True, num_workers = 20)
 
-        early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.00, patience = 4)
+        early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.00, patience = 10)
         progress = TQDMProgressBar(refresh_rate = 50)
 
-        log_dir = "logs/" + target
+        log_dir = "logs/" + f"Run-{run}/"+ experiment_name
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
 
@@ -84,17 +98,17 @@ def main():
             monitor = "val_loss",
             dirpath = log_dir,
             filename = "{target}-{epoch:02d}-{val_loss:.2f}",
-            save_top_k=1,
+            save_top_k = 1,
             mode="min",
         )
 
         trainer = Trainer(max_epochs = hyper_parameters['epochs'],
             logger = comet_logger,
             accelerator = accelerator,
-            strategy = DDPPlugin(find_unused_parameters=False),
+            strategy = DDPPlugin(find_unused_parameters = False),
             devices = num_gpu,
             callbacks = [early_stop_callback, progress, checkpoint_callback],
-            log_every_n_steps=50)
+            log_every_n_steps = 50)
 
         
         trainer.fit(model = model, train_dataloaders = train_loader, val_dataloaders = val_loader)
@@ -102,6 +116,7 @@ def main():
 
         trainer.test(dataloaders = test_loader)
 
+        comet_logger_main.log_metrics(model.metrics, step = target)
 
 if __name__ == '__main__':
     main()

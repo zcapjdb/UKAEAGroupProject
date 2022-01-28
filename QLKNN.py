@@ -1,10 +1,7 @@
-<<<<<<< HEAD
-=======
 import pandas as pd 
 import numpy as np 
 import torch.nn as nn
 import torch
-<<<<<<< HEAD
 import pytorch_lightning as pl
 
 from torch.utils.data import Dataset
@@ -30,19 +27,27 @@ class QLKNN(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay = 1e-5)
         return optimizer
 
+    def log_weights_and_biases(self):
+        for name, param in self.named_parameters():
+            self.log(name, param.data.cpu().numpy(), on_step=False, on_epoch=True, prog_bar=False, logger=True)
     
+    def log_gradients(self):
+        for name, param in self.named_parameters():
+            self.log(name, param.grad.data.cpu().numpy(), on_step=False, on_epoch=True, prog_bar=False, logger=True)
+
     def step(self, batch, batch_idx):
         X, y = batch
         pred = self.forward(X).squeeze()
-
         loss = self.loss_function
-        #loss = nn.MSELoss()
+
         return loss(pred.float(), y.float())
-        #return loss
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx)
         #tensorboard_logs = {'train_loss': loss}
+
+        self.log_gradients()
+        self.log_weights_and_biases()
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         #return {'loss': loss, 'log': tensorboard_logs}
@@ -73,13 +78,13 @@ class QLKNN(pl.LightningModule):
 
 
 class QLKNN_Dataset(Dataset):
-    def __init__(self, file_path, columns = None, train = True):
+    def __init__(self, file_path, columns = None):
         self.data = pd.read_pickle(file_path)
 
         if columns is not None:
             self.data = self.data[columns]
 
-        self.data = self.data.dropna()
+        self.data = self.data.dropna() 
         # convert all columns to float
         self.data = self.data.astype(float)
 
@@ -91,6 +96,22 @@ class QLKNN_Dataset(Dataset):
         X = self.data.iloc[idx, :-1].to_numpy()
         y = self.data.iloc[idx, -1]
         return X.astype(float), y.astype(float)
+
+
+class AE_Dataset(Dataset):
+    def __init__(self, file_path, columns = None):
+        self.data = pd.read_pickle(file_path)
+
+        if columns is not None:
+            self.data = self.data[columns]
+
+    def __len__(self):
+        # data is numpy array
+        return len(self.data.index)
+
+    def __getitem__(self, idx):
+        X = self.data.iloc[idx, :-1].to_numpy()
+        return X.astype(float)
 
 
 train_keys = ['Ane', 'Ate', 'Autor', 'Machtor', 'x', 'Zeff', 'gammaE', 
@@ -107,5 +128,4 @@ target_keys = ['dfeitg_gb_div_efiitg_gb', 'dfetem_gb_div_efetem_gb',
        'vfitem_gb_div_efetem_gb', 'vriitg_gb_div_efiitg_gb',
        'vritem_gb_div_efetem_gb', 'vteitg_gb_div_efiitg_gb',
         'vtiitg_gb_div_efiitg_gb',]
-=======
 
