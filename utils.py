@@ -1,0 +1,90 @@
+import pandas as pd
+import numpy as np
+import os
+import comet_ml
+
+from pytorch_lightning.loggers import CometLogger
+from sklearn.preprocessing import StandardScaler
+from torch.utils.data import Dataset
+
+
+
+def ScaleData(data: pd.DataFrame, scaler: object = None) -> pd.DataFrame:
+    """
+    Scale the data using the StandardScaler. If given a training set, fit the scaler to the training data.
+    If given a validation or test set, use the fitted scaler to scale the test data.
+
+    Inputs:
+        data: a pandas dataframe containing the data to be scaled
+        Train: a boolean indicating whether the data is a training set or not
+    
+    Outputs:
+        data: a pandas dataframe containing the scaled data
+        scaler: a StandardScaler object containing the fitted scaler if validating or testing
+    """
+    if scaler is None:
+        scaler = StandardScaler()
+        columns = data.columns
+        data = scaler.fit_transform(data) # scaler converts dataframe to numpy array!
+        data = pd.DataFrame(data, columns = columns)
+
+        return data, scaler
+
+    else:
+        columns = data.columns
+        data = scaler.transform(data)
+        data = pd.DataFrame(data, columns = columns)
+
+        return data
+
+def prepare_model(train_path: str, val_path: str, test_path: str, CustomDataset: Dataset, keys: list, comet_project_name: str, experiment_name: str):
+    """
+    Prepare the model for training.
+
+    Inputs:
+        train_path: the path to the training data
+        val_path: the path to the validation data
+        test_path: the path to the test data
+        keys: the dataframe columns to be used for training
+        experiment_name: the name of the experiment
+
+    Outputs:
+        train_data: a Dataset object containing the training data
+    """
+    train_data = CustomDataset(train_path, columns = keys)
+    scaler = train_data.scaler
+
+    val_data = CustomDataset(val_path, columns = keys, scale = scaler)
+    test_data = CustomDataset(test_path, columns = keys, scale = scaler)
+
+    comet_api_key = os.environ['COMET_API_KEY']
+    comet_workspace = os.environ['COMET_WORKSPACE']
+
+    comet_logger = CometLogger(api_key = comet_api_key, 
+        project_name = comet_project_name,
+        workspace = comet_workspace, 
+        save_dir = './logs', 
+        experiment_name = experiment_name)
+
+    # can have memory issues if too many data points
+    #comet_logger.experiment.log_dataframe_profile(train_data.data, name = 'train_data', minimal = True)
+
+    return comet_logger, train_data, val_data, test_data
+
+
+train_keys = ['Ane', 'Ate', 'Autor', 'Machtor', 'x', 'Zeff', 'gammaE', 
+              'q', 'smag', 'alpha', 'Ani1', 'Ati0', 'normni1', 'Ti_Te0', 'logNustar']
+
+target_keys = ['dfeitg_gb_div_efiitg_gb', 'dfetem_gb_div_efetem_gb',
+       'dfiitg_gb_div_efiitg_gb', 'dfitem_gb_div_efetem_gb', 'efeetg_gb',
+       'efeitg_gb_div_efiitg_gb', 'efetem_gb', 'efiitg_gb',
+       'efitem_gb_div_efetem_gb', 'pfeitg_gb_div_efiitg_gb',
+       'pfetem_gb_div_efetem_gb', 'pfiitg_gb_div_efiitg_gb',
+       'pfitem_gb_div_efetem_gb', 'vceitg_gb_div_efiitg_gb',
+       'vcetem_gb_div_efetem_gb', 'vciitg_gb_div_efiitg_gb',
+       'vcitem_gb_div_efetem_gb', 'vfiitg_gb_div_efiitg_gb',
+       'vfitem_gb_div_efetem_gb', 'vriitg_gb_div_efiitg_gb',
+       'vritem_gb_div_efetem_gb', 'vteitg_gb_div_efiitg_gb',
+        'vtiitg_gb_div_efiitg_gb',]
+
+

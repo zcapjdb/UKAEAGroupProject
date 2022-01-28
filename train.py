@@ -14,20 +14,17 @@ from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint
 from pytorch_lightning.plugins import DDPPlugin
 from sklearn.preprocessing import StandardScaler
 
-from QLKNN import QLKNN, QLKNN_Dataset, train_keys, target_keys
+from QLKNN import QLKNN, QLKNN_Dataset
+from utils import train_keys, target_keys, prepare_model 
 
 hyper_parameters = {
     'batch_size': 4096,
-    'epochs': 50,
+    'epochs': 75,
     'learning_rate': 0.001,
 }
 
 num_gpu = 3 # Make sure to request this in the batch script
 accelerator = 'gpu'
-
-comet_api_key = os.environ['COMET_API_KEY']
-comet_workspace = os.environ['COMET_WORKSPACE']
-comet_project_name = 'QLKNN-Regressor'
 
 run = "4"
 
@@ -35,37 +32,9 @@ train_data_path = "data/QLKNN_train_data.pkl"
 val_data_path = "data/QLKNN_validation_data.pkl"
 test_data_path = "data/QLKNN_test_data.pkl"
 
-
-def prepare_model(target, experiment_name):
-    train_data = QLKNN_Dataset(train_data_path, columns = train_keys + [target])
-    val_data = QLKNN_Dataset(val_data_path, columns = train_keys + [target])
-    test_data = QLKNN_Dataset(test_data_path, columns = train_keys + [target])
-
-    # maybe cleaner to do this in the dataset class?
-    scaler = StandardScaler()
-    scaler.fit(train_data.data)
-
-    train_data.data = scaler.transform(train_data.data) # scaler converts dataframe to numpy array!
-    train_data.data = pd.DataFrame(train_data.data, columns = train_keys + [target])
-
-    val_data.data = scaler.transform(val_data.data)
-    val_data.data = pd.DataFrame(val_data.data, columns = train_keys + [target])
-
-    test_data.data = scaler.transform(test_data.data)
-    test_data.data = pd.DataFrame(test_data.data, columns = train_keys + [target])
-
-    comet_logger = CometLogger(api_key = comet_api_key, 
-        project_name = comet_project_name,
-        workspace = comet_workspace, 
-        save_dir = './logs', 
-        experiment_name = experiment_name)
-
-    comet_logger.log_hyperparams(hyper_parameters)
-
-    comet_logger.experiment.log_dataframe_profile(train_data.data, name = 'train_data', minimal = True)
-
-    return comet_logger, train_data, val_data, test_data
-
+comet_api_key = os.environ['COMET_API_KEY']
+comet_workspace = os.environ['COMET_WORKSPACE']
+comet_project_name = 'QLKNN-Regressor'
 
 def main():
 
@@ -78,10 +47,15 @@ def main():
     for target in target_keys:
         print(f"Training model for {target}")
         experiment_name = f"Run-{run}-{target}"
-        comet_logger, train_data, val_data, test_data = prepare_model(target, experiment_name)
+        keys = train_keys + [target]
+
+        comet_logger, train_data, val_data, test_data = prepare_model(train_data_path, val_data_path,
+        test_data_path, QLKNN_Dataset, keys, comet_project_name, experiment_name)
 
         model = QLKNN(n_input = 15, **hyper_parameters)
         print(model)
+
+        comet_logger.log_hyperparams(hyper_parameters)
 
         train_loader = DataLoader(train_data, batch_size = hyper_parameters['batch_size'], shuffle = True, num_workers = 20)
         val_loader = DataLoader(val_data, batch_size = hyper_parameters['batch_size'], shuffle = True, num_workers = 20)
