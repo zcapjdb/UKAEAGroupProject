@@ -99,11 +99,14 @@ class AutoEncoderDataset(Dataset):
     """
     scaler = None # create scaler class instance
 
-    def __init__(self, file_path: str, columns = None):
+    def __init__(self, file_path: str, columns = None, train: bool = False):
         self.data = pd.read_pickle(file_path)
 
         if columns is not None:
             self.data = self.data[columns]
+        
+        if train: # ensures the class attribute is reset for every new training run
+            AutoEncoderDataset.scaler = None
 
     def scale(self, own_scaler: object = None):
         if own_scaler is not None:
