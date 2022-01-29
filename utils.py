@@ -5,8 +5,9 @@ import comet_ml
 
 from pytorch_lightning.loggers import CometLogger
 from sklearn.preprocessing import StandardScaler
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint
 from torch.utils.data import Dataset
-
 
 
 def ScaleData(data: pd.DataFrame, scaler: object = None) -> pd.DataFrame:
@@ -37,9 +38,16 @@ def ScaleData(data: pd.DataFrame, scaler: object = None) -> pd.DataFrame:
 
         return data
 
-def prepare_model(train_path: str, val_path: str, test_path: str, CustomDataset: Dataset, keys: list, comet_project_name: str, experiment_name: str):
+def prepare_model(
+    train_path: str,
+    val_path: str,
+    test_path: str,
+    CustomDataset: Dataset,
+    keys: list,
+    comet_project_name: str,
+    experiment_name: str):
     """
-    Prepare the model for training.
+    Prepare the data and logging for training.
 
     Inputs:
         train_path: the path to the training data
@@ -51,11 +59,14 @@ def prepare_model(train_path: str, val_path: str, test_path: str, CustomDataset:
     Outputs:
         train_data: a Dataset object containing the training data
     """
-    train_data = CustomDataset(train_path, columns = keys)
-    scaler = train_data.scaler
+    train_data = CustomDataset(train_path, columns = keys, train = True)
+    train_data.scale()
 
-    val_data = CustomDataset(val_path, columns = keys, scale = scaler)
-    test_data = CustomDataset(test_path, columns = keys, scale = scaler)
+    val_data = CustomDataset(val_path, columns = keys)
+    val_data.scale()
+
+    test_data = CustomDataset(test_path, columns = keys)
+    test_data.scale()
 
     comet_api_key = os.environ['COMET_API_KEY']
     comet_workspace = os.environ['COMET_WORKSPACE']
@@ -66,11 +77,40 @@ def prepare_model(train_path: str, val_path: str, test_path: str, CustomDataset:
         save_dir = './logs', 
         experiment_name = experiment_name)
 
-    # can have memory issues if too many data points
+    # can have memory issues if too many data points TODO: find out is there a way round this
     #comet_logger.experiment.log_dataframe_profile(train_data.data, name = 'train_data', minimal = True)
 
     return comet_logger, train_data, val_data, test_data
 
+def callbacks(directory: str, run: str, experiment_name: str, top_k: int = 1) -> list:
+    """
+    Prepare the callbacks for training.
+
+    Inputs:
+        directory: the directory to save the model
+        run: the run number for the model
+        experiment_name: the name of the experiment
+
+    Outputs:
+        callbacks: a list of callbacks to be used for training
+    """
+
+    log_dir = f"logs/{directory}/Run-{run}/{experiment_name}"
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.01, patience = 10)
+    progress = TQDMProgressBar(refresh_rate = 250)
+
+    checkpoint_callback = ModelCheckpoint(
+        monitor = "val_loss",
+        dirpath = log_dir,
+        filename = "{experiment_name}-{epoch:02d}-{val_loss:.2f}",
+        save_top_k = top_k,
+        mode="min",
+    )
+
+    return [early_stop_callback, progress, checkpoint_callback]
 
 train_keys = ['Ane', 'Ate', 'Autor', 'Machtor', 'x', 'Zeff', 'gammaE', 
               'q', 'smag', 'alpha', 'Ani1', 'Ati0', 'normni1', 'Ti_Te0', 'logNustar']

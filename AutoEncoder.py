@@ -1,69 +1,63 @@
-import numpy as np 
 import pandas as pd 
+import numpy as np 
 import torch.nn as nn
-
+import torch
 import pytorch_lightning as pl
 
+from torch.utils.data import Dataset
+from utils import ScaleData
 
-class Encoder(nn.Model): 
+class Encoder(nn.Module): 
     def __init__(self, latent_dims: int = 3, n_input: int = 15):
         super().__init__()
 
         self.encoder = nn.Sequential(
-            nn.Linear(n_input, 128),
-            nn.ReLu(),
-            nn.Linear(20, 10),
-            nn.ReLu(), 
+            nn.Linear(n_input, 10),
+            nn.ReLU(), 
             nn.Linear(10,5), 
-            nn.ReLu(),
+            nn.ReLU(),
             nn.Linear(5, latent_dims)
         )
     
     def forward(self, x): 
-        encoded = self.encoder(x)
+        encoded = self.encoder(x.float())
 
         return encoded
 
-class Decoder(nn.Model):
+class Decoder(nn.Module):
         def __init__(self, latent_dims: int = 3, n_output: int = 15):
             super().__init__()
 
             self.decoder = nn.Sequential(
                 nn.Linear(latent_dims,5),
-                nn.ReLu(), 
+                nn.ReLU(), 
                 nn.Linear(5, 10), 
-                nn.ReLu(), 
-                nn.Linear(10, 20), 
-                nn.ReLu(), 
-                nn.Linear(20, n_output)
+                nn.ReLU(), 
+                nn.Linear(10, n_output)
             )
 
         def forward(self, encoded):
-            decoded = self.decoder(encoded)
+            decoded = self.decoder(encoded.float())
 
             return decoded
 
-
-
-    
 
 class AutoEncoder(pl.LightningModule):
 
     def __init__(
         self,
+        encoder: nn.Module = Encoder,
+        decoder: nn.Module = Decoder,
         latent_dims: int = 3,
-        encoder: nn.Model = Encoder,
-        decoder: nn.Model = Decoder,
         n_input: int = 15,
-        n_output: int = 15,
-        batch_size: int,
-        epochs: int,
-        learning_rate: float
+        batch_size: int = 2048,
+        epochs: int = 100,
+        learning_rate: float = 0.001,
         ):
 
         super().__init__()
-        self.encoder = encoder()
-        self.decoder = decoder
+        self.encoder = encoder(latent_dims, n_input)
+        self.decoder = decoder(latent_dims, n_input)
 
     def forward(self, x):
         encoded = self.encoder(x)
@@ -71,18 +65,16 @@ class AutoEncoder(pl.LightningModule):
 
         return decoded
 
-
     def configure_optimizers(self, lr = 0.001):
         optimizer = torch.optim.Adam(self.parameters(), lr = lr, weight_decay = 1e-5)
         return optimizer
 
     def step(self, batch, batch_idx):
         X = batch
-        encoded = self.encoder(X)
-        decoded = self.decoder(encoded)
+        pred = self.forward(X).squeeze()
 
         MSE_loss = nn.MSELoss()
-        loss = MSE_loss(decoded, X)
+        loss = MSE_loss(X.float(), pred.float())
 
         return loss
 
@@ -101,18 +93,27 @@ class AutoEncoder(pl.LightningModule):
 
 
 
-class AE_Dataset(Dataset):
-    def __init__(self, file_path: str, columns = None, scale: object = None):
+class AutoEncoderDataset(Dataset):
+    """
+    Class that implements a PyTorch Dataset object for the autoencoder
+    """
+    scaler = None # create scaler class instance
+
+    def __init__(self, file_path: str, columns = None):
         self.data = pd.read_pickle(file_path)
 
         if columns is not None:
             self.data = self.data[columns]
 
-        if scale is None:
-            self.data, self.scaler = ScaleData(self.data)
+    def scale(self, own_scaler: object = None):
+        if own_scaler is not None:
+            self.data = ScaleData(self.data, own_scaler)
 
-        if scale is not None:
-            self.data = ScaleData(self.data, scale)
+        elif AutoEncoderDataset.scaler is None:
+            self.data, AutoEncoderDataset.scaler = ScaleData(self.data)
+
+        else:
+            self.data = ScaleData(self.data, AutoEncoderDataset.scaler)
 
     def __len__(self):
         return len(self.data.index)

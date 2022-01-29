@@ -9,7 +9,11 @@ from utils import ScaleData
 
 
 class QLKNN(pl.LightningModule):
-    def __init__(self, n_input: int = 15, batch_size: int = 4096, epochs: int = 50, learning_rate: float = 0.001,):
+    """
+    Class that implements QLKNN model as defined in the paper:
+    Fast modeling of turbulent transport in fusion plasmas using neural networks
+    """
+    def __init__(self, n_input: int = 15, batch_size: int = 2048, epochs: int = 50, learning_rate: float = 0.001):
         super().__init__()
         self.model = nn.Sequential(
            nn.Linear(n_input,128), 
@@ -24,8 +28,8 @@ class QLKNN(pl.LightningModule):
         X = self.model(x.float())
         return X
 
-    def configure_optimizers(self, lr = 0.001): # TODO why can't I use self.lr?
-        optimizer = torch.optim.Adam(self.parameters(), lr = lr, weight_decay = 1e-5)
+    def configure_optimizers(self, lr = 0.002): # TODO why can't I use self.lr?
+        optimizer = torch.optim.Adam(self.parameters(), lr = lr, weight_decay = 1e-4)
         return optimizer
 
     # TODO: make this work, currently param.data gives an error - 'NoneType' object has no attribute 'data'
@@ -78,8 +82,13 @@ class QLKNN(pl.LightningModule):
         return c_good + lambda_stab*k_stab
 
 
-class QLKNN_Dataset(Dataset):
-    def __init__(self, file_path: str, columns: list = None, scale: object = None):
+class QLKNNDataset(Dataset):
+    """
+    Class that implements a PyTorch Dataset object for the QLKNN model
+    """
+    scaler = None # create scaler class instance
+
+    def __init__(self, file_path: str, columns: list = None, train: bool = False):
         self.data = pd.read_pickle(file_path)
 
         if columns is not None:
@@ -87,11 +96,18 @@ class QLKNN_Dataset(Dataset):
 
         self.data = self.data.dropna() 
 
-        if scale is None:
-            self.data, self.scaler = ScaleData(self.data)
+        if train: # ensures the class attribute is reset for every new training run
+            QLKNNDataset.scaler = None
 
-        if scale is not None:
-            self.data = ScaleData(self.data, scale)
+    def scale(self, own_scaler: object = None):
+        if own_scaler is not None:
+            self.data = ScaleData(self.data, own_scaler)
+
+        elif QLKNNDataset.scaler is None:
+            self.data, QLKNNDataset.scaler = ScaleData(self.data)
+
+        else:
+            self.data = ScaleData(self.data, QLKNNDataset.scaler)
 
     def __len__(self):
         # data is numpy array
