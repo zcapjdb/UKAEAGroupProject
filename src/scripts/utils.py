@@ -6,7 +6,7 @@ import comet_ml
 from pytorch_lightning.loggers import CometLogger
 from sklearn.preprocessing import StandardScaler
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint
+from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint, StochasticWeightAveraging
 from torch.utils.data import Dataset
 
 
@@ -36,7 +36,7 @@ def ScaleData(data: pd.DataFrame, scaler: object = None) -> pd.DataFrame:
         data = scaler.transform(data)
         data = pd.DataFrame(data, columns = columns)
 
-        return data
+        return data, scaler
 
 def prepare_model(
     train_path: str,
@@ -74,7 +74,7 @@ def prepare_model(
     comet_logger = CometLogger(api_key = comet_api_key, 
         project_name = comet_project_name,
         workspace = comet_workspace, 
-        save_dir = './logs', 
+        save_dir = '/share/rcifdata/jbarr/UKAEAGroupProject/logs', #TODO: figure out how this works so this can be more general
         experiment_name = experiment_name)
 
     # can have memory issues if too many data points TODO: find out is there a way round this
@@ -95,12 +95,14 @@ def callbacks(directory: str, run: str, experiment_name: str, top_k: int = 1) ->
         callbacks: a list of callbacks to be used for training
     """
 
-    log_dir = f"logs/{directory}/Run-{run}/{experiment_name}"
+    log_dir = f"/share/rcifdata/jbarr/UKAEAGroupProject/logs/{directory}/Run-{run}/{experiment_name}"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.01, patience = 10)
+    early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.01, patience = 15)
     progress = TQDMProgressBar(refresh_rate = 250)
+
+    SWA = StochasticWeightAveraging(swa_epoch_start = 35) # TODO base this off max epochs
 
     checkpoint_callback = ModelCheckpoint(
         monitor = "val_loss",
@@ -110,7 +112,7 @@ def callbacks(directory: str, run: str, experiment_name: str, top_k: int = 1) ->
         mode="min",
     )
 
-    return [early_stop_callback, progress, checkpoint_callback]
+    return [early_stop_callback, progress, checkpoint_callback, SWA]
 
 train_keys = ['Ane', 'Ate', 'Autor', 'Machtor', 'x', 'Zeff', 'gammaE', 
               'q', 'smag', 'alpha', 'Ani1', 'Ati0', 'normni1', 'Ti_Te0', 'logNustar']

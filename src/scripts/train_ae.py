@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from pytorch_lightning.plugins import DDPPlugin
 
 from AutoEncoder import Encoder, Decoder, AutoEncoder, AutoEncoderDataset
-from utils import train_keys, target_keys, prepare_model, callbacks 
+from scripts.utils import train_keys, target_keys, prepare_model, callbacks 
 
 hyper_parameters = {
     'batch_size': 4096,
@@ -18,9 +18,9 @@ accelerator = 'gpu'
 
 run = "1"
 
-train_data_path = "data/QLKNN_train_data.pkl"
-val_data_path = "data/QLKNN_validation_data.pkl"
-test_data_path = "data/QLKNN_test_data.pkl"
+train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_train_data.pkl"
+val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_validation_data.pkl"
+test_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_test_data.pkl"
 
 comet_project_name = 'AutoEncoder'
 
@@ -41,7 +41,7 @@ def main():
     # Create data loaders
     train_loader = DataLoader(train_data, batch_size = hyper_parameters['batch_size'], shuffle = True, num_workers = 20)
     val_loader = DataLoader(val_data, batch_size = hyper_parameters['batch_size'], shuffle = False, num_workers = 20)
-    test_loader = DataLoader(test_data, batch_size = hyper_parameters['batch_size'], shuffle = Fa;se, num_workers = 20)
+    test_loader = DataLoader(test_data, batch_size = hyper_parameters['batch_size'], shuffle = False, num_workers = 20)
 
     # Create callbacks
     early_stop_callback, progress, checkpoint_callback = callbacks(
