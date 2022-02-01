@@ -41,7 +41,7 @@ def main():
     # Create data loaders
     train_loader = DataLoader(train_data, batch_size = hyper_parameters['batch_size'], shuffle = True, num_workers = 20)
     val_loader = DataLoader(val_data, batch_size = hyper_parameters['batch_size'], shuffle = False, num_workers = 20)
-    test_loader = DataLoader(test_data, batch_size = hyper_parameters['batch_size'], shuffle = Fa;se, num_workers = 20)
+    test_loader = DataLoader(test_data, batch_size = hyper_parameters['batch_size'], shuffle = False, num_workers = 20)
 
     # Create callbacks
     early_stop_callback, progress, checkpoint_callback = callbacks(

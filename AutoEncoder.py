@@ -106,17 +106,13 @@ class AutoEncoderDataset(Dataset):
             self.data = self.data[columns]
         
         if train: # ensures the class attribute is reset for every new training run
-            AutoEncoderDataset.scaler = None
+            AutoEncoderDataset.scaler, self.scaler = None, None
 
     def scale(self, own_scaler: object = None):
         if own_scaler is not None:
             self.data = ScaleData(self.data, own_scaler)
 
-        elif AutoEncoderDataset.scaler is None:
-            self.data, AutoEncoderDataset.scaler = ScaleData(self.data)
-
-        else:
-            self.data = ScaleData(self.data, AutoEncoderDataset.scaler)
+        self.data, AutoEncoderDataset.scaler = ScaleData(self.data, self.scaler)
 
     def __len__(self):
         return len(self.data.index)

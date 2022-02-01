@@ -6,7 +6,7 @@ import comet_ml
 from pytorch_lightning.loggers import CometLogger
 from sklearn.preprocessing import StandardScaler
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint
+from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint, StochasticWeightAveraging
 from torch.utils.data import Dataset
 
 
@@ -36,7 +36,7 @@ def ScaleData(data: pd.DataFrame, scaler: object = None) -> pd.DataFrame:
         data = scaler.transform(data)
         data = pd.DataFrame(data, columns = columns)
 
-        return data
+        return data, scaler
 
 def prepare_model(
     train_path: str,
@@ -99,8 +99,10 @@ def callbacks(directory: str, run: str, experiment_name: str, top_k: int = 1) ->
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.01, patience = 10)
+    early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.01, patience = 15)
     progress = TQDMProgressBar(refresh_rate = 250)
+
+    SWA = StochasticWeightAveraging(swa_epoch_start = 35) # TODO base this off max epochs
 
     checkpoint_callback = ModelCheckpoint(
         monitor = "val_loss",
@@ -110,7 +112,7 @@ def callbacks(directory: str, run: str, experiment_name: str, top_k: int = 1) ->
         mode="min",
     )
 
-    return [early_stop_callback, progress, checkpoint_callback]
+    return [early_stop_callback, progress, checkpoint_callback, SWA]
 
 train_keys = ['Ane', 'Ate', 'Autor', 'Machtor', 'x', 'Zeff', 'gammaE', 
               'q', 'smag', 'alpha', 'Ani1', 'Ati0', 'normni1', 'Ti_Te0', 'logNustar']

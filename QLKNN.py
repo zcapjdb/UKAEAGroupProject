@@ -97,17 +97,13 @@ class QLKNNDataset(Dataset):
         self.data = self.data.dropna() 
 
         if train: # ensures the class attribute is reset for every new training run
-            QLKNNDataset.scaler = None
+            QLKNNDataset.scaler, self.scaler = None, None
 
     def scale(self, own_scaler: object = None):
         if own_scaler is not None:
             self.data = ScaleData(self.data, own_scaler)
 
-        elif QLKNNDataset.scaler is None:
-            self.data, QLKNNDataset.scaler = ScaleData(self.data)
-
-        else:
-            self.data = ScaleData(self.data, QLKNNDataset.scaler)
+        self.data, QLKNNDataset.scaler = ScaleData(self.data, self.scaler)
 
     def __len__(self):
         # data is numpy array
@@ -117,3 +113,6 @@ class QLKNNDataset(Dataset):
         X = self.data.iloc[idx, :-1].to_numpy()
         y = self.data.iloc[idx, -1]
         return X.astype(float), y.astype(float)
+
+if __name__ == "__main__":
+    pass
