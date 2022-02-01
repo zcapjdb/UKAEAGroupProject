@@ -5,7 +5,7 @@ import torch
 import pytorch_lightning as pl
 
 from torch.utils.data import Dataset
-from utils import ScaleData
+from scripts.utils import ScaleData
 
 
 class QLKNN(pl.LightningModule):

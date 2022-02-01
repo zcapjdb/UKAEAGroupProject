@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from pytorch_lightning.plugins import DDPPlugin
 
 from QLKNN import QLKNN, QLKNNDataset
-from utils import train_keys, target_keys, prepare_model, callbacks 
+from scripts.utils import train_keys, target_keys, prepare_model, callbacks 
 
 hyper_parameters = {
     'batch_size': 1024,
@@ -18,9 +18,9 @@ accelerator = 'gpu'
 
 run = "5"
 
-train_data_path = "data/QLKNN_train_data.pkl"
-val_data_path = "data/QLKNN_validation_data.pkl"
-test_data_path = "data/QLKNN_test_data.pkl"
+train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_train_data.pkl"
+val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_validation_data.pkl"
+test_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_test_data.pkl"
 
 comet_project_name = 'QLKNN-Regressor'
 

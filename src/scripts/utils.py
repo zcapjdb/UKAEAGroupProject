@@ -74,7 +74,7 @@ def prepare_model(
     comet_logger = CometLogger(api_key = comet_api_key, 
         project_name = comet_project_name,
         workspace = comet_workspace, 
-        save_dir = './logs', 
+        save_dir = '/share/rcifdata/jbarr/UKAEAGroupProject/logs', #TODO: figure out how this works so this can be more general
         experiment_name = experiment_name)
 
     # can have memory issues if too many data points TODO: find out is there a way round this
@@ -95,7 +95,7 @@ def callbacks(directory: str, run: str, experiment_name: str, top_k: int = 1) ->
         callbacks: a list of callbacks to be used for training
     """
 
-    log_dir = f"logs/{directory}/Run-{run}/{experiment_name}"
+    log_dir = f"/share/rcifdata/jbarr/UKAEAGroupProject/logs/{directory}/Run-{run}/{experiment_name}"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
