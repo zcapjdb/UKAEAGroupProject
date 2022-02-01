@@ -87,15 +87,15 @@ def grid_search(build_fn, parameters, train_data, val_data):
             
             model.compile(optimizer = 'adam', loss ='binary_crossentropy', metrics = 'acc')
             
-            history = model.fit(x_train, y_train,batch_size = 4096, epochs =25)
+            history = model.fit(x_train, y_train,batch_size = 4096, epochs = 25, verbose = 2)
             
-            evaluate = model.evaluate(x_val, y_val, batch_sze = 4096)
+            evaluate = model.evaluate(x_val, y_val, batch_size = 4096)
             
                         
             trial_dict = {
                 'layers': i,
                 'nodes': node,
-                'history': history, 
+                'history': history.history, 
                 'perfomance': evaluate
             }
             
@@ -105,10 +105,13 @@ def grid_search(build_fn, parameters, train_data, val_data):
                 results_dict['best_model'] = trial_dict
         
             
-            results_dict['trial'+str(counter)] = trial_dict
+            results_dict['trial_'+str(counter)] = trial_dict
             
-            counter += 1
+            file_name = f'./grid_search/trial_{str(counter)}.pkl'
+            with open(file_name, 'wb') as file:
+                pickle.dump(trial_dict, file)    
 
+            counter += 1
     return results_dict
 
 def build_classifier(n_layers,nodes):
