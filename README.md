@@ -20,14 +20,18 @@ Initial data exploration can also be found in [DataExploration.ipynb](src/notebo
 ## Missing Outputs:
 A major difficulty in applying a neural network surrogate model to the data is that QuaLiKiz, which is used to train the surrogate, does not always map an input to an output.
 
-It is therefore of interest to try and understand why this is the case. To do so a classifier is trained on the model inputs to determine if a given set of inputs gives a corresponding output. TODO: add link to Thandi's notebook
+It is therefore of interest to try and understand why this is the case. To do so a classifier is trained on the model inputs to determine if a given set of inputs gives a corresponding output. Classifier and results are shown in [Classifier.ipynb](src/notebooks/Classifier.ipynb) with hyperparameter tuning performed in [classifier_optimisation.ipynb](src/notebooks/classifier_optimisation.ipynb)
 
 ## QLKNN Reproduction:
-The QLKNN model is defined in [QLKNN.py](src/scripts/QLKNN.py).
-Trained using [train.py](src/scripts/train.py)
-Results evaluated in [RegressionOutputs.ipynb](src/notebooks/RegressionOutputs.ipynb).
+-The QLKNN model is defined in [QLKNN.py](src/scripts/QLKNN.py)
+
+-Trained using [train.py](src/scripts/train.py)
+
+-Results evaluated in [RegressionOutputs.ipynb](src/notebooks/RegressionOutputs.ipynb)
 
 ## Autoencoder:
-The autoencoder is defined in [Autoencoder.py](src/scripts/Autoencoder.py).
-Trained using [train_ae.py](src/scripts/train_ae.py)
-Results evaluated in [AutoencoderOutputs.ipynb](src/notebooks/AutoencoderOutputs.ipynb). TODO: This is not yet implemented.
+-The autoencoder is defined in [AutoEncoder.py](src/scripts/AutoEncoder.py)
+
+-Trained using [train_ae.py](src/scripts/train_ae.py)
+
+-Results evaluated in [AutoEncoderOutputs.ipynb](src/notebooks/AutoEncoderOutputs.ipynb). TODO: This is not yet implemented
