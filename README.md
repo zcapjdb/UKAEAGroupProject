@@ -36,5 +36,5 @@ It is therefore of interest to try and understand why this is the case. To do so
 
 -Results evaluated in [AutoEncoderOutputs.ipynb](src/notebooks/AutoEncoderOutputs.ipynb). TODO: This is not yet implemented
 
-## Gaussian Proccess:
--One dimensional gaussian processes is trained and plotted in [GaussianProcess.ipynb](src/notebooks/GaussianProcess.ipynb) 
+## Gaussian Process:
+-One dimensional gaussian processes are trained and plotted in [GaussianProcess.ipynb](src/notebooks/GaussianProcess.ipynb) 
