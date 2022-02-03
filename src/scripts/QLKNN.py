@@ -1,17 +1,19 @@
-<<<<<<< HEAD
-=======
 import pandas as pd 
 import numpy as np 
 import torch.nn as nn
 import torch
-<<<<<<< HEAD
 import pytorch_lightning as pl
 
 from torch.utils.data import Dataset
+from scripts.utils import ScaleData
 
 
 class QLKNN(pl.LightningModule):
-    def __init__(self, n_input, batch_size, epochs, learning_rate):
+    """
+    Class that implements QLKNN model as defined in the paper:
+    Fast modeling of turbulent transport in fusion plasmas using neural networks
+    """
+    def __init__(self, n_input: int = 15, batch_size: int = 2048, epochs: int = 50, learning_rate: float = 0.001):
         super().__init__()
         self.model = nn.Sequential(
            nn.Linear(n_input,128), 
@@ -26,23 +28,32 @@ class QLKNN(pl.LightningModule):
         X = self.model(x.float())
         return X
 
-    def configure_optimizers(self, lr=0.001):
-        optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay = 1e-5)
+    def configure_optimizers(self, lr = 0.002): # TODO why can't I use self.lr?
+        optimizer = torch.optim.Adam(self.parameters(), lr = lr, weight_decay = 1e-4)
         return optimizer
 
+    # TODO: make this work, currently param.data gives an error - 'NoneType' object has no attribute 'data'
+    # def log_weights_and_biases(self):
+    #     for name, param in self.named_parameters():
+    #         self.log(name, param.data.cpu().numpy(), on_step=False, on_epoch=True, prog_bar=False, logger=True)
     
+    # def log_gradients(self):
+    #     for name, param in self.named_parameters():
+    #         self.log(name, param.grad.data.cpu().numpy(), on_step=False, on_epoch=True, prog_bar=False, logger=True)
+
     def step(self, batch, batch_idx):
         X, y = batch
         pred = self.forward(X).squeeze()
-
         loss = self.loss_function
-        #loss = nn.MSELoss()
+
         return loss(pred.float(), y.float())
-        #return loss
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx)
         #tensorboard_logs = {'train_loss': loss}
+
+        #self.log_gradients()
+        #self.log_weights_and_biases()
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         #return {'loss': loss, 'log': tensorboard_logs}
@@ -51,7 +62,6 @@ class QLKNN(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx)
         self.log("val_loss", loss, on_step=True, on_epoch=True, sync_dist=True, logger = True)
-
 
     def test_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx)
@@ -72,16 +82,28 @@ class QLKNN(pl.LightningModule):
         return c_good + lambda_stab*k_stab
 
 
-class QLKNN_Dataset(Dataset):
-    def __init__(self, file_path, columns = None, train = True):
+class QLKNNDataset(Dataset):
+    """
+    Class that implements a PyTorch Dataset object for the QLKNN model
+    """
+    scaler = None # create scaler class instance
+
+    def __init__(self, file_path: str, columns: list = None, train: bool = False):
         self.data = pd.read_pickle(file_path)
 
         if columns is not None:
             self.data = self.data[columns]
 
-        self.data = self.data.dropna()
-        # convert all columns to float
-        self.data = self.data.astype(float)
+        self.data = self.data.dropna() 
+
+        if train: # ensures the class attribute is reset for every new training run
+            QLKNNDataset.scaler, self.scaler = None, None
+
+    def scale(self, own_scaler: object = None):
+        if own_scaler is not None:
+            self.data = ScaleData(self.data, own_scaler)
+
+        self.data, QLKNNDataset.scaler = ScaleData(self.data, self.scaler)
 
     def __len__(self):
         # data is numpy array
@@ -92,20 +114,5 @@ class QLKNN_Dataset(Dataset):
         y = self.data.iloc[idx, -1]
         return X.astype(float), y.astype(float)
 
-
-train_keys = ['Ane', 'Ate', 'Autor', 'Machtor', 'x', 'Zeff', 'gammaE', 
-              'q', 'smag', 'alpha', 'Ani1', 'Ati0', 'normni1', 'Ti_Te0', 'logNustar']
-
-target_keys = ['dfeitg_gb_div_efiitg_gb', 'dfetem_gb_div_efetem_gb',
-       'dfiitg_gb_div_efiitg_gb', 'dfitem_gb_div_efetem_gb', 'efeetg_gb',
-       'efeitg_gb_div_efiitg_gb', 'efetem_gb', 'efiitg_gb',
-       'efitem_gb_div_efetem_gb', 'pfeitg_gb_div_efiitg_gb',
-       'pfetem_gb_div_efetem_gb', 'pfiitg_gb_div_efiitg_gb',
-       'pfitem_gb_div_efetem_gb', 'vceitg_gb_div_efiitg_gb',
-       'vcetem_gb_div_efetem_gb', 'vciitg_gb_div_efiitg_gb',
-       'vcitem_gb_div_efetem_gb', 'vfiitg_gb_div_efiitg_gb',
-       'vfitem_gb_div_efetem_gb', 'vriitg_gb_div_efiitg_gb',
-       'vritem_gb_div_efetem_gb', 'vteitg_gb_div_efiitg_gb',
-        'vtiitg_gb_div_efiitg_gb',]
-=======
-
+if __name__ == "__main__":
+    pass
