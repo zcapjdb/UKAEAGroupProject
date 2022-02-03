@@ -8,15 +8,15 @@ from AutoEncoder import Encoder, Decoder, AutoEncoder, AutoEncoderDataset
 from scripts.utils import train_keys, target_keys, prepare_model, callbacks 
 
 hyper_parameters = {
-    'batch_size': 4096,
+    'batch_size': 2048,
     'epochs': 100,
-    'learning_rate': 0.001,
+    'learning_rate': 0.002,
 }
 
 num_gpu = 3 # Make sure to request this in the batch script
 accelerator = 'gpu'
 
-run = "1"
+run = "3"
 
 train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_train_data.pkl"
 val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_validation_data.pkl"
@@ -32,7 +32,7 @@ def main():
     test_data_path, AutoEncoderDataset, keys, comet_project_name, experiment_name)
 
     # Create model
-    model = AutoEncoder(n_input = 15, **hyper_parameters)
+    model = AutoEncoder(n_input = 15, latent_dims = 2 **hyper_parameters)
     print(model)
 
     # Log hyperparameters
@@ -44,8 +44,8 @@ def main():
     test_loader = DataLoader(test_data, batch_size = hyper_parameters['batch_size'], shuffle = False, num_workers = 20)
 
     # Create callbacks
-    early_stop_callback, progress, checkpoint_callback = callbacks(
-        directory = comet_project_name, run = run, experiment_name = experiment_name, top_k = 5)
+    callback_list = callbacks(
+        directory = comet_project_name, run = run, experiment_name = experiment_name, top_k = 3)
 
     # Create trainer
     trainer = Trainer(max_epochs = hyper_parameters['epochs'],
@@ -53,7 +53,7 @@ def main():
         accelerator = accelerator,
         strategy = DDPPlugin(find_unused_parameters = False),
         devices = num_gpu,
-        callbacks = [early_stop_callback, progress, checkpoint_callback],
+        callbacks = callback_list,
         log_every_n_steps = 50)
 
     # Train model
