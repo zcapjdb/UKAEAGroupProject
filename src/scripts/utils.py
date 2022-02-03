@@ -99,7 +99,7 @@ def callbacks(directory: str, run: str, experiment_name: str, top_k: int = 1) ->
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.01, patience = 15)
+    early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.0, patience = 25)
     progress = TQDMProgressBar(refresh_rate = 250)
 
     SWA = StochasticWeightAveraging(swa_epoch_start = 35) # TODO base this off max epochs

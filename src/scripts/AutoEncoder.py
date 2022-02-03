@@ -52,7 +52,7 @@ class AutoEncoder(pl.LightningModule):
         n_input: int = 15,
         batch_size: int = 2048,
         epochs: int = 100,
-        learning_rate: float = 0.001,
+        learning_rate: float = 0.002,
         ):
 
         super().__init__()
@@ -65,8 +65,8 @@ class AutoEncoder(pl.LightningModule):
 
         return decoded
 
-    def configure_optimizers(self, lr = 0.002):
-        optimizer = torch.optim.Adam(self.parameters(), lr = lr, weight_decay = 1e-5)
+    def configure_optimizers(self, lr = 0.005):
+        optimizer = torch.optim.Adam(self.parameters(), lr = lr, weight_decay = 1e-4)
         return optimizer
 
     def step(self, batch, batch_idx):

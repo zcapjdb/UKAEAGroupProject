@@ -16,7 +16,7 @@ hyper_parameters = {
 num_gpu = 3 # Make sure to request this in the batch script
 accelerator = 'gpu'
 
-run = "3"
+run = "4"
 
 train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_train_data.pkl"
 val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_validation_data.pkl"
@@ -32,7 +32,7 @@ def main():
     test_data_path, AutoEncoderDataset, keys, comet_project_name, experiment_name)
 
     # Create model
-    model = AutoEncoder(n_input = 15, latent_dims = 2 **hyper_parameters)
+    model = AutoEncoder(n_input = 15, latent_dims = 3, **hyper_parameters)
     print(model)
 
     # Log hyperparameters
