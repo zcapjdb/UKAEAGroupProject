@@ -5,7 +5,7 @@ import torch
 import pytorch_lightning as pl
 
 from torch.utils.data import Dataset
-from utils import ScaleData
+from scripts.utils import ScaleData
 
 class Encoder(nn.Module): 
     def __init__(self, latent_dims: int = 3, n_input: int = 15):
@@ -52,7 +52,7 @@ class AutoEncoder(pl.LightningModule):
         n_input: int = 15,
         batch_size: int = 2048,
         epochs: int = 100,
-        learning_rate: float = 0.001,
+        learning_rate: float = 0.002,
         ):
 
         super().__init__()
@@ -65,8 +65,8 @@ class AutoEncoder(pl.LightningModule):
 
         return decoded
 
-    def configure_optimizers(self, lr = 0.001):
-        optimizer = torch.optim.Adam(self.parameters(), lr = lr, weight_decay = 1e-5)
+    def configure_optimizers(self, lr = 0.005):
+        optimizer = torch.optim.Adam(self.parameters(), lr = lr, weight_decay = 1e-4)
         return optimizer
 
     def step(self, batch, batch_idx):
