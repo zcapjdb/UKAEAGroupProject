@@ -35,3 +35,6 @@ It is therefore of interest to try and understand why this is the case. To do so
 -Trained using [train_ae.py](src/scripts/train_ae.py)
 
 -Results evaluated in [AutoEncoderOutputs.ipynb](src/notebooks/AutoEncoderOutputs.ipynb). TODO: This is not yet implemented
+
+## Gaussian Proccess:
+-One dimensional gaussian processes is trained and plotted in [GaussianProcess.ipynb](src/notebooks/GaussianProcess.ipynb) 
