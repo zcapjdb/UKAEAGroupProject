@@ -10,7 +10,7 @@ Repository for the UCL CDT in DIS group project with UKAEA.
 
 ## Installation
 TODO: add in requirements.txt
-To install the package run: `python setup.py install`
+To install the package run: `pip install .` in the root directory (installation via a setup.py file is deprecated). If you wish to make changes to the package you can install using `pip install -e .` which will install the package in editable mode.
 
 ## Data Preparation:
 The models used in the project take the .h5 file provided and convert it to pickled dataframes. The data is also split into a training, validation and test set at this point. This is done in [QLKNNDataPreparation.ipynb](src/notebooks/QLKNNDataPreparation.ipynb).
