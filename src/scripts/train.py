@@ -10,7 +10,7 @@ from scripts.utils import train_keys, target_keys, prepare_model, callbacks
 hyper_parameters = {
     'batch_size': 1024,
     'epochs': 100,
-    'learning_rate': 0.002, # TODO: setting lr currently doesn't work
+    'learning_rate': 0.002, 
 }
 
 num_gpu = 3 # Make sure to request this in the batch script
