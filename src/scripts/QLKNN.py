@@ -28,8 +28,8 @@ class QLKNN(pl.LightningModule):
         X = self.model(x.float())
         return X
 
-    def configure_optimizers(self, lr = 0.002): # TODO why can't I use self.lr?
-        optimizer = torch.optim.Adam(self.parameters(), lr = lr, weight_decay = 1e-4)
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr = self.lr, weight_decay = 1e-4)
         return optimizer
 
     # TODO: make this work, currently param.data gives an error - 'NoneType' object has no attribute 'data'

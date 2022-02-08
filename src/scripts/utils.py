@@ -82,7 +82,7 @@ def prepare_model(
 
     return comet_logger, train_data, val_data, test_data
 
-def callbacks(directory: str, run: str, experiment_name: str, top_k: int = 1) -> list:
+def callbacks(directory: str, run: str, experiment_name: str, top_k: int = 1, patience = 25, swa_epoch = 75) -> list:
     """
     Prepare the callbacks for training.
 
@@ -99,10 +99,10 @@ def callbacks(directory: str, run: str, experiment_name: str, top_k: int = 1) ->
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.0, patience = 25)
+    early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 0.0, patience = patience)
     progress = TQDMProgressBar(refresh_rate = 250)
 
-    SWA = StochasticWeightAveraging(swa_epoch_start = 35) # TODO base this off max epochs
+    SWA = StochasticWeightAveraging(swa_epoch_start = swa_epoch) # TODO base this off max epochs
 
     checkpoint_callback = ModelCheckpoint(
         monitor = "val_loss",
