@@ -2,13 +2,13 @@
 Repository for the UCL CDT in DIS group project with UKAEA.
 
 <!-- omit in toc -->
-- [UKAEA Group Project](#ukaeagroupproject) 
+- [Installation](#installation) 
 - [Data Preparation:](#data-preparation)
 - [Missing Outputs:](#missing-outputs)
 - [QLKNN Reproduction:](#qlknn-reproduction)
 - [Autoencoder:](#autoencoder)
 
-## Installation
+## Installation:
 TODO: add in requirements.txt
 To install the package run: `pip install .` in the root directory (installation via a setup.py file is deprecated). If you wish to make changes to the package you can install using `pip install -e .` which will install the package in editable mode.
 
@@ -34,7 +34,7 @@ It is therefore of interest to try and understand why this is the case. To do so
 
 -Trained using [train_ae.py](src/scripts/train_ae.py)
 
--Results evaluated in [AutoEncoderOutputs.ipynb](src/notebooks/AutoEncoderOutputs.ipynb). TODO: This is not yet implemented
+-Results evaluated in [AutoEncoderOutputs.ipynb](src/notebooks/AutoEncoderOutputs.ipynb). 
 
 ## Gaussian Process:
 -One dimensional gaussian processes are trained and plotted in [GaussianProcess.ipynb](src/notebooks/GaussianProcess.ipynb) 
