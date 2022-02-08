@@ -10,18 +10,18 @@ from scripts.utils import train_keys, target_keys, prepare_model, callbacks
 
 hyper_parameters = {
     'batch_size': 4096,
-    'epochs': 500,
+    'epochs': 150,
     'learning_rate': 0.0025,
     'latent_dims': 3,
 }
 
-patience = 150
-swa_epoch = 100
+patience = 25
+swa_epoch = 75
 
-num_gpu = 1 # Make sure to request this in the batch script
+num_gpu = 3 # Make sure to request this in the batch script
 accelerator = 'gpu'
 
-run = "7"
+run = "8"
 
 train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_train_data.pkl"
 val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_validation_data.pkl"
@@ -58,7 +58,7 @@ def main():
         swa_epoch = swa_epoch)
 
     # TODO: make this only call in a debug mode
-    callback_list.append(ModuleDataMonitor(submodules = True, log_every_n_steps = 2500))
+    #callback_list.append(ModuleDataMonitor(submodules = True, log_every_n_steps = 2500))
 
     if hyper_parameters['latent_dims'] == 2 or hyper_parameters['latent_dims'] == 3:
         callback_list.append(LatentSpace())

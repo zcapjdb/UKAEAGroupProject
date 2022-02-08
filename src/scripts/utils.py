@@ -114,8 +114,8 @@ def callbacks(directory: str, run: str, experiment_name: str, top_k: int = 1, pa
 
     return [early_stop_callback, progress, checkpoint_callback, SWA]
 
-train_keys = ['Ane', 'Ate', 'Autor', 'Machtor', 'x', 'Zeff', 'gammaE', 
-              'q', 'smag', 'alpha', 'Ani1', 'Ati0', 'normni1', 'Ti_Te0', 'logNustar']
+train_keys = ['ane', 'ate', 'autor', 'machtor', 'x', 'zeff', 'gammae', 
+              'q', 'smag', 'alpha', 'ani1', 'ati0', 'normni1', 'ti_te0', 'lognustar']
 
 target_keys = ['dfeitg_gb_div_efiitg_gb', 'dfetem_gb_div_efetem_gb',
        'dfiitg_gb_div_efiitg_gb', 'dfitem_gb_div_efetem_gb', 'efeetg_gb',
