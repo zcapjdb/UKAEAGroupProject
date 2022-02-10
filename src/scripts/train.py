@@ -8,15 +8,18 @@ from QLKNN import QLKNN, QLKNNDataset
 from scripts.utils import train_keys, target_keys, prepare_model, callbacks 
 
 hyper_parameters = {
-    'batch_size': 1024,
-    'epochs': 100,
+    'batch_size': 4096,
+    'epochs': 250,
     'learning_rate': 0.002, 
 }
+
+patience = 25
+swa_epoch = 75
 
 num_gpu = 3 # Make sure to request this in the batch script
 accelerator = 'gpu'
 
-run = "5"
+run = "6"
 
 train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_train_data.pkl"
 val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/QLKNN_validation_data.pkl"
@@ -48,8 +51,14 @@ def main():
         val_loader = DataLoader(val_data, batch_size = hyper_parameters['batch_size'], shuffle = False, num_workers = 20)
         test_loader = DataLoader(test_data, batch_size = hyper_parameters['batch_size'], shuffle = False, num_workers = 20)
 
+        # Create callbacks
         callback_list = callbacks(
-            directory = comet_project_name, run = run, experiment_name = experiment_name)
+            directory = comet_project_name, 
+            run = run, 
+            experiment_name = experiment_name, 
+            top_k = 3, 
+            patience = patience, 
+            swa_epoch = swa_epoch)
 
         trainer = Trainer(max_epochs = hyper_parameters['epochs'],
             logger = comet_logger,

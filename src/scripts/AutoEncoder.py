@@ -246,7 +246,8 @@ class LatentTrajectory(Callback):
                 trajectory = self.trajectories[key]
                 sc = plt.scatter(trajectory[:, 0], trajectory[:, 1],
                 c = trajectory[:, 2], alpha = i/len(self.trajectories))
-                plt.colorbar(sc)
+            
+            #plt.colorbar(sc)
 
             return fig
 
