@@ -10,29 +10,31 @@ from sklearn.model_selection import train_test_split
 
 import pickle
 
-# The inputs to the Neural Network
-with h5.File('../qlk_jetexp_nn_training_database_minimal.h5', "r") as f:
-        inputs = f['input']['block0_values'][()]
-        input_names = f['input']['block0_items'][()]
-        index_inp = f['input']['axis1'][()]   #row number from 0 to len(inputs)
-        
-        # The target outputs for the NN
-        outputs = f['output']['block0_values'][()]
-        output_names = f['output']['block0_items'][()]
-        index_out = f['output']['axis1'][()]   #row number from 0 to len(inputs) with some missing rows
 
+train_data = pd.read_pickle("/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl")
+train_keys = [
+    "ane",
+    "ate",
+    "autor",
+    "machtor",
+    "x",
+    "zeff",
+    "gammae",
+    "q",
+    "smag",
+    "alpha",
+    "ani1",
+    "ati0",
+    "normni1",
+    "ti_te0",
+    "lognustar",
+]
 
-#Load the data into the dataframe
-df_in = pd.DataFrame(inputs,index_inp,input_names)
-df_out = pd.DataFrame(outputs,index_out, output_names)
+X_train, Y_train = train_data[train_keys].to_numpy(), train_data['target'].to_numpy()
 
-train_data = pd.read_pickle("/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data.pkl")
+validation_data = pd.read_pickle("/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl")
 
-X_train, Y_train = train_data.iloc[:,:-1].to_numpy(), train_data.iloc[:,-1].to_numpy()
-
-validation_data = pd.read_pickle("/share/rcifdata/jbarr/UKAEAGroupProject/data/validation_data.pkl")
-
-X_val, Y_val = validation_data.iloc[:,:-1].to_numpy(), validation_data.iloc[:,-1].to_numpy()
+X_val, Y_val = validation_data[train_keys].to_numpy(), validation_data['target'].to_numpy()
 
 # standard scaler
 scaler = StandardScaler()
@@ -43,8 +45,8 @@ x_val = scaler.transform (X_val)
 
 
 parameters = {
-    'nodes': [5,10,20,30],
-    'layers': [2,3,4]
+    'nodes': [128, 256, 512],
+    'layers': [3, 4, 5, 6]
 }
 
 def grid_search(build_fn, parameters, train_data, val_data): 
@@ -61,6 +63,8 @@ def grid_search(build_fn, parameters, train_data, val_data):
     x_train, y_train = train_data
     
     x_val, y_val = val_data
+
+    inshape = x_train.shape[1]
     
     
     results_dict = {}
@@ -75,19 +79,23 @@ def grid_search(build_fn, parameters, train_data, val_data):
         
         #List of possible node combinations
         n = i 
-        nodes = tuple([parameters['nodes'] for j in range(i)])
+        # nodes = tuple([parameters['nodes'] for j in range(i)])
         
-        combs = np.array(np.meshgrid(*nodes)).T.reshape(-1,n)
+        # combs = np.array(np.meshgrid(*nodes)).T.reshape(-1,n)
+
+        combs = [[nodesize]*i for nodesize in parameters['nodes']]
         
         for node in combs:
-    
-        
+
             # build model
-            model = build_fn(i,node)
+            model = build_fn(i,node, inshape)
             
             model.compile(optimizer = 'adam', loss ='binary_crossentropy', metrics = 'acc')
+
+
+            stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
             
-            history = model.fit(x_train, y_train,batch_size = 4096, epochs = 25, verbose = 2)
+            history = model.fit(x_train, y_train,batch_size = 4096, epochs = 80, verbose = 2, callbacks=[stop_early], validation_split = 0.2)
             
             evaluate = model.evaluate(x_val, y_val, batch_size = 4096)
             
@@ -107,29 +115,31 @@ def grid_search(build_fn, parameters, train_data, val_data):
             
             results_dict['trial_'+str(counter)] = trial_dict
             
-            file_name = f'./grid_search/trial_{str(counter)}.pkl'
+            file_name = f'/home/tmadula/grid_search/trial_{str(counter)}.pkl'
             with open(file_name, 'wb') as file:
                 pickle.dump(trial_dict, file)    
 
             counter += 1
     return results_dict
 
-def build_classifier(n_layers,nodes):
+def build_classifier(n_layers,nodes, inshape):
     model = tf.keras.Sequential()
-    
+    model.add(tf.keras.Input(shape=(inshape,)))
     # Flexible number of hidden layers
     for i in range(n_layers):
-        model.add(tf.keras.layers.Dense(nodes[i],activation ='relu'))
+        model.add(tf.keras.layers.Dense(nodes[i],activation ='relu' ))
+        model.add(tf.keras.layers.Dropout(0.1))
     
     # Final classifer layer 
     model.add(tf.keras.layers.Dense(1, activation ='sigmoid'))
-    
+
+    model.summary()
     return model
 
 
 results_dict = grid_search(build_classifier, parameters, (x_train, Y_train), (x_val, Y_val))
 
-with open('/home/tmadula/UKAEAGroupProject/grid_search_results.pickle', 'wb') as file:
+with open('/home/tmadula/grid_search/grid_search_results.pickle', 'wb') as file:
     pickle.dump(results_dict, file)
 
 
