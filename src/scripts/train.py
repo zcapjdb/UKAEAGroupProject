@@ -35,6 +35,7 @@ def main():
     #     workspace = comet_workspace,
     #     save_dir = './logs',
     #     experiment_name = f'Run-{run}-main')
+    save_dir = f"/share/rcifdata/jbarr/UKAEAGroupProject/logs/run-{run}"
     for target in target_:
         print(f"Training model for {target}")
         experiment_name = f"Run-{run}-{target}"
@@ -48,6 +49,7 @@ def main():
             keys,
             comet_project_name,
             experiment_name,
+
         )
 
         model = QLKNN(n_input=15, **hyper_parameters)

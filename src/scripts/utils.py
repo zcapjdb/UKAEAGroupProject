@@ -51,6 +51,7 @@ def prepare_model(
     keys: list,
     comet_project_name: str,
     experiment_name: str,
+    save_dir: str = "/share/rcifdata/jbarr/UKAEAGroupProject/logs",
 ):
     """
     Prepare the data and logging for training.
@@ -81,7 +82,7 @@ def prepare_model(
         api_key=comet_api_key,
         project_name=comet_project_name,
         workspace=comet_workspace,
-        save_dir="/share/rcifdata/jbarr/UKAEAGroupProject/logs",  # TODO: figure out how this works so this can be more general
+        save_dir=save_dir,  # TODO: figure out how this works so this can be more general
         experiment_name=experiment_name,
     )
 

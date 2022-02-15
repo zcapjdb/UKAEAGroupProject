@@ -18,7 +18,9 @@ class Encoder(nn.Module):
         self.encoder = nn.Sequential(
             nn.Linear(n_input, 12),
             nn.ReLU(),
-            nn.Linear(12, 8),
+            nn.Linear(12, 10),
+            nn.ReLU(),
+            nn.Linear(10, 8),
             nn.ReLU(),
             nn.Linear(8, 4),
             nn.ReLU(),
@@ -40,7 +42,9 @@ class Decoder(nn.Module):
             nn.ReLU(),
             nn.Linear(4, 8),
             nn.ReLU(),
-            nn.Linear(8, 12),
+            nn.Linear(8, 10),
+            nn.ReLU(),
+            nn.Linear(10, 12),
             nn.ReLU(),
             nn.Linear(12, n_output),
         )
