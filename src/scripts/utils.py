@@ -21,7 +21,7 @@ def ScaleData(data: pd.DataFrame, scaler: object = None) -> pd.DataFrame:
 
     Inputs:
         data: a pandas dataframe containing the data to be scaled
-        Train: a boolean indicating whether the data is a training set or not
+        scaler: a sklearn StandardScaler object
 
     Outputs:
         data: a pandas dataframe containing the scaled data
@@ -60,8 +60,11 @@ def prepare_model(
         train_path: the path to the training data
         val_path: the path to the validation data
         test_path: the path to the test data
+        CustomDataset: the dataset class to use for data loading
         keys: the dataframe columns to be used for training
+        comet_project_name: the name of the comet project
         experiment_name: the name of the experiment
+        save_dir: the directory to save the model
 
     Outputs:
         train_data: a Dataset object containing the training data
