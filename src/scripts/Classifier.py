@@ -1,16 +1,18 @@
+#!/usr/bin/env python 
 import pandas as pd 
 import numpy as np 
 import torch.nn as nn
 import torch
 import pytorch_lightning as pl
+from torch.utils.data import Dataset
 
-from scripts.utils import ScaleData
+from utils import ScaleData
 
 class Classifier(pl.LightningModule): 
     def __init__(self): 
     
-    super().__init__()
-    self.model = nn.Sequential()
+        super().__init__()
+        self.model = nn.Sequential()
 
     def build_classifier(self, n_layers, nodes, inshape):
         layers = [] 
@@ -22,10 +24,10 @@ class Classifier(pl.LightningModule):
             else: 
                 layers.append(nn.Linear(nodes[i-1], nodes[i]))
                 layers.append(nn.ReLU())
-                layer.append(nn.Dropout(0.1))
+                layers.append(nn.Dropout(0.1))
 
         layers.append(nn.Linear(nodes[-1], 1))
-        layers.append(nn.sigmoid())
+        layers.append(nn.Sigmoid())
 
         self.model = nn.Sequential(*layers)
     
@@ -69,8 +71,8 @@ class ClassifierDataset(Dataset):
         self.xdata = pd.read_pickle(file_path) 
 
         if xcolumns and ycolumns is not None:
-            self.ydata = self.xdata[ycolumns]
-            self.xdata = self.xdata[xcolumns]
+            self.ydata = self.xdata.iloc[:,-1]
+            self.xdata = self.xdata.iloc[:,:-1]
         
         if train: # ensures the class attribute is reset for every new training run
             ClassifierDataset.scaler, self.scaler = None, None
@@ -86,10 +88,10 @@ class ClassifierDataset(Dataset):
 
     def __getitem__(self, idx):
         # no y label for auto encoder
-        X = self.xdata.[xcolumns].to_numpy()
+        X = self.xdata.to_numpy()
 
-        if ycolumns is not None:  
-            Y = self.ydata.[ycolumns].to_numpy()
+        if self.ydata is not None:  
+            Y = self.ydata.to_numpy()
 
             return X.astype(float), Y.astype(float)
         else: 
