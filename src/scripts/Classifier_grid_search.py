@@ -10,6 +10,8 @@ from sklearn.model_selection import train_test_split
 
 import pickle
 
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+
 
 train_data = pd.read_pickle("/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl")
 train_keys = [
@@ -46,7 +48,7 @@ x_val = scaler.transform (X_val)
 
 parameters = {
     'nodes': [128, 256, 512],
-    'layers': [3, 4, 5, 6]
+    'layers': [4, 5, 6]
 }
 
 def grid_search(build_fn, parameters, train_data, val_data): 
@@ -113,9 +115,9 @@ def grid_search(build_fn, parameters, train_data, val_data):
                 results_dict['best_model'] = trial_dict
         
             
-            results_dict['trial_'+str(counter)] = trial_dict
+            results_dict['trial_0'+str(counter)] = trial_dict
             
-            file_name = f'/home/tmadula/grid_search/trial_{str(counter)}.pkl'
+            file_name = f'/home/tmadula/grid_search/trial_0{str(counter)}.pkl'
             with open(file_name, 'wb') as file:
                 pickle.dump(trial_dict, file)    
 
