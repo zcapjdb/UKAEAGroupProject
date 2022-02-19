@@ -49,7 +49,6 @@ def main():
             keys,
             comet_project_name,
             experiment_name,
-
         )
 
         model = QLKNN(n_input=15, **hyper_parameters)
