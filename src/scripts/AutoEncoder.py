@@ -212,7 +212,7 @@ class LatentTrajectory(Callback):
     def __init__(
         self,
         n_epochs: int = 10,
-        n_samples: int = 5,
+        n_samples: int = 1,
         n_latent: int = 3,
         n_input: int = 15,
     ):

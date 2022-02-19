@@ -14,24 +14,35 @@ from pytorch_lightning.callbacks import (
 from torch.utils.data import Dataset
 
 
-def ScaleData(data: pd.DataFrame, scaler: object = None) -> pd.DataFrame:
+def ScaleData(
+    data: pd.DataFrame, scaler: object = None, ignore: list = None
+) -> pd.DataFrame:
     """
     Scale the data using the StandardScaler. If given a training set, fit the scaler to the training data.
     If given a validation or test set, use the fitted scaler to scale the test data.
 
     Inputs:
         data: a pandas dataframe containing the data to be scaled
-        Train: a boolean indicating whether the data is a training set or not
+        scaler: a sklearn StandardScaler object
 
     Outputs:
         data: a pandas dataframe containing the scaled data
         scaler: a StandardScaler object containing the fitted scaler if validating or testing
     """
+
+    #TODO: This might currently only work for a single ignored column, generalise
+    if ignore is not None:
+        ignore_data = data[ignore]
+        data = data.drop(ignore, axis=1)
+
     if scaler is None:
         scaler = StandardScaler()
         columns = data.columns
         data = scaler.fit_transform(data)  # scaler converts dataframe to numpy array!
         data = pd.DataFrame(data, columns=columns)
+
+        if ignore is not None:
+            data[ignore] = ignore_data.values
 
         return data, scaler
 
@@ -39,6 +50,9 @@ def ScaleData(data: pd.DataFrame, scaler: object = None) -> pd.DataFrame:
         columns = data.columns
         data = scaler.transform(data)
         data = pd.DataFrame(data, columns=columns)
+
+        if ignore is not None:
+            data[ignore] = ignore_data.values
 
         return data, scaler
 
@@ -49,8 +63,10 @@ def prepare_model(
     test_path: str,
     CustomDataset: Dataset,
     keys: list,
-    comet_project_name: str,
-    experiment_name: str,
+    comet_project_name: str = None,
+    experiment_name: str = None,
+    save_dir: str = "/share/rcifdata/jbarr/UKAEAGroupProject/logs",
+    categorical_keys: list = None,
 ):
     """
     Prepare the data and logging for training.
@@ -59,36 +75,43 @@ def prepare_model(
         train_path: the path to the training data
         val_path: the path to the validation data
         test_path: the path to the test data
+        CustomDataset: the dataset class to use for data loading
         keys: the dataframe columns to be used for training
+        comet_project_name: the name of the comet project
         experiment_name: the name of the experiment
+        save_dir: the directory to save the model
+        categorical_keys: the categorical keys to be used for training (not to be scaled)
 
     Outputs:
         train_data: a Dataset object containing the training data
     """
+    #TODO: Change to pass training columns, target column, and categorical bool for target
+
     train_data = CustomDataset(train_path, columns=keys, train=True)
-    train_data.scale()
+    train_data.scale(categorical_keys=categorical_keys)
 
     val_data = CustomDataset(val_path, columns=keys)
-    val_data.scale()
+    val_data.scale(categorical_keys=categorical_keys)
 
     test_data = CustomDataset(test_path, columns=keys)
-    test_data.scale()
+    test_data.scale(categorical_keys=categorical_keys)
 
-    comet_api_key = os.environ["COMET_API_KEY"]
-    comet_workspace = os.environ["COMET_WORKSPACE"]
+    if comet_project_name is not None:
+        comet_api_key = os.environ["COMET_API_KEY"]
+        comet_workspace = os.environ["COMET_WORKSPACE"]
 
-    comet_logger = CometLogger(
-        api_key=comet_api_key,
-        project_name=comet_project_name,
-        workspace=comet_workspace,
-        save_dir="/share/rcifdata/jbarr/UKAEAGroupProject/logs",  # TODO: figure out how this works so this can be more general
-        experiment_name=experiment_name,
-    )
+        comet_logger = CometLogger(
+            api_key=comet_api_key,
+            project_name=comet_project_name,
+            workspace=comet_workspace,
+            save_dir=save_dir,  # TODO: figure out how this works so this can be more general
+            experiment_name=experiment_name,
+        )
+        return comet_logger, train_data, val_data, test_data
+        # can have memory issues if too many data points TODO: find out is there a way round this
+        # comet_logger.experiment.log_dataframe_profile(train_data.data, name = 'train_data', minimal = True)
 
-    # can have memory issues if too many data points TODO: find out is there a way round this
-    # comet_logger.experiment.log_dataframe_profile(train_data.data, name = 'train_data', minimal = True)
-
-    return comet_logger, train_data, val_data, test_data
+    return train_data, val_data, test_data
 
 
 def callbacks(
