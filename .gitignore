@@ -134,3 +134,4 @@ input_output_model/
 logs/
 lightning_logs/
 submit.sh
+data/*
