@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import torch.nn as nn
+import torch.distributions as dist
 import torch
 import copy
 import matplotlib.pyplot as plt
@@ -12,7 +13,7 @@ from scripts.utils import ScaleData
 
 
 class Encoder(nn.Module):
-    def __init__(self, latent_dims: int = 3, n_input: int = 15):
+    def __init__(self, latent_dims: int = 3, n_input: int = 15, VAE: bool = False):
         super().__init__()
 
         self.encoder = nn.Sequential(
@@ -25,14 +26,25 @@ class Encoder(nn.Module):
             nn.Linear(4, latent_dims),
         )
 
+        self.VAE = VAE
+        if self.VAE:
+            self.mu = nn.Linear(latent_dims, latent_dims)
+            self.logvar = nn.Linear(latent_dims, latent_dims)
+
     def forward(self, x):
         encoded = self.encoder(x.float())
+
+        if self.VAE:
+            mu = self.mu(encoded)
+            logvar = self.logvar(encoded)
+            return dist.Normal(mu, logvar.exp())
+            #return mu, logvar
 
         return encoded
 
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dims: int = 3, n_output: int = 15):
+    def __init__(self, latent_dims: int = 3, n_output: int = 15, VAE: bool = False):
         super().__init__()
 
         self.decoder = nn.Sequential(
@@ -45,8 +57,19 @@ class Decoder(nn.Module):
             nn.Linear(12, n_output),
         )
 
+        self.VAE = VAE
+        if self.VAE:
+            self.mu = nn.Linear(n_output, n_output)
+            self.logvar = nn.Linear(n_output, n_output)
+
     def forward(self, encoded):
         decoded = self.decoder(encoded.float())
+
+        if self.VAE:
+            mu = self.mu(decoded)
+            logvar = self.logvar(decoded)
+            return dist.Normal(mu, logvar.exp())
+            #return decoded
 
         return decoded
 

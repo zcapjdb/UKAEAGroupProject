@@ -10,8 +10,9 @@ import pickle
 from utils import train_keys, target_keys, prepare_model, callbacks
 from Classifier import Classifier, ClassifierDataset
 from scripts.utils import train_keys, target_keys, prepare_model
+from temperature_scaling import ModelWithTemperature
 
-num_gpu = 4  # Make sure to request this in the batch script
+num_gpu = 3  # Make sure to request this in the batch script
 accelerator = "gpu"
 
 run = "1"
@@ -24,7 +25,7 @@ parameters = {"nodes": [128,256,512], "layers": [3,4,5]}
 
 hyper_parameters = {
     "batch_size": 4096,
-    "epochs": 50,
+    "epochs": 1,
     "learning_rate": 0.002,
 }
 
@@ -56,7 +57,7 @@ def grid_search(parameters, train_loader, val_loader, test_loader, inshape=15):
             # build model
             model = Classifier()
             early_stopping = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=10)
-            progress_bar = TQDMProgressBar(refresh_rate=200)
+            progress_bar = TQDMProgressBar(refresh_rate=250)
 
             model.build_classifier(i, node, inshape)
             print(model)
@@ -68,9 +69,19 @@ def grid_search(parameters, train_loader, val_loader, test_loader, inshape=15):
                 devices=num_gpu,
                 callbacks=[early_stopping, progress_bar],
                 log_every_n_steps=250,
+                precision=32,
+                amp_backend="native"
             )
 
             trainer.fit(model, train_loader, val_loader)
+            result_1 = trainer.test(dataloaders = test_loader)
+            print(result_1)
+
+            scaled_model = ModelWithTemperature(model)
+            scaled_model.set_temperature(val_loader)
+
+            trainer_test = Trainer(precision=32, amp_backend="native")
+            result = trainer_test.test(model = scaled_model, dataloaders = test_loader)
             result = trainer.test(dataloaders=test_loader)
             print(result)
 
