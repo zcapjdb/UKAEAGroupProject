@@ -73,6 +73,44 @@ class Decoder(nn.Module):
 
         return decoded
 
+class EncoderBig(nn.Module): 
+    def __init__(self,n_input=15, latent_dims=3): 
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(n_input, 150),
+            nn.ReLU(),
+            nn.Linear(150, 75),
+            nn.ReLU(),
+            nn.Linear(75, 30),
+            nn.ReLU(),
+            nn.Linear(30, 10),
+            nn.ReLU(),
+            nn.Linear(10, latent_dims),
+        )
+    
+    def forward(self,x): 
+        output = self.encoder(x)
+        
+        return output
+
+class DecoderBig(nn.Module): 
+    def __init__(self,n_input=15, latent_dims=3): 
+        super().__init__()
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dims, 10),
+            nn.ReLU(),
+            nn.Linear(10, 30),
+            nn.ReLU(),
+            nn.Linear(30, 75),
+            nn.ReLU(),
+            nn.Linear(75, 150),
+            nn.ReLU(),
+            nn.Linear(150, n_input),
+        )
+    def forward(self, x): 
+        output = self.decoder(x)
+        
+        return output
 
 class AutoEncoder(LightningModule):
     def __init__(

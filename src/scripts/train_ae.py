@@ -6,8 +6,8 @@ from torch.utils.data import DataLoader
 from pytorch_lightning.plugins import DDPPlugin
 
 from AutoEncoder import (
-    Encoder,
-    Decoder,
+    EncoderBig,
+    DecoderBig,
     AutoEncoder,
     AutoEncoderDataset,
     LatentSpace,
@@ -18,7 +18,7 @@ from scripts.utils import train_keys, target_keys, prepare_model, callbacks
 hyper_parameters = {
     "batch_size": 4096,
     "epochs": 250,
-    "learning_rate": 0.0025,
+    "learning_rate": 0.001,
     "latent_dims": 3,
 }
 
@@ -52,7 +52,7 @@ def main():
     )
 
     # Create model
-    model = AutoEncoder(n_input=15, **hyper_parameters)
+    model = AutoEncoder(n_input=15,encoder=EncoderBig, decoder=DecoderBig, **hyper_parameters)
     print(model)
 
     # Log hyperparameters
