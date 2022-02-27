@@ -8,18 +8,18 @@ from QLKNN import QLKNN, QLKNNDataset
 from scripts.utils import train_keys, target_keys, prepare_model, callbacks
 
 hyper_parameters = {
-    "batch_size": 4096,
-    "epochs": 100,
-    "learning_rate": 0.002,
+    "batch_size": 2048,
+    "epochs": 150,
+    "learning_rate": 0.001,
 }
 
-patience = 20
-swa_epoch = 75
+patience = 10
+swa_epoch = 100
 
-num_gpu = 3  # Make sure to request this in the batch script
+num_gpu = 4  # Make sure to request this in the batch script
 accelerator = "gpu"
 
-run = "6"
+run = "7"
 
 train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
 val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
@@ -30,13 +30,8 @@ comet_project_name = "QLKNN-Regressor"
 
 def main():
 
-    # comet_logger_main = CometLogger(api_key = comet_api_key,
-    #     project_name = comet_project_name,
-    #     workspace = comet_workspace,
-    #     save_dir = './logs',
-    #     experiment_name = f'Run-{run}-main')
     save_dir = f"/share/rcifdata/jbarr/UKAEAGroupProject/logs/run-{run}"
-    for target in target_:
+    for target in target_keys:
         print(f"Training model for {target}")
         experiment_name = f"Run-{run}-{target}"
         keys = train_keys + [target]
@@ -60,19 +55,19 @@ def main():
             train_data,
             batch_size=hyper_parameters["batch_size"],
             shuffle=True,
-            num_workers=20,
+            num_workers=10,
         )
         val_loader = DataLoader(
             val_data,
             batch_size=hyper_parameters["batch_size"],
             shuffle=False,
-            num_workers=20,
+            num_workers=10,
         )
         test_loader = DataLoader(
             test_data,
             batch_size=hyper_parameters["batch_size"],
             shuffle=False,
-            num_workers=20,
+            num_workers=10,
         )
 
         # Create callbacks
@@ -92,7 +87,9 @@ def main():
             strategy=DDPPlugin(find_unused_parameters=False),
             devices=num_gpu,
             callbacks=callback_list,
-            log_every_n_steps=50,
+            log_every_n_steps=250,
+            benchmark=True,
+            check_val_every_n_epoch=5
         )
 
         trainer.fit(

@@ -74,7 +74,7 @@ class Decoder(nn.Module):
         return decoded
 
 class EncoderBig(nn.Module): 
-    def __init__(self,n_input=15, latent_dims=3): 
+    def __init__(self, latent_dims: int = 3, n_input: int = 15): 
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Linear(n_input, 150),
@@ -89,12 +89,12 @@ class EncoderBig(nn.Module):
         )
     
     def forward(self,x): 
-        output = self.encoder(x)
+        output = self.encoder(x.float())
         
         return output
 
 class DecoderBig(nn.Module): 
-    def __init__(self,n_input=15, latent_dims=3): 
+    def __init__(self, latent_dims: int = 3, n_input: int = 15): 
         super().__init__()
         self.decoder = nn.Sequential(
             nn.Linear(latent_dims, 10),
@@ -108,7 +108,50 @@ class DecoderBig(nn.Module):
             nn.Linear(150, n_input),
         )
     def forward(self, x): 
-        output = self.decoder(x)
+        output = self.decoder(x.float())
+        
+        return output
+
+class EncoderHuge(nn.Module): 
+    def __init__(self, latent_dims: int = 3, n_input: int = 15): 
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(n_input, 50),
+            nn.ReLU(),
+            nn.Linear(50, 150),
+            nn.ReLU(),
+            nn.Linear(150, 75),
+            nn.ReLU(),
+            nn.Linear(75, 30),
+            nn.ReLU(),
+            nn.Linear(30, 10),
+            nn.ReLU(),
+            nn.Linear(10, latent_dims),
+        )
+    
+    def forward(self,x): 
+        output = self.encoder(x.float())
+        
+        return output
+
+class DecoderHuge(nn.Module): 
+    def __init__(self, latent_dims: int = 3, n_input: int = 15): 
+        super().__init__()
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dims, 10),
+            nn.ReLU(),
+            nn.Linear(10, 30),
+            nn.ReLU(),
+            nn.Linear(30, 75),
+            nn.ReLU(),
+            nn.Linear(75, 150),
+            nn.ReLU(),
+            nn.Linear(150, 50),
+            nn.ReLU(),
+            nn.Linear(50, n_input),
+        )
+    def forward(self, x): 
+        output = self.decoder(x.float())
         
         return output
 
@@ -121,7 +164,7 @@ class AutoEncoder(LightningModule):
         n_input: int = 15,
         batch_size: int = 2048,
         epochs: int = 100,
-        learning_rate: float = 0.0025,
+        learning_rate: float = 0.001,
     ):
 
         super().__init__()
@@ -135,8 +178,8 @@ class AutoEncoder(LightningModule):
         self.learning_rate = learning_rate
 
     def forward(self, x):
-        encoded = self.encoder(x)
-        decoded = self.decoder(encoded)
+        encoded = self.encoder(x.float())
+        decoded = self.decoder(encoded.float())
 
         return decoded
 
@@ -191,7 +234,7 @@ class AutoEncoderDataset(Dataset):
         if train:  # ensures the class attribute is reset for every new training run
             AutoEncoderDataset.scaler, self.scaler = None, None
 
-    def scale(self, own_scaler: object = None):
+    def scale(self, own_scaler: object = None, categorical_keys = None):
         if own_scaler is not None:
             self.data = ScaleData(self.data, own_scaler)
 

@@ -6,8 +6,8 @@ from torch.utils.data import DataLoader
 from pytorch_lightning.plugins import DDPPlugin
 
 from AutoEncoder import (
-    EncoderBig,
-    DecoderBig,
+    EncoderHuge,
+    DecoderHuge,
     AutoEncoder,
     AutoEncoderDataset,
     LatentSpace,
@@ -16,19 +16,19 @@ from AutoEncoder import (
 from scripts.utils import train_keys, target_keys, prepare_model, callbacks
 
 hyper_parameters = {
-    "batch_size": 4096,
-    "epochs": 250,
+    "batch_size": 2048,
+    "epochs": 500,
     "learning_rate": 0.001,
     "latent_dims": 3,
 }
 
-patience = 25
-swa_epoch = 100
+patience = 500
+swa_epoch = 300
 
 num_gpu = 3  # Make sure to request this in the batch script
 accelerator = "gpu"
 
-run = "13"
+run = "17"
 
 train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
 val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
@@ -52,7 +52,7 @@ def main():
     )
 
     # Create model
-    model = AutoEncoder(n_input=15,encoder=EncoderBig, decoder=DecoderBig, **hyper_parameters)
+    model = AutoEncoder(n_input=15,encoder=EncoderHuge, decoder=DecoderHuge, **hyper_parameters)
     print(model)
 
     # Log hyperparameters
@@ -91,9 +91,9 @@ def main():
     # TODO: make this only call in a debug mode
     # callback_list.append(ModuleDataMonitor(submodules = True, log_every_n_steps = 2500))
 
-    if hyper_parameters["latent_dims"] == 2 or hyper_parameters["latent_dims"] == 3:
-        callback_list.append(LatentSpace())
-        callback_list.append(LatentTrajectory())
+    # if hyper_parameters["latent_dims"] == 2 or hyper_parameters["latent_dims"] == 3:
+    #     callback_list.append(LatentSpace())
+    #     callback_list.append(LatentTrajectory())
 
     # Create trainer
     trainer = Trainer(
@@ -103,14 +103,16 @@ def main():
         strategy=DDPPlugin(find_unused_parameters=False),
         devices=num_gpu,
         callbacks=callback_list,
-        log_every_n_steps=100,
+        log_every_n_steps=250,
+        benchmark=True,
+        check_val_every_n_epoch=5
     )
 
     # Train model
     trainer.fit(model, train_loader, val_loader)
 
     # Evaluate model
-    trainer.test(dataloaders=test_loader)
+   # trainer.test(dataloaders=test_loader)
 
 
 if __name__ == "__main__":
