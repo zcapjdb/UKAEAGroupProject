@@ -67,6 +67,7 @@ def prepare_model(
     experiment_name: str = None,
     save_dir: str = "/share/rcifdata/jbarr/UKAEAGroupProject/logs",
     categorical_keys: list = None,
+    phys_loss : bool = True 
 ):
     """
     Prepare the data and logging for training.
@@ -87,14 +88,14 @@ def prepare_model(
     """
     #TODO: Change to pass training columns, target column, and categorical bool for target
 
-    train_data = CustomDataset(train_path, columns=keys, train=True)
-    train_data.scale(categorical_keys=categorical_keys)
+    train_data = CustomDataset(train_path, columns=keys, train=True, phys_loss=phys_loss)
+    train_data.scale()#categorical_keys=categorical_keys) #error here
 
-    val_data = CustomDataset(val_path, columns=keys)
-    val_data.scale(categorical_keys=categorical_keys)
+    val_data = CustomDataset(val_path, columns=keys, phys_loss=phys_loss)
+    val_data.scale()#categorical_keys=categorical_keys)
 
-    test_data = CustomDataset(test_path, columns=keys)
-    test_data.scale(categorical_keys=categorical_keys)
+    test_data = CustomDataset(test_path, columns=keys, phys_loss=phys_loss)
+    test_data.scale()#categorical_keys=categorical_keys)
 
     if comet_project_name is not None:
         comet_api_key = os.environ["COMET_API_KEY"]
@@ -135,7 +136,7 @@ def callbacks(
     """
 
     log_dir = (
-        f"/share/rcifdata/jbarr/UKAEAGroupProject/logs/{directory}/{experiment_name}"
+        f"/lustre/home/pr5739/qualikiz/UKAEAGroupProject/logs/{directory}/{experiment_name}"
     )
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
