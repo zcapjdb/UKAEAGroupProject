@@ -234,7 +234,7 @@ class AutoEncoderDataset(Dataset):
         if train:  # ensures the class attribute is reset for every new training run
             AutoEncoderDataset.scaler, self.scaler = None, None
 
-    def scale(self, own_scaler: object = None, categorical_keys = None):
+    def scale(self, own_scaler: object = None, categorical_keys: list = None):
         if own_scaler is not None:
             self.data = ScaleData(self.data, own_scaler)
 
