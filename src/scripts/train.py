@@ -4,12 +4,12 @@ from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
 from pytorch_lightning.plugins import DDPPlugin
 
-from QLKNN import QLKNN, QLKNNDataset
+from QLKNN import QLKNN, QLKNN_Big, QLKNNDataset
 from scripts.utils import train_keys, target_keys, prepare_model, callbacks
 
 hyper_parameters = {
     "batch_size": 2048,
-    "epochs": 150,
+    "epochs": 200,
     "learning_rate": 0.001,
 }
 
@@ -19,7 +19,7 @@ swa_epoch = 100
 num_gpu = 4  # Make sure to request this in the batch script
 accelerator = "gpu"
 
-run = "7"
+run = "8"
 
 train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
 val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
@@ -46,7 +46,7 @@ def main():
             experiment_name,
         )
 
-        model = QLKNN(n_input=15, **hyper_parameters)
+        model = QLKNN_Big(n_input=15, **hyper_parameters)
         print(model)
 
         comet_logger.log_hyperparams(hyper_parameters)
@@ -97,7 +97,7 @@ def main():
         )
         comet_logger.log_graph(model)
 
-        trainer.test(dataloaders=test_loader)
+        trainer.test(dataloaders=val_loader)
 
         # log validation loss for each target TODO: model.metrics doesn't exist
         # comet_logger_main.log_metrics(model.metrics, step = target)
