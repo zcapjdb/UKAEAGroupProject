@@ -61,7 +61,7 @@ def main():
         assert x_train_data.shape[0] == y_train_data.shape[0]
         assert x_train_data.shape[1] == len(joint_keys)-1
 
-        n = 1_000
+        n = 2_000
         idx = np.random.permutation(n)
 
         x_train_data = torch.tensor(x_train_data)[idx]
@@ -73,12 +73,13 @@ def main():
         x_min0, x_max0 = x_train_data.min(), x_train_data.max()
 
         # Gaussian Process and Model fit:
+        print('Training Gaussian Process....')
         gp = SingleTaskGP(x_train_data, y_train_data)
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
         fit_gpytorch_model(mll);
 
         # Testing trained gaussian process:
-        test_data = pd.read_pickle("/share/rcifdata/jbarr/UKAEAGroupProject/data/test_data_clipped.pkl")
+        test_data = pd.read_pickle("/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl")
         drop_data_test = test_data[joint_keys].dropna()
 
         drop_data_test = scaler.transform(drop_data_test)
@@ -86,7 +87,7 @@ def main():
         x_test_data = drop_data_test[:,:-1]
         y_test_data = drop_data_test[:,-1:]
 
-        x_test_data = scaler.transform(x_test_data)
+        # x_test_data = scaler.transform(x_test_data)
 
 
         assert x_test_data.shape[0] == y_test_data.shape[0]
@@ -102,6 +103,7 @@ def main():
         x_min0, x_max0 = x_test_data.min(), x_test_data.max()
 
         # Get into evaluation (predictive posterior) mode
+        print('Evaluating on validation data....')
         gp.eval()
         gp.likelihood.eval()
 
@@ -117,7 +119,7 @@ def main():
         out_var = variance.detach().numpy().squeeze()
         output = output.squeeze()
 
-        predictions_dict[target] = {'means': output, 'variances': out_var, 'scaler': scaler}
+        predictions_dict[target] = {'n': n,'means': output, 'variances': out_var, 'scaler': scaler}
     
     file_name = f'/home/tmadula/submit/outputs/gp_outputs_{n}.pkl'
     
