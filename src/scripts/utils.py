@@ -143,7 +143,7 @@ def callbacks(
     early_stop_callback = EarlyStopping(
         monitor="val_loss", min_delta=0.0, patience=patience
     )
-    progress = TQDMProgressBar(refresh_rate=100)
+    progress = TQDMProgressBar(refresh_rate=250)
 
     # SWA = StochasticWeightAveraging(
     #     swa_epoch_start=swa_epoch
