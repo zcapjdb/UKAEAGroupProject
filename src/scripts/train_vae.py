@@ -11,19 +11,19 @@ from scripts.AutoEncoder import (
 from scripts.utils import train_keys, target_keys, prepare_model, callbacks
 
 hyper_parameters = {
-    "batch_size": 4096,
+    "batch_size": 1024,
     "epochs": 250,
     "learning_rate": 1e-3,
     "latent_dims": 3,
 }
 
 patience = 25
-swa_epoch = 100
+# swa_epoch = 100
 
 num_gpu = 1  # Make sure to request this in the batch script
 accelerator = "gpu"
 
-run = "13"
+run = "5"
 
 train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
 val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
@@ -80,7 +80,7 @@ def main():
         experiment_name=experiment_name,
         top_k=3,
         patience=patience,
-        swa_epoch=swa_epoch,
+        # swa_epoch=swa_epoch,
     )
 
     # TODO: make this only call in a debug mode

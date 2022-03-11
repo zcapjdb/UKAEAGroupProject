@@ -36,29 +36,9 @@ train_keys = [
 ]
 
 target_keys = [
-    "dfeitg_gb_div_efiitg_gb",
-    "dfetem_gb_div_efetem_gb",
-    "dfiitg_gb_div_efiitg_gb",
-    "dfitem_gb_div_efetem_gb",
     "efeetg_gb",
-    "efeitg_gb_div_efiitg_gb",
     "efetem_gb",
     "efiitg_gb",
-    "efitem_gb_div_efetem_gb",
-    "pfeitg_gb_div_efiitg_gb",
-    "pfetem_gb_div_efetem_gb",
-    "pfiitg_gb_div_efiitg_gb",
-    "pfitem_gb_div_efetem_gb",
-    "vceitg_gb_div_efiitg_gb",
-    "vcetem_gb_div_efetem_gb",
-    "vciitg_gb_div_efiitg_gb",
-    "vcitem_gb_div_efetem_gb",
-    "vfiitg_gb_div_efiitg_gb",
-    "vfitem_gb_div_efetem_gb",
-    "vriitg_gb_div_efiitg_gb",
-    "vritem_gb_div_efetem_gb",
-    "vteitg_gb_div_efiitg_gb",
-    "vtiitg_gb_div_efiitg_gb",
 ]
 
 # larger training loop
@@ -81,7 +61,7 @@ def main():
         assert x_train_data.shape[0] == y_train_data.shape[0]
         assert x_train_data.shape[1] == len(joint_keys)-1
 
-        n = 5_000
+        n = 1_000
         idx = np.random.permutation(n)
 
         x_train_data = torch.tensor(x_train_data)[idx]
@@ -139,7 +119,7 @@ def main():
 
         predictions_dict[target] = {'means': output, 'variances': out_var, 'scaler': scaler}
     
-    file_name = '/home/tmadula/submit/errors/gp_outputs.pkl'
+    file_name = f'/home/tmadula/submit/outputs/gp_outputs_{n}.pkl'
     
     with open(file_name, "wb") as file:
                 pickle.dump(predictions_dict, file)
