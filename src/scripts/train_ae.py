@@ -64,18 +64,21 @@ def main():
         batch_size=hyper_parameters["batch_size"],
         shuffle=True,
         num_workers=10,
+        pin_memory=True,
     )
     val_loader = DataLoader(
         val_data,
         batch_size=hyper_parameters["batch_size"],
         shuffle=False,
         num_workers=10,
+        pin_memory=True,
     )
     test_loader = DataLoader(
         test_data,
         batch_size=hyper_parameters["batch_size"],
         shuffle=False,
         num_workers=10,
+        pin_memory=True,
     )
 
     # Create callbacks
