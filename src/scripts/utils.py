@@ -30,7 +30,7 @@ def ScaleData(
         scaler: a StandardScaler object containing the fitted scaler if validating or testing
     """
 
-    #TODO: This might currently only work for a single ignored column, generalise
+    # TODO: This might currently only work for a single ignored column, generalise
     if ignore is not None:
         ignore_data = data[ignore]
         data = data.drop(ignore, axis=1)
@@ -85,7 +85,7 @@ def prepare_model(
     Outputs:
         train_data: a Dataset object containing the training data
     """
-    #TODO: Change to pass training columns, target column, and categorical bool for target
+    # TODO: Change to pass training columns, target column, and categorical bool for target
 
     train_data = CustomDataset(train_path, columns=keys, train=True)
     train_data.scale(categorical_keys=categorical_keys)

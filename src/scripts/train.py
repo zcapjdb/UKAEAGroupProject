@@ -92,7 +92,7 @@ def main():
             callbacks=callback_list,
             log_every_n_steps=250,
             benchmark=True,
-            check_val_every_n_epoch=5
+            check_val_every_n_epoch=5,
         )
 
         trainer.fit(

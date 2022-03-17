@@ -67,6 +67,7 @@ class Classifier(pl.LightningModule):
             "test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
         )
 
+
 class ClassifierDataset(Dataset):
     """
     Class that implements a PyTorch Dataset object for the classifier.
