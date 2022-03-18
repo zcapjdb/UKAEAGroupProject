@@ -10,12 +10,14 @@ import gpytorch
 import pandas as pd
 import numpy as np
 import pickle
+import gc
 
 from tqdm.auto import tqdm
 from sklearn.preprocessing import StandardScaler
 
+
 # Load the training data
-train_data = pd.read_pickle("/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl")
+train_data = pd.read_pickle("/home/tmadula/data/UKAEA/train_data_clipped.pkl")
 
 train_keys = [
     "ane",
@@ -61,7 +63,7 @@ def main():
         assert x_train_data.shape[0] == y_train_data.shape[0]
         assert x_train_data.shape[1] == len(joint_keys)-1
 
-        n = 2_000
+        n = 3_000
         idx = np.random.permutation(n)
 
         x_train_data = torch.tensor(x_train_data)[idx]
@@ -79,7 +81,7 @@ def main():
         fit_gpytorch_model(mll);
 
         # Testing trained gaussian process:
-        test_data = pd.read_pickle("/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl")
+        test_data = pd.read_pickle("/home/tmadula/data/UKAEA/valid_data_clipped.pkl")
         drop_data_test = test_data[joint_keys].dropna()
 
         drop_data_test = scaler.transform(drop_data_test)
@@ -120,7 +122,7 @@ def main():
         output = output.squeeze()
 
         predictions_dict[target] = {'n': n,'means': output, 'variances': out_var, 'scaler': scaler}
-    
+        
     file_name = f'/home/tmadula/submit/outputs/gp_outputs_{n}.pkl'
     
     with open(file_name, "wb") as file:

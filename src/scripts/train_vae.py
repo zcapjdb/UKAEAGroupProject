@@ -14,7 +14,7 @@ hyper_parameters = {
     "batch_size": 1024,
     "epochs": 250,
     "learning_rate": 1e-3,
-    "latent_dims": 3,
+    "latent_dims": 5,
 }
 
 patience = 25
@@ -23,11 +23,11 @@ patience = 25
 num_gpu = 1  # Make sure to request this in the batch script
 accelerator = "gpu"
 
-run = "5"
+run = "6"
 
-train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
-val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
-test_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/test_data_clipped.pkl"
+train_data_path = "/home/tmadula/data/UKAEA/train_data_clipped.pkl"
+val_data_path = "/home/tmadula/data/UKAEA/valid_data_clipped.pkl"
+test_data_path = "/home/tmadula/data/UKAEA/test_data_clipped.pkl"
 
 comet_project_name = "vae"
 
