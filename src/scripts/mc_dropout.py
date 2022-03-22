@@ -30,8 +30,8 @@ def enable_dropout(model):
         if m.__class__.__name__.startswith("Dropout"):
             m.train()
 
-
-for target in target_keys:
+targets = target_keys[:5]
+for target in targets:
     print(f"Evaluating on {target}")
     path = glob.glob(
         f"/share/rcifdata/jbarr/UKAEAGroupProject/logs/QLKNN-Regressor/Run-8-{target}/*.ckpt"
@@ -56,25 +56,23 @@ for target in target_keys:
     enable_dropout(eval_model)
 
     runs = []
-    hist_list = []
     for i in tqdm(range(100)):
         step_list = []
-        print(f"Run {i}")
         for step, (x, y) in enumerate(test_loader):
+            if len(x) < 10_000: # don't evaluate on the last batch due to smaller size
+                break
             predictions = eval_model(x).detach().numpy()
             step_list.append(predictions)
 
         flattened_predictions = np.array(step_list).flatten()
         runs.append(flattened_predictions)
-        hist_list.append(flattened_predictions[0])
 
     output_mean = np.mean(np.array(runs), axis=0)
-
     out_std = np.std(np.array(runs), axis=0)
 
     params = {"indices": used_idx, "means": output_mean, "std": out_std}
 
     target_dict[target] = params
 
-with open("saved_dictionary_big.pkl", "wb") as f:
+with open("saved_dictionary_big_1.pkl", "wb") as f:
     pickle.dump(target_dict, f)

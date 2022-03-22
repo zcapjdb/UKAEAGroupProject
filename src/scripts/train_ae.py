@@ -24,8 +24,7 @@ hyper_parameters = {
 
 patience = 500
 swa_epoch = 350
-
-num_gpu = 2  # Make sure to request this in the batch script
+num_gpu = 2
 accelerator = "gpu"
 
 run = "19"
@@ -44,9 +43,9 @@ def main():
     comet_logger, train_data, val_data, test_data = prepare_model(
         train_data_path,
         val_data_path,
-        test_data_path,
         AutoEncoderDataset,
         keys,
+        test_data_path,
         comet_project_name,
         experiment_name,
     )

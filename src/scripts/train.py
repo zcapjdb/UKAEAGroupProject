@@ -39,9 +39,9 @@ def main():
         comet_logger, train_data, val_data, test_data = prepare_model(
             train_data_path,
             val_data_path,
-            test_data_path,
             QLKNNDataset,
             keys,
+            test_data_path,
             comet_project_name,
             experiment_name,
         )

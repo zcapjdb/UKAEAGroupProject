@@ -60,9 +60,9 @@ def ScaleData(
 def prepare_model(
     train_path: str,
     val_path: str,
-    test_path: str,
     CustomDataset: Dataset,
     keys: list,
+    test_path: str = None,
     comet_project_name: str = None,
     experiment_name: str = None,
     save_dir: str = "/share/rcifdata/jbarr/UKAEAGroupProject/logs",
@@ -93,8 +93,9 @@ def prepare_model(
     val_data = CustomDataset(val_path, columns=keys)
     val_data.scale(categorical_keys=categorical_keys)
 
-    test_data = CustomDataset(test_path, columns=keys)
-    test_data.scale(categorical_keys=categorical_keys)
+    if test_path is not None:
+        test_data = CustomDataset(test_path, columns=keys)
+        test_data.scale(categorical_keys=categorical_keys)
 
     if comet_project_name is not None:
         comet_api_key = os.environ["COMET_API_KEY"]
@@ -111,7 +112,10 @@ def prepare_model(
         # can have memory issues if too many data points TODO: find out is there a way round this
         # comet_logger.experiment.log_dataframe_profile(train_data.data, name = 'train_data', minimal = True)
 
-    return train_data, val_data, test_data
+    if test_path is not None:
+        return train_data, val_data, test_data
+    else:
+        return train_data, val_data
 
 
 def callbacks(
