@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from pytorch_lightning.plugins import DDPPlugin
 
 from scripts.AutoEncoder import (
-    VAE,
+    VariationalAutoencoder,
     AutoEncoderDataset
 )
 from scripts.utils import train_keys, target_keys, prepare_model, callbacks
@@ -23,7 +23,7 @@ patience = 25
 num_gpu = 1  # Make sure to request this in the batch script
 accelerator = "gpu"
 
-run = "6"
+run = "0"
 
 train_data_path = "/home/tmadula/data/UKAEA/train_data_clipped.pkl"
 val_data_path = "/home/tmadula/data/UKAEA/valid_data_clipped.pkl"
@@ -47,7 +47,10 @@ def main():
     )
 
     # Create model
-    model = VAE(**hyper_parameters)
+    model = VariationalAutoencoder(
+        latent_dims=hyper_parameters['latent_dims'],
+         learning_rate=hyper_parameters['learning_rate']
+    )
     print(model)
 
     # Log hyperparameters

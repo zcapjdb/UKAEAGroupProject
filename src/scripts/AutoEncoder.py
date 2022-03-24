@@ -242,6 +242,97 @@ class AutoEncoder(LightningModule):
             "test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
         )
 
+class VariationalEncoder(nn.Module):
+    def __init__(self, latent_dims):
+        super(VariationalEncoder, self).__init__()
+        self.linear1 = nn.Linear(15, 150)
+        self.linear2 = nn.Linear(150, 75)
+        self.linear3 = nn.Linear(75, 30)
+        self.linear4 = nn.Linear(30, 15)
+        
+        self.mu = nn.Linear(15, latent_dims)
+        self.logvar = nn.Linear(15, latent_dims)
+
+        self.N = torch.distributions.Normal(0, 1)
+        self.N.loc = self.N.loc.cuda() # hack to get sampling on the GPU
+        self.N.scale = self.N.scale.cuda()
+        self.kl = 0
+
+    def forward(self, x):
+        x = x.float()
+        x = F.relu(self.linear1(x))
+        x = F.relu(self.linear2(x))
+        x = F.relu(self.linear3(x))
+        x = F.relu(self.linear4(x))
+        
+        mu =  self.mu(x)
+        sigma = torch.exp(self.logvar(x))
+        z = mu + sigma*self.N.sample(mu.shape)
+        self.kl = (sigma**2 + mu**2 - torch.log(sigma) - 1/2).sum()
+        return z
+
+class VariationalDecoder(nn.Module):
+    def __init__(self, latent_dims):
+        super(VariationalDecoder, self).__init__()
+        self.linear1 = nn.Linear(latent_dims, 15)
+        self.linear2 = nn.Linear(15, 30)
+        self.linear3 = nn.Linear(30, 75)
+        self.linear4 = nn.Linear(75, 150)
+        self.linear5 = nn.Linear(150,15)
+
+    def forward(self, z):
+        z = F.relu(self.linear1(z))
+        z = F.relu(self.linear2(z))
+        z = F.relu(self.linear3(z))
+        z = F.relu(self.linear4(z))
+        z = self.linear5(z)
+        return z
+
+class VariationalAutoencoder(LightningModule):
+    def __init__(self, latent_dims, learning_rate):
+        super(VariationalAutoencoder, self).__init__()
+        self.encoder = VariationalEncoder(latent_dims)
+        self.decoder = VariationalDecoder(latent_dims)
+
+        self.learning_rate = learning_rate
+
+    def forward(self, x):
+        z = self.encoder(x)
+        return self.decoder(z)
+    
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(
+            self.parameters(), lr=self.learning_rate, weight_decay=1e-4
+        )
+        return optimizer
+    
+    def step(self, batch, batch_idx):
+        x = batch
+        x_hat = self.forward(x)
+        loss = ((x - x_hat)**2).sum() + self.encoder.kl
+
+        return loss
+    def training_step(self, batch, batch_idx):
+        loss = self.step(batch, batch_idx)
+        self.log(
+            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+        return {"loss": loss}
+
+    def validation_step(self, batch, batch_idx):
+        loss = self.step(batch, batch_idx)
+        self.log(
+            "val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+
+    def test_step(self, batch, batch_idx):
+        loss = self.step(batch, batch_idx)
+        self.log(
+            "test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+
+
+
 class VAE(LightningModule): 
     def __init__(
         self,
