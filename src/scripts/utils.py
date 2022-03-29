@@ -65,7 +65,7 @@ def prepare_model(
     test_path: str = None,
     comet_project_name: str = None,
     experiment_name: str = None,
-    save_dir: str = "/home/tmadula/UKAEAGroupProject/logs",
+    save_dir: str = "/share/rcifdata/jbarr/UKAEAGroupProject/logs",
     categorical_keys: list = None,
 ):
     """
@@ -124,7 +124,7 @@ def callbacks(
     experiment_name: str,
     top_k: int = 1,
     patience=25,
-    # swa_epoch=75,
+    swa_epoch=75,
 ) -> list:
     """
     Prepare the callbacks for training.
@@ -139,7 +139,7 @@ def callbacks(
     """
 
     log_dir = (
-        f"/home/tmadula/UKAEAGroupProject/logs/{directory}/{experiment_name}"
+        f"/share/rcifdata/jbarr/UKAEAGroupProject/logs/{directory}/{experiment_name}"
     )
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
@@ -149,9 +149,9 @@ def callbacks(
     )
     progress = TQDMProgressBar(refresh_rate=250)
 
-    # SWA = StochasticWeightAveraging(
-    #     swa_epoch_start=swa_epoch
-    # )  # TODO base this off max epochs
+    SWA = StochasticWeightAveraging(
+        swa_epoch_start=swa_epoch
+    )  # TODO base this off max epochs
 
     checkpoint_callback = ModelCheckpoint(
         monitor="val_loss",
@@ -161,7 +161,7 @@ def callbacks(
         mode="min",
     )
 
-    return [early_stop_callback, progress, checkpoint_callback]
+    return [early_stop_callback, progress, checkpoint_callback, SWA]
 
 
 train_keys = [
