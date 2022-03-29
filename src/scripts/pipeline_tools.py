@@ -33,11 +33,23 @@ def prepare_data(train_path, valid_path):
     # Make sure that the class label creation has been done correctly
     assert len(train_data['itg'].unique()) == 2
     assert len(validation_data['itg'].unique()) == 2
-    
+
     return train_data, validation_data
 
 
 # Active Learning diagonistic functions
 
+# Lower or Higher uncertainty post training
+def uncertainty_change(x,y): 
+    theta = np.arctan(y,x)
+    theta = np.rad2deg(theta)
+
+    total = theta.shape[0]
+
+    increase = len(theta[theta < 45])*100/total
+    decrease = len(theta[theta > 45])*100/total
+    no_chnage = 100 - increase - decrease
+
+    print(f' Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_chnage:.3f} ')
 
 
