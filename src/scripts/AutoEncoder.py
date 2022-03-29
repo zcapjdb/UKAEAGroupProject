@@ -7,6 +7,7 @@ import copy
 import matplotlib.pyplot as plt
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import Callback
+import torch.nn.functional as F
 
 from torch.utils.data import Dataset
 from scripts.utils import ScaleData
@@ -76,7 +77,9 @@ class Decoder(nn.Module):
 
 class EncoderBig(nn.Module):
     def __init__(self, latent_dims: int = 3, n_input: int = 15):
+
         super().__init__()
+        
         self.encoder = nn.Sequential(
             nn.Linear(n_input, 150),
             nn.ReLU(),
@@ -89,14 +92,26 @@ class EncoderBig(nn.Module):
             nn.Linear(10, latent_dims),
         )
 
-    def forward(self, x):
-        output = self.encoder(x.float())
+        self.VAE = VAE
+        if self.VAE:
+            self.mu = nn.Linear(latent_dims, latent_dims)
+            self.logvar = nn.Linear(latent_dims, latent_dims)
+    
+    def forward(self,x): 
+        encoded = self.encoder(x.float())
 
-        return output
-
+        if self.VAE:
+            # print(f'Encoded: {encoded}')
+            mu = self.mu(encoded)
+            logvar = self.logvar(encoded)
+            return dist.Normal(mu, logvar.exp())
+            #return mu, logvar
+        
+        return encoded
 
 class DecoderBig(nn.Module):
     def __init__(self, latent_dims: int = 3, n_input: int = 15):
+
         super().__init__()
         self.decoder = nn.Sequential(
             nn.Linear(latent_dims, 10),
@@ -110,8 +125,20 @@ class DecoderBig(nn.Module):
             nn.Linear(150, n_input),
         )
 
+        self.VAE = VAE
+        if self.VAE:
+            self.mu = nn.Linear(n_input, n_input)
+            self.logvar = nn.Linear(n_input, n_input)
+
     def forward(self, x):
+
         output = self.decoder(x.float())
+
+        if self.VAE:
+            mu = self.mu(output)
+            logvar = self.logvar(output)
+            return dist.Normal(mu, logvar.exp())
+            # return decoded
 
         return output
 
@@ -158,7 +185,7 @@ class DecoderHuge(nn.Module):
 
     def forward(self, x):
         output = self.decoder(x.float())
-
+        
         return output
 
 
@@ -200,7 +227,7 @@ class AutoEncoder(LightningModule):
         X = batch
         pred = self.forward(X).squeeze()
 
-        MSE_loss = nn.MSELoss()
+        MSE_loss = nn.MSELoss(reduction='sum')
         loss = MSE_loss(X.float(), pred.float())
 
         return loss
@@ -223,6 +250,202 @@ class AutoEncoder(LightningModule):
         self.log(
             "test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
         )
+
+class VariationalEncoder(nn.Module):
+    def __init__(self, latent_dims):
+        super(VariationalEncoder, self).__init__()
+        self.linear1 = nn.Linear(15, 150)
+        self.linear2 = nn.Linear(150, 75)
+        self.linear3 = nn.Linear(75, 30)
+        self.linear4 = nn.Linear(30, 15)
+        
+        self.mu = nn.Linear(15, latent_dims)
+        self.logvar = nn.Linear(15, latent_dims)
+
+        self.N = torch.distributions.Normal(0, 1)
+        self.N.loc = self.N.loc.cuda() # hack to get sampling on the GPU
+        self.N.scale = self.N.scale.cuda()
+        self.kl = 0
+
+    def forward(self, x):
+        x = x.float()
+        x = F.relu(self.linear1(x))
+        x = F.relu(self.linear2(x))
+        x = F.relu(self.linear3(x))
+        x = F.relu(self.linear4(x))
+        
+        mu =  self.mu(x)
+        sigma = torch.exp(self.logvar(x))
+        z = mu + sigma*self.N.sample(mu.shape)
+        self.kl = (sigma**2 + mu**2 - torch.log(sigma) - 1/2).sum()
+        return z
+
+class VariationalDecoder(nn.Module):
+    def __init__(self, latent_dims):
+        super(VariationalDecoder, self).__init__()
+        self.linear1 = nn.Linear(latent_dims, 15)
+        self.linear2 = nn.Linear(15, 30)
+        self.linear3 = nn.Linear(30, 75)
+        self.linear4 = nn.Linear(75, 150)
+        self.linear5 = nn.Linear(150,15)
+
+    def forward(self, z):
+        z = F.relu(self.linear1(z))
+        z = F.relu(self.linear2(z))
+        z = F.relu(self.linear3(z))
+        z = F.relu(self.linear4(z))
+        z = self.linear5(z)
+        return z
+
+class VariationalAutoencoder(LightningModule):
+    def __init__(self, latent_dims, learning_rate):
+        super(VariationalAutoencoder, self).__init__()
+        self.encoder = VariationalEncoder(latent_dims)
+        self.decoder = VariationalDecoder(latent_dims)
+
+        self.learning_rate = learning_rate
+
+    def forward(self, x):
+        z = self.encoder(x)
+        return self.decoder(z)
+    
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(
+            self.parameters(), lr=self.learning_rate, weight_decay=1e-4
+        )
+        return optimizer
+    
+    def step(self, batch, batch_idx):
+        x = batch
+        x_hat = self.forward(x)
+        loss = ((x - x_hat)**2).sum() + self.encoder.kl
+
+        return loss
+    def training_step(self, batch, batch_idx):
+        loss = self.step(batch, batch_idx)
+        self.log(
+            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+        return {"loss": loss}
+
+    def validation_step(self, batch, batch_idx):
+        loss = self.step(batch, batch_idx)
+        self.log(
+            "val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+
+    def test_step(self, batch, batch_idx):
+        loss = self.step(batch, batch_idx)
+        self.log(
+            "test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+
+
+
+class VAE(LightningModule): 
+    def __init__(
+        self,
+        n_inputs=15,
+        latent_dims=3,
+        batch_size: int = 2048,
+        epochs: int = 100,
+        learning_rate: float =1e-3
+    ): 
+        super().__init__()
+        self.n_inputs = n_inputs
+        self.latent_dims = latent_dims
+
+        self.batch_size = batch_size
+        self.epochs = epochs
+        self.learning_rate = learning_rate
+
+        # encoder
+        self.enc1 = nn.Linear(in_features=self.n_inputs, out_features =150)
+        self.enc2 = nn.Linear(in_features=150, out_features=75)
+        self.enc3 = nn.Linear(in_features=75, out_features =25)
+        
+        self.mu = nn.Linear(25,self.latent_dims)
+        self.sigma = nn.Linear(25,self.latent_dims)
+ 
+        # decoder 
+        self.dec1 = nn.Linear(in_features = self.latent_dims, out_features = 25)
+        self.dec2 = nn.Linear(in_features = 25, out_features = 75)
+        self.dec3 = nn.Linear(in_features = 75, out_features = 150)
+        self.dec4 = nn.Linear(150, self.n_inputs)
+
+    def reparameterize(self, mu, log_var):
+        """
+        :param mu: mean from the encoder's latent space
+        :param log_var: log variance from the encoder's latent space
+        """
+        std = torch.exp(0.5*log_var) # standard deviation
+        eps = torch.randn_like(std) # `randn_like` as we need the same size
+        sample = mu + (eps * std) # sampling as if coming from the input space
+        return sample
+ 
+    def forward(self, x):
+        # encoding
+        x = x.float()
+        x = F.relu(self.enc1(x.float()))
+        x = F.relu(self.enc2(x.float()))
+        x = F.relu(self.enc3(x.float()))
+        # get `mu` and `log_var`
+        mu = self.mu(x.float()) # the first feature values as mean
+        log_var = self.sigma(x.float()) # the other feature values as variance
+        # get the latent vector through reparameterization
+        z = self.reparameterize(mu, log_var)
+ 
+        # decoding
+        z = F.relu(self.dec1(z.float()))
+        z = F.relu(self.dec2(z.float()))
+        z = F.relu(self.dec3(z.float()))
+        
+        reconstruction = self.dec4(z.float())
+        return reconstruction.float(), mu.float(), log_var.float()
+    
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(
+            self.parameters(), lr=self.learning_rate)
+        return optimizer
+
+    def step(self, batch, batch_idx):
+        x = batch
+        reconstruction, mu, logvar = self.forward(x)
+        MSE = nn.MSELoss(reduction='sum')
+        MSE_loss = MSE(reconstruction.float(), x.float())
+        loss = final_loss(MSE_loss, mu, logvar)
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        loss = self.step(batch, batch_idx)
+        self.log(
+            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+        return {"loss": loss}
+
+    def validation_step(self, batch, batch_idx):
+        loss = self.step(batch, batch_idx)
+        self.log(
+            "val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+
+    def test_step(self, batch, batch_idx):
+        loss = self.step(batch, batch_idx)
+        self.log(
+            "test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+def final_loss(MSE_loss, mu, logvar):
+        """
+        This function will add the reconstruction loss (BCELoss) and the 
+        KL-Divergence.
+        KL-Divergence = 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+        :param bce_loss: recontruction loss
+        :param mu: the mean from the latent vector
+        :param logvar: log variance from the latent vector
+        """
+        MSE = MSE_loss 
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return MSE + KLD 
 
 
 class AutoEncoderDataset(Dataset):
