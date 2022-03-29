@@ -74,27 +74,12 @@ class Decoder(nn.Module):
 
         return decoded
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-class EncoderBig(nn.Module): 
-    def __init__(self,n_input=15, latent_dims=3, VAE: bool = False): 
-=======
 
 class EncoderBig(nn.Module):
     def __init__(self, latent_dims: int = 3, n_input: int = 15):
->>>>>>> main
-=======
 
-class EncoderBig(nn.Module):
-    def __init__(self, latent_dims: int = 3, n_input: int = 15):
->>>>>>> main
-=======
-
-class EncoderBig(nn.Module):
-    def __init__(self, latent_dims: int = 3, n_input: int = 15):
->>>>>>> origin
         super().__init__()
+        
         self.encoder = nn.Sequential(
             nn.Linear(n_input, 150),
             nn.ReLU(),
@@ -106,10 +91,7 @@ class EncoderBig(nn.Module):
             nn.ReLU(),
             nn.Linear(10, latent_dims),
         )
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-        
+
         self.VAE = VAE
         if self.VAE:
             self.mu = nn.Linear(latent_dims, latent_dims)
@@ -127,41 +109,9 @@ class EncoderBig(nn.Module):
         
         return encoded
 
-class DecoderBig(nn.Module): 
-    def __init__(self,n_input=15, latent_dims=3, VAE: bool = False): 
-=======
-
-    def forward(self, x):
-        output = self.encoder(x.float())
-
-        return output
-
-
 class DecoderBig(nn.Module):
     def __init__(self, latent_dims: int = 3, n_input: int = 15):
->>>>>>> main
-=======
 
-    def forward(self, x):
-        output = self.encoder(x.float())
-
-        return output
-
-
-class DecoderBig(nn.Module):
-    def __init__(self, latent_dims: int = 3, n_input: int = 15):
->>>>>>> main
-=======
-
-    def forward(self, x):
-        output = self.encoder(x.float())
-
-        return output
-
-
-class DecoderBig(nn.Module):
-    def __init__(self, latent_dims: int = 3, n_input: int = 15):
->>>>>>> origin
         super().__init__()
         self.decoder = nn.Sequential(
             nn.Linear(latent_dims, 10),
@@ -175,25 +125,20 @@ class DecoderBig(nn.Module):
             nn.Linear(150, n_input),
         )
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
         self.VAE = VAE
         if self.VAE:
             self.mu = nn.Linear(n_input, n_input)
             self.logvar = nn.Linear(n_input, n_input)
 
-    def forward(self, x): 
-=======
     def forward(self, x):
->>>>>>> main
-=======
-    def forward(self, x):
->>>>>>> main
-=======
-    def forward(self, x):
->>>>>>> origin
+
         output = self.decoder(x.float())
+
+        if self.VAE:
+            mu = self.mu(output)
+            logvar = self.logvar(output)
+            return dist.Normal(mu, logvar.exp())
+            # return decoded
 
         return output
 
@@ -240,25 +185,7 @@ class DecoderHuge(nn.Module):
 
     def forward(self, x):
         output = self.decoder(x.float())
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
         
-        if self.VAE:
-            mu = self.mu(output)
-            logvar = self.logvar(output)
-            return dist.Normal(mu, logvar.exp())
-            #return decoded
-        
-=======
-
->>>>>>> main
-=======
-
->>>>>>> main
-=======
-
->>>>>>> origin
         return output
 
 
