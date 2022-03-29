@@ -21,7 +21,7 @@ train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipp
 val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
 test_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/test_data_clipped.pkl"
 
-parameters = {"nodes": [128,256,512], "layers": [3,4,5]}
+parameters = {"nodes": [128, 256, 512], "layers": [3, 4, 5]}
 
 hyper_parameters = {
     "batch_size": 4096,
@@ -56,7 +56,9 @@ def grid_search(parameters, train_loader, val_loader, test_loader, inshape=15):
 
             # build model
             model = Classifier()
-            early_stopping = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=10)
+            early_stopping = EarlyStopping(
+                monitor="val_loss", min_delta=0.0, patience=10
+            )
             progress_bar = TQDMProgressBar(refresh_rate=250)
 
             model.build_classifier(i, node, inshape)
@@ -70,18 +72,18 @@ def grid_search(parameters, train_loader, val_loader, test_loader, inshape=15):
                 callbacks=[early_stopping, progress_bar],
                 log_every_n_steps=250,
                 precision=32,
-                amp_backend="native"
+                amp_backend="native",
             )
 
             trainer.fit(model, train_loader, val_loader)
-            result_1 = trainer.test(dataloaders = test_loader)
+            result_1 = trainer.test(dataloaders=test_loader)
             print(result_1)
 
             scaled_model = ModelWithTemperature(model)
             scaled_model.set_temperature(val_loader)
 
             trainer_test = Trainer(precision=32, amp_backend="native")
-            result = trainer_test.test(model = scaled_model, dataloaders = test_loader)
+            result = trainer_test.test(model=scaled_model, dataloaders=test_loader)
             result = trainer.test(dataloaders=test_loader)
             print(result)
 
@@ -111,7 +113,7 @@ def main():
         test_data_path,
         ClassifierDataset,
         keys,
-        categorical_keys = ["target"],
+        categorical_keys=["target"],
     )
 
     train_loader = DataLoader(

@@ -24,10 +24,10 @@ class QLKNN(pl.LightningModule):
         super().__init__()
         self.model = nn.Sequential(
             nn.Linear(n_input, 128),
-            nn.Dropout(p = 0.2),
+            nn.Dropout(p=0.2),
             nn.ReLU(),
             nn.Linear(128, 128),
-            nn.Dropout(p = 0.2),
+            nn.Dropout(p=0.2),
             nn.ReLU(),
             nn.Linear(128, 1),
         )
@@ -81,6 +81,7 @@ class QLKNN(pl.LightningModule):
             c_good = torch.mean(torch.square(y - y_hat))
             c_stab = 0
         return c_good + lambda_stab * k_stab
+
 
 class QLKNN_Big(pl.LightningModule):
     """
@@ -98,19 +99,19 @@ class QLKNN_Big(pl.LightningModule):
         super().__init__()
         self.model = nn.Sequential(
             nn.Linear(n_input, 128),
-            nn.Dropout(p = 0.1),
+            nn.Dropout(p=0.1),
             nn.ReLU(),
             nn.Linear(128, 256),
-            nn.Dropout(p = 0.1),
+            nn.Dropout(p=0.1),
             nn.ReLU(),
             nn.Linear(256, 256),
-            nn.Dropout(p = 0.1),
+            nn.Dropout(p=0.1),
             nn.ReLU(),
             nn.Linear(256, 256),
-            nn.Dropout(p = 0.1),
+            nn.Dropout(p=0.1),
             nn.ReLU(),
             nn.Linear(256, 128),
-            nn.Dropout(p = 0.1),
+            nn.Dropout(p=0.1),
             nn.ReLU(),
             nn.Linear(128, 1),
         )
@@ -164,7 +165,8 @@ class QLKNN_Big(pl.LightningModule):
             c_good = torch.mean(torch.square(y - y_hat))
             c_stab = 0
         return c_good + lambda_stab * k_stab
-        
+
+
 class QLKNNDataset(Dataset):
     """
     Class that implements a PyTorch Dataset object for the QLKNN model
