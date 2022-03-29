@@ -19,16 +19,15 @@ hyper_parameters = {
     "batch_size": 2048,
     "epochs": 500,
     "learning_rate": 0.001,
-    "latent_dims": 3,
+    "latent_dims": 5,
 }
 
 patience = 500
-swa_epoch = 300
-
-num_gpu = 3  # Make sure to request this in the batch script
+swa_epoch = 350
+num_gpu = 2
 accelerator = "gpu"
 
-run = "17"
+run = "19"
 
 train_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
 val_data_path = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
@@ -44,15 +43,17 @@ def main():
     comet_logger, train_data, val_data, test_data = prepare_model(
         train_data_path,
         val_data_path,
-        test_data_path,
         AutoEncoderDataset,
         keys,
+        test_data_path,
         comet_project_name,
         experiment_name,
     )
 
     # Create model
-    model = AutoEncoder(n_input=15,encoder=EncoderHuge, decoder=DecoderHuge, **hyper_parameters)
+    model = AutoEncoder(
+        n_input=15, encoder=EncoderHuge, decoder=DecoderHuge, **hyper_parameters
+    )
     print(model)
 
     # Log hyperparameters
@@ -64,18 +65,21 @@ def main():
         batch_size=hyper_parameters["batch_size"],
         shuffle=True,
         num_workers=10,
+        pin_memory=True,
     )
     val_loader = DataLoader(
         val_data,
         batch_size=hyper_parameters["batch_size"],
         shuffle=False,
         num_workers=10,
+        pin_memory=True,
     )
     test_loader = DataLoader(
         test_data,
         batch_size=hyper_parameters["batch_size"],
         shuffle=False,
         num_workers=10,
+        pin_memory=True,
     )
 
     # Create callbacks
@@ -105,14 +109,12 @@ def main():
         callbacks=callback_list,
         log_every_n_steps=250,
         benchmark=True,
-        check_val_every_n_epoch=5
+        check_val_every_n_epoch=5,
+        auto_select_gpus=True,
     )
 
     # Train model
     trainer.fit(model, train_loader, val_loader)
-
-    # Evaluate model
-   # trainer.test(dataloaders=test_loader)
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ hyper_parameters = {
 patience = 10
 swa_epoch = 100
 
-num_gpu = 4  # Make sure to request this in the batch script
+num_gpu = 2  # Make sure to request this in the batch script
 accelerator = "gpu"
 
 run = "8"
@@ -39,9 +39,9 @@ def main():
         comet_logger, train_data, val_data, test_data = prepare_model(
             train_data_path,
             val_data_path,
-            test_data_path,
             QLKNNDataset,
             keys,
+            test_data_path,
             comet_project_name,
             experiment_name,
         )
@@ -56,18 +56,21 @@ def main():
             batch_size=hyper_parameters["batch_size"],
             shuffle=True,
             num_workers=10,
+            pin_memory=True,
         )
         val_loader = DataLoader(
             val_data,
             batch_size=hyper_parameters["batch_size"],
             shuffle=False,
             num_workers=10,
+            pin_memory=True,
         )
         test_loader = DataLoader(
             test_data,
             batch_size=hyper_parameters["batch_size"],
             shuffle=False,
             num_workers=10,
+            pin_memory=True,
         )
 
         # Create callbacks
@@ -89,7 +92,7 @@ def main():
             callbacks=callback_list,
             log_every_n_steps=250,
             benchmark=True,
-            check_val_every_n_epoch=5
+            check_val_every_n_epoch=5,
         )
 
         trainer.fit(

@@ -39,7 +39,7 @@ class Encoder(nn.Module):
             mu = self.mu(encoded)
             logvar = self.logvar(encoded)
             return dist.Normal(mu, logvar.exp())
-            #return mu, logvar
+            # return mu, logvar
 
         return encoded
 
@@ -70,12 +70,18 @@ class Decoder(nn.Module):
             mu = self.mu(decoded)
             logvar = self.logvar(decoded)
             return dist.Normal(mu, logvar.exp())
-            #return decoded
+            # return decoded
 
         return decoded
 
+<<<<<<< HEAD
 class EncoderBig(nn.Module): 
     def __init__(self,n_input=15, latent_dims=3, VAE: bool = False): 
+=======
+
+class EncoderBig(nn.Module):
+    def __init__(self, latent_dims: int = 3, n_input: int = 15):
+>>>>>>> main
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Linear(n_input, 150),
@@ -88,6 +94,7 @@ class EncoderBig(nn.Module):
             nn.ReLU(),
             nn.Linear(10, latent_dims),
         )
+<<<<<<< HEAD
         
         self.VAE = VAE
         if self.VAE:
@@ -108,6 +115,17 @@ class EncoderBig(nn.Module):
 
 class DecoderBig(nn.Module): 
     def __init__(self,n_input=15, latent_dims=3, VAE: bool = False): 
+=======
+
+    def forward(self, x):
+        output = self.encoder(x.float())
+
+        return output
+
+
+class DecoderBig(nn.Module):
+    def __init__(self, latent_dims: int = 3, n_input: int = 15):
+>>>>>>> main
         super().__init__()
         self.decoder = nn.Sequential(
             nn.Linear(latent_dims, 10),
@@ -121,18 +139,23 @@ class DecoderBig(nn.Module):
             nn.Linear(150, n_input),
         )
 
+<<<<<<< HEAD
         self.VAE = VAE
         if self.VAE:
             self.mu = nn.Linear(n_input, n_input)
             self.logvar = nn.Linear(n_input, n_input)
 
     def forward(self, x): 
+=======
+    def forward(self, x):
+>>>>>>> main
         output = self.decoder(x.float())
-        
+
         return output
 
-class EncoderHuge(nn.Module): 
-    def __init__(self, latent_dims: int = 3, n_input: int = 15): 
+
+class EncoderHuge(nn.Module):
+    def __init__(self, latent_dims: int = 3, n_input: int = 15):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Linear(n_input, 50),
@@ -147,14 +170,15 @@ class EncoderHuge(nn.Module):
             nn.ReLU(),
             nn.Linear(10, latent_dims),
         )
-    
-    def forward(self,x): 
+
+    def forward(self, x):
         output = self.encoder(x.float())
-        
+
         return output
 
-class DecoderHuge(nn.Module): 
-    def __init__(self, latent_dims: int = 3, n_input: int = 15): 
+
+class DecoderHuge(nn.Module):
+    def __init__(self, latent_dims: int = 3, n_input: int = 15):
         super().__init__()
         self.decoder = nn.Sequential(
             nn.Linear(latent_dims, 10),
@@ -169,8 +193,10 @@ class DecoderHuge(nn.Module):
             nn.ReLU(),
             nn.Linear(50, n_input),
         )
-    def forward(self, x): 
+
+    def forward(self, x):
         output = self.decoder(x.float())
+<<<<<<< HEAD
         
         if self.VAE:
             mu = self.mu(output)
@@ -178,7 +204,11 @@ class DecoderHuge(nn.Module):
             return dist.Normal(mu, logvar.exp())
             #return decoded
         
+=======
+
+>>>>>>> main
         return output
+
 
 class AutoEncoder(LightningModule):
     def __init__(
