@@ -142,6 +142,9 @@ class ITGDataset(Dataset):
         self.y = y
         self.z = z
 
+        # add indices to all the data points
+        self.indices = np.arange(len(self.X))
+
     # number of rows in the dataset
     def __len__(self):
         return len(self.y)
@@ -153,13 +156,42 @@ class ITGDataset(Dataset):
         else:
             return [self.X[idx], self.y[idx]]
 
-    # add method to add a new row to the dataset
+    # method to add a new row to the dataset
     def add(self, x, y, z = None):
         self.X = np.append(self.X, x, axis = 0)
         self.y = np.append(self.y, y, axis = 0)
         
         if z is not None:
             self.z = np.append(self.z, z, axis = 0)
+
+        # update indices from max index
+        max_index = np.max(self.indices)
+        new_indices = np.arange(max_index + 1, max_index + len(x) + 1)
+        self.indices = np.append(self.indices, new_indices)
+
+    # get index of a row
+    def get_index(self, idx):
+        return self.indices[idx]
+
+    # method to remove rows from the dataset using indices
+    def remove(self, idx):
+        # get indices of rows to be removed
+        indices = self.indices[idx]
+
+        # remove rows from dataset
+        self.X = np.delete(self.X, indices, axis = 0)
+        self.y = np.delete(self.y, indices, axis = 0)
+        if self.z is not None:
+            self.z = np.delete(self.z, indices, axis = 0)
+
+
+    # method to sample a batch of rows from the dataset - not inplace!
+    def sample(self, batch_size):
+        indices = np.random.randint(0, len(self.y), batch_size)
+        if self.z is not None:
+            return [self.X[indices], self.y[indices], self.z[indices]]
+        else:
+            return [self.X[indices], self.y[indices]]
 
 # General Model functions
 
