@@ -1,3 +1,4 @@
+from itertools import count
 import torch
 import torch.nn as nn 
 from torch.utils.data import Dataset, DataLoader
@@ -8,6 +9,7 @@ import pandas as pd
 from scripts.utils import train_keys
 from scripts.Models import ITGDataset
 from tqdm.auto import tqdm 
+import copy 
 
 
 # Data preparation functions
@@ -53,9 +55,11 @@ def select_unstable_data(dataset, batch_size, classifier):
     # get initial size of the dataset 
     init_size = len(dataloader.dataset)
 
-    print(init_size)
+    # print(init_size)
 
     failed_count = 0
+
+    temp_dataset = copy.deepcopy(dataset)
 
     for i, batch in enumerate(tqdm(dataloader)):
         x = batch[:,:15]
@@ -63,21 +67,21 @@ def select_unstable_data(dataset, batch_size, classifier):
         idx = batch[:,-2].type(torch.int)
 
         y_hat = classifier(x.float())
+
+        # TODO: Verify which cutoff to use for the classifer
         pred_class = torch.round(y_hat.squeeze().detach())
         pred_class = pred_class.type(torch.int)
 
         failed = np.where(pred_class != y.numpy())[0]
         failed_count += len(failed)
 
-        dataset.data.drop(index=idx[failed], inplace=True)
+        temp_dataset.data.drop(index=idx[failed], inplace=True)
         
+    dataset.data = temp_dataset.data
+    
     fin_size = len(dataset)
 
-    print(fin_size)
-
-    print(failed_count)
-
-    print(init_size - fin_size - failed_count)
+    assert fin_size + failed_count == init_size
 
 # Regressor tools
 def regressor_uncertainty(dataloader, regressor, keep = 0.1):
@@ -118,7 +122,17 @@ def regressor_uncertainty(dataloader, regressor, keep = 0.1):
 
 # Active Learning diagonistic functions
 
-# Lower or Higher uncertainty post training
+def classifier_accuracy(dataset, target_var):
+
+    n_total = len(dataset)
+    counts = dataset.data.groupby(target_var).count()
+
+    accuracy = counts.loc[0][0]*100/n_total
+
+    print(f'Correctly Classified {accuracy:.3f} %')
+
+
+
 def uncertainty_change(x, y):
     theta = np.arctan(y, x)
     theta = np.rad2deg(theta)

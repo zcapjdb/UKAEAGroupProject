@@ -244,7 +244,7 @@ class ITGDatasetDF(Dataset):
         self.data = pd.concat([self.data, rows], axis=0)
 
     def remove(self, indices):
-        self.data = self.data[~self.data["index"].isin(indices)]
+        self.data.drop(index = indices, inplace = True)
 
     def __len__(self):
         return len(self.data.index)

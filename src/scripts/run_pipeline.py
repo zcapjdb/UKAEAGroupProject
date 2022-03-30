@@ -1,6 +1,6 @@
 # Load the required data
 
-from scripts.pipeline_tools import prepare_data, select_unstable_data
+from scripts.pipeline_tools import classifier_accuracy, prepare_data, select_unstable_data
 from scripts.Models import ITGDatasetDF, load_model
 from sklearn.preprocessing import StandardScaler
 
@@ -33,7 +33,7 @@ scaler.fit_transform(train_data.drop(['itg'], axis = 1))
 train_dataset = ITGDatasetDF(train_data, target_column='efiitg_gb', target_var='itg')
 valid_dataset = ITGDatasetDF(train_data, target_column='efiitg_gb', target_var='itg')
 
-# TODO: further testing of the scale function
+# # TODO: further testing of the scale function
 train_dataset.scale(scaler)
 valid_dataset.scale(scaler)
 
@@ -58,7 +58,8 @@ valid_sample = valid_dataset.sample(10_000)
 # print(valid_sample.data.columns)
 
 # Pass points through the ITG Classifier and return points that pass (what threshold?)
-test = select_unstable_data(valid_sample, 10, models['ITG_class'])
+select_unstable_data(valid_sample, 10, models['ITG_class'])
+classifier_accuracy(valid_sample, target_var='itg')
 
 # Run MC dropout on points that pass the ITG classifier 
 
