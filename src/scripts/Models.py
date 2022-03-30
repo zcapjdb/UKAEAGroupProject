@@ -7,7 +7,7 @@ import numpy as np
 # Class definitions
 class ITG_Classifier(nn.Module): 
     def __init__(self):
-        super.__init__()
+        super().__init__()
         self.type = 'classifier'
         self.model = self.model = nn.Sequential(
             nn.Linear(15, 128),
@@ -89,6 +89,12 @@ class ITG_Regressor(nn.Module):
     def forward(self, x):
         y_hat = self.model(x.float())
         return y_hat
+        
+    def enable_dropout(self): 
+        """Function to enable the dropout layers during test-time"""
+        for m in self.model.modules():
+            if m.__class__.__name__.startswith("Dropout"):
+                m.train()
     
     def loss_function(self, y, y_hat):
         # Loss function missing regularization term (to be added using Adam optimizer)
@@ -142,6 +148,9 @@ class ITGDataset(Dataset):
         self.y = y
         self.z = z
 
+        # add indices to all the data points
+        self.indices = np.arange(len(self.X))
+
     # number of rows in the dataset
     def __len__(self):
         return len(self.y)
@@ -153,13 +162,42 @@ class ITGDataset(Dataset):
         else:
             return [self.X[idx], self.y[idx]]
 
-    # add method to add a new row to the dataset
+    # method to add a new row to the dataset
     def add(self, x, y, z = None):
         self.X = np.append(self.X, x, axis = 0)
         self.y = np.append(self.y, y, axis = 0)
         
         if z is not None:
             self.z = np.append(self.z, z, axis = 0)
+
+        # update indices from max index
+        max_index = np.max(self.indices)
+        new_indices = np.arange(max_index + 1, max_index + len(x) + 1)
+        self.indices = np.append(self.indices, new_indices)
+
+    # get index of a row
+    def get_index(self, idx):
+        return self.indices[idx]
+
+    # method to remove rows from the dataset using indices
+    def remove(self, idx):
+        # get indices of rows to be removed
+        indices = self.indices[idx]
+
+        # remove rows from dataset
+        self.X = np.delete(self.X, indices, axis = 0)
+        self.y = np.delete(self.y, indices, axis = 0)
+        if self.z is not None:
+            self.z = np.delete(self.z, indices, axis = 0)
+
+
+    # method to sample a batch of rows from the dataset - not inplace!
+    def sample(self, batch_size):
+        indices = np.random.randint(0, len(self.y), batch_size)
+        if self.z is not None:
+            return [self.X[indices], self.y[indices], self.z[indices]]
+        else:
+            return [self.X[indices], self.y[indices]]
 
 # General Model functions
 
@@ -196,6 +234,19 @@ def train_model(model, train_loader,val_loader, epochs, learning_rate, weight_de
             validation_losses.append(validation_losses)
 
         return losses, validation_losses
+
+def load_model(model, save_path):
+    print(model)
+    if model == 'ITG_class':
+        classifier = ITG_Classifier()
+        classifier.load_state_dict(torch.load(save_path))
+        return classifier
+    
+    elif model == 'ITG_reg': 
+        regressor = ITG_Regressor()
+        regressor.load_state_dict(torch.load(save_path))
+        return regressor
+    
 
 
 
