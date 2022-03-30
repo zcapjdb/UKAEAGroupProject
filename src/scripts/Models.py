@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 # Class definitions
 class ITG_Classifier(nn.Module): 
     def __init__(self):
-        super.__init__()
+        super().__init__()
         self.type = 'classifier'
         self.model = self.model = nn.Sequential(
             nn.Linear(15, 128),
@@ -91,6 +91,12 @@ class ITG_Regressor(nn.Module):
     def forward(self, x):
         y_hat = self.model(x.float())
         return y_hat
+        
+    def enable_dropout(self): 
+        """Function to enable the dropout layers during test-time"""
+        for m in self.model.modules():
+            if m.__class__.__name__.startswith("Dropout"):
+                m.train()
     
     def loss_function(self, y, y_hat):
         # Loss function missing regularization term (to be added using Adam optimizer)
@@ -280,6 +286,19 @@ def train_model(model, train_loader,val_loader, epochs, learning_rate, weight_de
             validation_losses.append(validation_losses)
 
         return losses, validation_losses
+
+def load_model(model, save_path):
+    print(model)
+    if model == 'ITG_class':
+        classifier = ITG_Classifier()
+        classifier.load_state_dict(torch.load(save_path))
+        return classifier
+    
+    elif model == 'ITG_reg': 
+        regressor = ITG_Regressor()
+        regressor.load_state_dict(torch.load(save_path))
+        return regressor
+    
 
 
 
