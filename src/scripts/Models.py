@@ -3,6 +3,8 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
 import numpy as np
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler
 
 # Class definitions
 class ITG_Classifier(nn.Module): 
@@ -186,12 +188,62 @@ class ITGDataset(Dataset):
 
 
     # method to sample a batch of rows from the dataset - not inplace!
+    # TODO: carry over indices into sample dataset
     def sample(self, batch_size):
         indices = np.random.randint(0, len(self.y), batch_size)
         if self.z is not None:
-            return [self.X[indices], self.y[indices], self.z[indices]]
+            return ITGDataset(self.X[indices], self.y[indices], self.z[indices])
         else:
-            return [self.X[indices], self.y[indices]]
+            return ITGDataset(self.X[indices], self.y[indices])
+
+
+class ITGDatasetDF(Dataset):
+    # DataFrame version of ITGDataset
+    def __init__(self, df: pd.DataFrame , train_columns: list = None, target_columns: list = None):
+        self.data = df
+        self.train_columns = train_columns
+        self.target_columns = target_columns
+
+        columns = train_columns + target_columns
+        if columns is not None:
+            self.data = self.data[columns]
+
+        try:
+            self.data['itg'] = np.where(train_data['efiitg_gb'] != 0, 1, 0)
+        except:
+            raise ValueError('train_data does not contain efiitg_gb column')
+
+        self.data = self.data.dropna()
+
+        self.data['index'] = np.arange(len(self.data))
+
+    def scale(self, scaler):
+        # Scale features in the scaler object and leave the rest as is
+        scaled_features = scaler.feature_names_in_
+
+        column_transformer = ColumnTransformer(
+            [('scaler', scaler, scaled_features)],
+            remainder='passthrough'
+        )
+
+        self.data = column_transformer.fit_transform(self.data)
+
+    def sample(self, batch_size):
+        return ITGDataset(self.data.sample(batch_size), self.train_columns, self.target_columns)
+
+    def add(self, rows):
+        rows['index'] = np.arange(len(self.data), len(self.data) + len(rows))
+        self.data = pd.concat([self.data, rows], axis = 0)
+
+    def remove(self, indices):
+        self.data = self.data[~self.data['index'].isin(indices)]
+        
+    def __len__(self):
+        return len(self.data.index)
+
+    def __getitem__(self, idx):
+        return self.data.iloc[idx]
+            
 
 # General Model functions
 
