@@ -1,7 +1,8 @@
 # Load the required data
 
-from scripts.pipeline_tools import prepare_data
-from scripts.Models import load_model
+from scripts.pipeline_tools import prepare_data, select_unstable_data
+from scripts.Models import ITGDatasetDF, load_model
+from sklearn.preprocessing import StandardScaler
 
 # TODO: Put some of these variables in a yaml config file
 
@@ -24,7 +25,18 @@ VALIDATION_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipp
 
 
 
-train_data, val_data = prepare_data(TRAIN_PATH, VALIDATION_PATH)
+train_data, val_data = prepare_data(TRAIN_PATH, VALIDATION_PATH, target_column='efiitg_gb', target_var='itg')
+
+scaler = StandardScaler()
+scaler.fit_transform(train_data.drop(['itg'], axis = 1))
+
+train_dataset = ITGDatasetDF(train_data, target_column='efiitg_gb', target_var='itg')
+valid_dataset = ITGDatasetDF(train_data, target_column='efiitg_gb', target_var='itg')
+
+# TODO: further testing of the scale function
+train_dataset.scale(scaler)
+valid_dataset.scale(scaler)
+
 
 # Load pretrained models
 models = {}
@@ -34,14 +46,19 @@ for model in pretrained:
         models[model] = trained_model
 
 for model_name in models:
+    print(f'Model: {model_name}')
     print(models[model_name])
 
 # Train untrained models (may not be needed)
 
 # Sample subset of data to use in active learning (10K for now)
 
-# Pass points through the ITG Classifier and return points that pass (what threshold?)
+valid_sample = valid_dataset.sample(10_000)
 
+# print(valid_sample.data.columns)
+
+# Pass points through the ITG Classifier and return points that pass (what threshold?)
+test = select_unstable_data(valid_sample, 10, models['ITG_class'])
 
 # Run MC dropout on points that pass the ITG classifier 
 

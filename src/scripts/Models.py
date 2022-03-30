@@ -1,3 +1,4 @@
+from operator import index
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -206,39 +207,36 @@ class ITGDataset(Dataset):
 
 class ITGDatasetDF(Dataset):
     # DataFrame version of ITGDataset
-    def __init__(
-        self, df: pd.DataFrame, train_columns: list = None, target_columns: list = None
-    ):
+    def __init__(self, df: pd.DataFrame, target_column: str, target_var: str):
         self.data = df
-        self.train_columns = train_columns
-        self.target_columns = target_columns
+        self.target = target_column
+        self.label = target_var 
 
-        self.columns = self.train_columns + self.target_columns
-        if self.columns is not None:
-            self.data = self.data[self.columns]
+        # make sure the dataframe contains the variable information we need
+        assert target_column and target_var in list(self.data.columns)
 
-        try:
-            self.data["itg"] = np.where(train_data["efiitg_gb"] != 0, 1, 0)
-        except:
-            raise ValueError("train_data does not contain efiitg_gb column")
-
-        self.data = self.data.dropna()
-
-        self.data["index"] = np.arange(len(self.data))
+        self.data["index"] = self.data.index
 
     def scale(self, scaler):
         # Scale features in the scaler object and leave the rest as is
-        scaled_features = scaler.feature_names_in_
+        scaled = scaler.transform(self.data.drop([self.label, 'index'], axis = 1))
 
-        column_transformer = ColumnTransformer(
-            [("scaler", scaler, scaled_features)], remainder="passthrough"
-        )
+        cols = scaler.feature_names_in_
 
-        self.data = column_transformer.fit_transform(self.data)
+        temp_df = pd.DataFrame(scaled, index=self.data.index,columns=cols )
+
+        assert set(list(temp_df.index)) == set(list(self.data.index))
+
+        temp_df['index'] = self.data['index']
+        temp_df[self.label] = self.data[self.label]
+
+        self.data = temp_df
+
+        del temp_df
 
     def sample(self, batch_size):
-        return ITGDataset(
-            self.data.sample(batch_size), self.train_columns, self.target_columns
+        return ITGDatasetDF(
+            self.data.sample(batch_size), self.target, self.label
         )
 
     def add(self, rows):
@@ -252,7 +250,7 @@ class ITGDatasetDF(Dataset):
         return len(self.data.index)
 
     def __getitem__(self, idx):
-        return self.data.iloc[idx]
+        return self.data.iloc[idx].to_numpy()
 
 
 # General Model functions

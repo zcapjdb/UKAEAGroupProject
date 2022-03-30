@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn 
 from torch.utils.data import Dataset, DataLoader
 
@@ -10,20 +11,20 @@ from tqdm.auto import tqdm
 
 
 # Data preparation functions
-def prepare_data(train_path, valid_path):
+def prepare_data(train_path, valid_path, target_column, target_var):
     train_data = pd.read_pickle(train_path)
     validation_data = pd.read_pickle(valid_path)
 
     # Remove NaN's and add appropripate class labels
-    keep_keys = train_keys + ["efiitg_gb"]
-
+    keep_keys = train_keys + [target_column]
+   
     train_data = train_data[keep_keys]
     validation_data = validation_data[keep_keys]
 
     nt, nv = train_data.shape[0], validation_data.shape[0]
     nt_nan, nv_nan = (
-        train_data["efiitg_gb"].isna().sum(),
-        validation_data["efiitg_gb"].isna().sum(),
+        train_data[target_column].isna().sum(),
+        validation_data[target_column].isna().sum(),
     )
 
     train_data = train_data.dropna()
@@ -33,17 +34,50 @@ def prepare_data(train_path, valid_path):
     assert train_data.shape[0] + nt_nan == nt
     assert validation_data.shape[0] + nv_nan == nv
 
-    train_data["itg"] = np.where(train_data["efiitg_gb"] != 0, 1, 0)
-    validation_data["itg"] = np.where(validation_data["efiitg_gb"] != 0, 1, 0)
+    train_data[target_var] = np.where(train_data[target_column] != 0, 1, 0)
+    validation_data[target_var] = np.where(validation_data[target_column] != 0, 1, 0)
 
     # Make sure that the class label creation has been done correctly
-    assert len(train_data["itg"].unique()) == 2
-    assert len(validation_data["itg"].unique()) == 2
+    assert len(train_data[target_var].unique()) == 2
+    assert len(validation_data[target_var].unique()) == 2
 
     return train_data, validation_data
 
 
 
+# classifier tools
+def select_unstable_data(dataset, batch_size, classifier):
+    # create a data loader
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    # get initial size of the dataset 
+    init_size = len(dataloader.dataset)
+
+    print(init_size)
+
+    failed_count = 0
+
+    for i, batch in enumerate(tqdm(dataloader)):
+        x = batch[:,:15]
+        y = batch[:,-1]
+        idx = batch[:,-2].type(torch.int)
+
+        y_hat = classifier(x.float())
+        pred_class = torch.round(y_hat.squeeze().detach())
+        pred_class = pred_class.type(torch.int)
+
+        failed = np.where(pred_class != y.numpy())[0]
+        failed_count += len(failed)
+
+        dataset.data.drop(index=idx[failed], inplace=True)
+        
+    fin_size = len(dataset)
+
+    print(fin_size)
+
+    print(failed_count)
+
+    print(init_size - fin_size - failed_count)
 
 # Regressor tools
 def regressor_uncertainty(dataloader, regressor, keep = 0.1):
