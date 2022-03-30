@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn 
+import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
 import numpy as np
@@ -7,10 +7,10 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
 
 # Class definitions
-class ITG_Classifier(nn.Module): 
+class ITG_Classifier(nn.Module):
     def __init__(self):
         super().__init__()
-        self.type = 'classifier'
+        self.type = "classifier"
         self.model = self.model = nn.Sequential(
             nn.Linear(15, 128),
             nn.Dropout(p=0.1),
@@ -49,7 +49,7 @@ class ITG_Classifier(nn.Module):
             if batch == num_batches - 1:
                 loss = loss.item()
                 print(f"loss: {loss:>7f}")
-    
+
     def validation_step(self, dataloader):
         size = len(dataloader.dataset)
         # Initalise loss function
@@ -57,7 +57,7 @@ class ITG_Classifier(nn.Module):
 
         test_loss = []
         correct = 0
-         
+
         with torch.no_grad():
             for X, y in dataloader:
                 y_hat = self.forward(X.float())
@@ -70,10 +70,11 @@ class ITG_Classifier(nn.Module):
         correct /= size
         return np.mean(test_loss), correct
 
+
 class ITG_Regressor(nn.Module):
     def __init__(self):
         super().__init__()
-        self.type = 'regressor'
+        self.type = "regressor"
         self.model = nn.Sequential(
             nn.Linear(15, 128),
             nn.Dropout(p=0.1),
@@ -85,19 +86,18 @@ class ITG_Regressor(nn.Module):
             nn.Dropout(p=0.1),
             nn.ReLU(),
             nn.Linear(128, 1),
-
         )
 
     def forward(self, x):
         y_hat = self.model(x.float())
         return y_hat
-        
-    def enable_dropout(self): 
+
+    def enable_dropout(self):
         """Function to enable the dropout layers during test-time"""
         for m in self.model.modules():
             if m.__class__.__name__.startswith("Dropout"):
                 m.train()
-    
+
     def loss_function(self, y, y_hat):
         # Loss function missing regularization term (to be added using Adam optimizer)
         lambda_stab = 1e-3
@@ -110,7 +110,7 @@ class ITG_Regressor(nn.Module):
             c_good = torch.mean(torch.square(y - y_hat))
             c_stab = 0
         return c_good + lambda_stab * k_stab
-    
+
     def train_step(self, dataloader, optimizer):
 
         size = len(dataloader.dataset)
@@ -133,19 +133,20 @@ class ITG_Regressor(nn.Module):
                 print(f"loss: {loss:>7f}")
 
         return np.mean(losses)
-    
+
     def validation_step(self, dataloader):
         test_loss = []
-         
+
         with torch.no_grad():
             for X, y in dataloader:
                 y_hat = self.forward(X.float())
                 test_loss.append(self.loss_fn(y.unsqueeze(-1).float()).item(), y_hat)
-        
+
         return np.mean(test_loss)
 
+
 class ITGDataset(Dataset):
-    def __init__(self, X, y, z = None):
+    def __init__(self, X, y, z=None):
         self.X = X
         self.y = y
         self.z = z
@@ -160,17 +161,17 @@ class ITGDataset(Dataset):
     # get a row at an index
     def __getitem__(self, idx):
         if self.z is not None:
-            return[self.X[idx], self.y[idx], self.z[idx]]
+            return [self.X[idx], self.y[idx], self.z[idx]]
         else:
             return [self.X[idx], self.y[idx]]
 
     # method to add a new row to the dataset
-    def add(self, x, y, z = None):
-        self.X = np.append(self.X, x, axis = 0)
-        self.y = np.append(self.y, y, axis = 0)
-        
+    def add(self, x, y, z=None):
+        self.X = np.append(self.X, x, axis=0)
+        self.y = np.append(self.y, y, axis=0)
+
         if z is not None:
-            self.z = np.append(self.z, z, axis = 0)
+            self.z = np.append(self.z, z, axis=0)
 
         # update indices from max index
         max_index = np.max(self.indices)
@@ -187,11 +188,10 @@ class ITGDataset(Dataset):
         indices = self.indices[idx]
 
         # remove rows from dataset
-        self.X = np.delete(self.X, indices, axis = 0)
-        self.y = np.delete(self.y, indices, axis = 0)
+        self.X = np.delete(self.X, indices, axis=0)
+        self.y = np.delete(self.y, indices, axis=0)
         if self.z is not None:
-            self.z = np.delete(self.z, indices, axis = 0)
-
+            self.z = np.delete(self.z, indices, axis=0)
 
     # method to sample a batch of rows from the dataset - not inplace!
     # TODO: carry over indices into sample dataset
@@ -205,68 +205,74 @@ class ITGDataset(Dataset):
 
 class ITGDatasetDF(Dataset):
     # DataFrame version of ITGDataset
-    def __init__(self, df: pd.DataFrame , train_columns: list = None, target_columns: list = None):
+    def __init__(
+        self, df: pd.DataFrame, train_columns: list = None, target_columns: list = None
+    ):
         self.data = df
         self.train_columns = train_columns
         self.target_columns = target_columns
 
-        columns = train_columns + target_columns
-        if columns is not None:
-            self.data = self.data[columns]
+        self.columns = self.train_columns + self.target_columns
+        if self.columns is not None:
+            self.data = self.data[self.columns]
 
         try:
-            self.data['itg'] = np.where(train_data['efiitg_gb'] != 0, 1, 0)
+            self.data["itg"] = np.where(train_data["efiitg_gb"] != 0, 1, 0)
         except:
-            raise ValueError('train_data does not contain efiitg_gb column')
+            raise ValueError("train_data does not contain efiitg_gb column")
 
         self.data = self.data.dropna()
 
-        self.data['index'] = np.arange(len(self.data))
+        self.data["index"] = np.arange(len(self.data))
 
     def scale(self, scaler):
         # Scale features in the scaler object and leave the rest as is
         scaled_features = scaler.feature_names_in_
 
         column_transformer = ColumnTransformer(
-            [('scaler', scaler, scaled_features)],
-            remainder='passthrough'
+            [("scaler", scaler, scaled_features)], remainder="passthrough"
         )
 
         self.data = column_transformer.fit_transform(self.data)
 
     def sample(self, batch_size):
-        return ITGDataset(self.data.sample(batch_size), self.train_columns, self.target_columns)
+        return ITGDataset(
+            self.data.sample(batch_size), self.train_columns, self.target_columns
+        )
 
     def add(self, rows):
-        rows['index'] = np.arange(len(self.data), len(self.data) + len(rows))
-        self.data = pd.concat([self.data, rows], axis = 0)
+        rows["index"] = np.arange(len(self.data), len(self.data) + len(rows))
+        self.data = pd.concat([self.data, rows], axis=0)
 
     def remove(self, indices):
-        self.data = self.data[~self.data['index'].isin(indices)]
-        
+        self.data = self.data[~self.data["index"].isin(indices)]
+
     def __len__(self):
         return len(self.data.index)
 
     def __getitem__(self, idx):
         return self.data.iloc[idx]
-            
+
 
 # General Model functions
 
-def train_model(model, train_loader,val_loader, epochs, learning_rate, weight_decay=None):
+
+def train_model(
+    model, train_loader, val_loader, epochs, learning_rate, weight_decay=None
+):
 
     # Initialise the optimiser
-    if weight_decay: 
+    if weight_decay:
         opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
-    else: 
-       opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    
+    else:
+        opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
     losses = []
     validation_losses = []
 
-    if model.type == 'classifer':
-        val_acc= []
-        
+    if model.type == "classifer":
+        val_acc = []
+
         for epoch in range(epochs):
             loss = model.train_step(train_loader, opt)
             losses.append(loss)
@@ -275,8 +281,8 @@ def train_model(model, train_loader,val_loader, epochs, learning_rate, weight_de
             validation_losses.append(validation_losses)
             val_acc.append(acc)
         return losses, validation_losses, val_acc
-    
-    elif model.type =='regressor': 
+
+    elif model.type == "regressor":
 
         for epoch in range(epochs):
             loss = model.train_step(train_loader, opt)
@@ -287,22 +293,15 @@ def train_model(model, train_loader,val_loader, epochs, learning_rate, weight_de
 
         return losses, validation_losses
 
+
 def load_model(model, save_path):
     print(model)
-    if model == 'ITG_class':
+    if model == "ITG_class":
         classifier = ITG_Classifier()
         classifier.load_state_dict(torch.load(save_path))
         return classifier
-    
-    elif model == 'ITG_reg': 
+
+    elif model == "ITG_reg":
         regressor = ITG_Regressor()
         regressor.load_state_dict(torch.load(save_path))
         return regressor
-    
-
-
-
-
-
-
-

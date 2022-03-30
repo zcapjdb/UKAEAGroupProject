@@ -6,16 +6,14 @@ from scripts.Models import load_model
 # TODO: Put some of these variables in a yaml config file
 
 pretrained = {
-
-        "ITG_class":{
-            'trained': True,
-            'save_path': '/home/tmadula/UKAEAGroupProject/src/notebooks/classifier_model.pt'
+    "ITG_class": {
+        "trained": True,
+        "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/classifier_model.pt",
     },
-
-        "ITG_reg":{
-            'trained': True,
-            'save_path': '/home/tmadula/UKAEAGroupProject/src/notebooks/regression_model.pt' 
-    }
+    "ITG_reg": {
+        "trained": True,
+        "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/regression_model.pt",
+    },
 }
 
 TRAIN_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
@@ -26,12 +24,12 @@ train_data, val_data = prepare_data(TRAIN_PATH, VALIDATION_PATH)
 
 # Load pretrained models
 models = {}
-for model in pretrained: 
-    if pretrained[model]['trained'] == True: 
-        trained_model = load_model(model, pretrained[model]['save_path'])
+for model in pretrained:
+    if pretrained[model]["trained"] == True:
+        trained_model = load_model(model, pretrained[model]["save_path"])
         models[model] = trained_model
 
-for model_name in models: 
+for model_name in models:
     print(models[model_name])
 
 # Train untrained models (may not be needed)
@@ -40,7 +38,7 @@ for model_name in models:
 
 # Pass points through the ITG Classifier and return points that pass (what threshold?)
 
-# Run MC dropout on points that pass the ITG classifier 
+# Run MC dropout on points that pass the ITG classifier
 
 # Return X % of data points with highest uncertainty
 
@@ -49,5 +47,3 @@ for model_name in models:
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
 
 # Pipeline diagnosis (How has the uncertainty changed for original training points)
-
-
