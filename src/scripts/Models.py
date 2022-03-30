@@ -89,6 +89,12 @@ class ITG_Regressor(nn.Module):
     def forward(self, x):
         y_hat = self.model(x.float())
         return y_hat
+        
+    def enable_dropout(self): 
+        """Function to enable the dropout layers during test-time"""
+        for m in self.model.modules():
+            if m.__class__.__name__.startswith("Dropout"):
+                m.train()
     
     def loss_function(self, y, y_hat):
         # Loss function missing regularization term (to be added using Adam optimizer)

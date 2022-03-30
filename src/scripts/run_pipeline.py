@@ -36,5 +36,18 @@ for model_name in models:
 
 # Train untrained models (may not be needed)
 
-#
+# Sample subset of data to use in active learning (10K for now)
+
+# Pass points through the ITG Classifier and return points that pass (what threshold?)
+
+# Run MC dropout on points that pass the ITG classifier 
+
+# Return X % of data points with highest uncertainty
+
+# Retrain Regressor (Further research required)
+
+# Pipeline diagnosis (Has the uncertainty decreased for new points)
+
+# Pipeline diagnosis (How has the uncertainty changed for original training points)
+
 
