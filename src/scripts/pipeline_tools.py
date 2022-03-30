@@ -1,9 +1,12 @@
-# from scripts.Models import ITG_Classifier, ITG_Regressor
-import pandas as pd
 import torch.nn as nn 
+from torch.utils.data import Dataset, DataLoader
+
 import numpy as np
+import pandas as pd
 
 from scripts.utils import train_keys
+from scripts.Models import ITGDataset
+from tqdm.auto import tqdm 
 
 
 # Data preparation functions
@@ -36,6 +39,45 @@ def prepare_data(train_path, valid_path):
 
     return train_data, validation_data
 
+
+
+
+# Regressor tools
+def regressor_uncertainty(dataloader, regressor, keep = 0.1):
+    """
+    Calculates the uncertainty of the regressor on the points in the dataloader.
+    Returns the most uncertain points.
+
+    """
+
+    regressor.eval()
+    regressor.enable_dropout()
+
+    # evaluate model on training data 100 times and return points with largest uncertainty
+    runs = []
+    for i in tqdm(range(100)):
+        step_list = []
+        for step, (x, y, z) in enumerate(dataloader):
+
+            predictions = regressor(x.float()).detach().numpy()
+            step_list.append(predictions)
+
+        flattened_predictions = np.array(step_list).flatten()
+        runs.append(flattened_predictions)
+
+    out_std = np.std(np.array(runs), axis=0)
+
+    top_indices = np.argsort(out_std)[-int(len(out_std) * keep):]
+
+    uncertain_dataset = ITGDataset(
+        dataloader.dataset.X[top_indices],
+        dataloader.dataset.y[top_indices], 
+        dataloader.dataset.z[top_indices].reshape(-1, 1)
+        )
+
+    uncertain_dataloader = DataLoader(uncertain_dataset, shuffle=True)
+
+    return uncertain_dataloader
 
 # Active Learning diagonistic functions
 

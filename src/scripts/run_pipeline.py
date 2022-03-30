@@ -18,9 +18,13 @@ pretrained = {
     }
 }
 
+# Data loading
+
 TRAIN_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
 
 VALIDATION_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
+
+
 
 train_data, val_data = prepare_data(TRAIN_PATH, VALIDATION_PATH)
 
@@ -39,6 +43,7 @@ for model_name in models:
 # Sample subset of data to use in active learning (10K for now)
 
 # Pass points through the ITG Classifier and return points that pass (what threshold?)
+
 
 # Run MC dropout on points that pass the ITG classifier 
 

@@ -89,7 +89,7 @@ class ITG_Regressor(nn.Module):
     def forward(self, x):
         y_hat = self.model(x.float())
         return y_hat
-        
+
     def enable_dropout(self): 
         """Function to enable the dropout layers during test-time"""
         for m in self.model.modules():
