@@ -1,6 +1,6 @@
 # Load the required data
 
-from scripts.pipeline_tools import classifier_accuracy, prepare_data, select_unstable_data
+from scripts.pipeline_tools import classifier_accuracy, prepare_data, regressor_uncertainty, select_unstable_data
 from scripts.Models import ITGDatasetDF, load_model
 from sklearn.preprocessing import StandardScaler
 
@@ -61,9 +61,8 @@ valid_sample = valid_dataset.sample(10_000)
 select_unstable_data(valid_sample, 10, models['ITG_class']) 
 classifier_accuracy(valid_sample, target_var='itg')
 
-# Run MC dropout on points that pass the ITG classifier 
-
-# Return X % of data points with highest uncertainty
+# Run MC dropout on points that pass the ITG classifier and return 
+uncertain_loader = regressor_uncertainty(valid_sample, models['ITG_reg'])
 
 # Retrain Regressor (Further research required)
 

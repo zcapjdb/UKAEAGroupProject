@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from scripts.utils import train_keys
-from scripts.Models import ITGDataset
+from scripts.Models import ITGDatasetDF
 from tqdm.auto import tqdm 
 import copy 
 
@@ -65,7 +65,7 @@ def select_unstable_data(dataset, batch_size, classifier):
 
     for i, batch in enumerate(tqdm(dataloader)):
         x,y,idx = batch
-        
+
         y_hat = classifier(x.float())
 
         # TODO: Verify which cutoff to use for the classifer
@@ -84,20 +84,24 @@ def select_unstable_data(dataset, batch_size, classifier):
     assert fin_size + failed_count == init_size
 
 # Regressor tools
-def regressor_uncertainty(dataloader, regressor, keep = 0.1):
+def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
     Returns the most uncertain points.
 
     """
+    dataloader =  DataLoader(dataset, shuffle=False)
+
+    data_copy = copy.deepcopy(dataset)
+
     regressor.eval()
     regressor.enable_dropout()
 
     # evaluate model on training data 100 times and return points with largest uncertainty
     runs = []
-    for i in tqdm(range(100)):
+    for i in range(n_runs):
         step_list = []
-        for step, (x, y, idx) in enumerate(dataloader):
+        for step, (x, y, idx) in enumerate(tqdm(dataloader, desc = f'Run {i}')):
 
             predictions = regressor(x.float()).detach().numpy()
             step_list.append(predictions)
@@ -107,15 +111,15 @@ def regressor_uncertainty(dataloader, regressor, keep = 0.1):
 
     out_std = np.std(np.array(runs), axis=0)
 
-    top_indices = np.argsort(out_std)[-int(len(out_std) * keep):]
+    n_out_std = len(out_std)
 
-    uncertain_dataset = ITGDataset(
-        dataloader.dataset.X[top_indices],
-        dataloader.dataset.y[top_indices], 
-        dataloader.dataset.z[top_indices].reshape(-1, 1)
-        )
+    drop_indices = np.argsort(out_std)[:n_out_std -int(n_out_std * keep)]
+    # TODO: Check if this line does what I expect
+    idx_drop = data_copy.data['index'].iloc[drop_indices]
 
-    uncertain_dataloader = DataLoader(uncertain_dataset, shuffle=True)
+    data_copy.remove(idx_drop)
+
+    uncertain_dataloader = DataLoader(data_copy, shuffle=True)
 
     return uncertain_dataloader
 
