@@ -48,23 +48,26 @@ def prepare_data(train_path, valid_path, target_column, target_var):
 
 
 # classifier tools
-def select_unstable_data(dataset, batch_size, classifier):
+def select_unstable_data(dataset, batch_size, classifier, target_col, target_var):
     # create a data loader
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     # get initial size of the dataset 
     init_size = len(dataloader.dataset)
 
-    # print(init_size)
+    cols = list(dataset.data.columns)
+
+    train_idx = [cols.index(col) for col in train_keys]
 
     failed_count = 0
 
     temp_dataset = copy.deepcopy(dataset)
 
     for i, batch in enumerate(tqdm(dataloader)):
-        x = batch[:,:15]
-        y = batch[:,-1]
-        idx = batch[:,-2].type(torch.int)
+
+        x = batch[:,train_idx]
+        y = batch[:,cols.index(target_col)]
+        idx = batch[:,cols.index('index')].type(torch.int)
 
         y_hat = classifier(x.float())
 
