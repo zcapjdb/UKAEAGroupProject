@@ -90,6 +90,7 @@ def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
     Returns the most uncertain points.
 
     """
+    print('\nRunning MC Dropout....\n')
     dataloader =  DataLoader(dataset, shuffle=False)
 
     data_copy = copy.deepcopy(dataset)
@@ -99,9 +100,9 @@ def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
 
     # evaluate model on training data 100 times and return points with largest uncertainty
     runs = []
-    for i in range(n_runs):
+    for i in tqdm(range(n_runs)):
         step_list = []
-        for step, (x, y, idx) in enumerate(tqdm(dataloader, desc = f'Run {i}')):
+        for step, (x, y, idx) in enumerate(dataloader):
 
             predictions = regressor(x.float()).detach().numpy()
             step_list.append(predictions)
