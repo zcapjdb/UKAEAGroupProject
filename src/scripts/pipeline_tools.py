@@ -84,6 +84,29 @@ def select_unstable_data(dataset, batch_size, classifier):
     assert fin_size + failed_count == init_size
 
 # Regressor tools
+def retrain_regressor(train_loader, new_loader, val_loader, model,learning_rate, epochs=5):
+    print('\nRetraining regressor...')
+    model.train()
+
+    #instantiate optimiser
+    opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    
+    for epoch in tqdm(range(epochs)): 
+        loss = model.train_step(new_loader, opt)
+
+        # loss = loss.item()
+
+        # print(f'Loss: {loss.item():.4f}')
+
+        if epoch % 2 ==0: 
+            loss = model.train_step(train_loader, opt)
+            # loss = loss.item()
+            # print(f'Loss: {loss.item():.4f}')
+        
+        test_loss = model.validation_step(val_loader)
+        # test_loss = test_loss.item()
+        # print(f'Test loss: {test_loss.item():.4f}')
+
 def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
@@ -122,7 +145,7 @@ def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
 
     uncertain_dataloader = DataLoader(data_copy, shuffle=True)
 
-    return uncertain_dataloader
+    return uncertain_dataloader, out_std[-int(n_out_std * keep):]
 
 # Active Learning diagonistic functions
 
@@ -133,7 +156,7 @@ def classifier_accuracy(dataset, target_var):
 
     accuracy = counts.loc[0][0]*100/n_total
 
-    print(f'Correctly Classified {accuracy:.3f} %')
+    print(f'\nCorrectly Classified {accuracy:.3f} %')
 
 
 

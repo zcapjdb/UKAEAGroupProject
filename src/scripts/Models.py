@@ -39,7 +39,7 @@ class ITG_Classifier(nn.Module):
         size = len(dataloader.dataset)
         num_batches = len(dataloader)
 
-        for batch, (X, y) in enumerate(dataloader):
+        for batch, (X, y, idx) in enumerate(dataloader):
 
             y_hat = self.forward(X.float())
             loss = BCE(y_hat, y.unsqueeze(-1).float())
@@ -62,7 +62,7 @@ class ITG_Classifier(nn.Module):
         correct = 0
 
         with torch.no_grad():
-            for X, y in dataloader:
+            for X, y, idx in dataloader:
                 y_hat = self.forward(X.float())
                 test_loss.append(BCE(y.unsqueeze(-1).float()).item(), y_hat)
 
@@ -120,16 +120,21 @@ class ITG_Regressor(nn.Module):
         num_batches = len(dataloader)
 
         losses = []
-        for batch, (X, y) in enumerate(dataloader):
-
+        for batch, (X, y, idx) in enumerate(dataloader):
+            batch_size = len(X)
             y_hat = self.forward(X.float())
             loss = self.loss_function(y.unsqueeze(-1).float(), y_hat)
+
+            print(type(loss))
 
             # Backpropagation
             optimizer.zero_grad()
             loss.backward()
-            losses.append(loss.item())
+            
             optimizer.step()
+            
+            loss = loss.item()
+            losses.append(loss)
 
             if batch == num_batches - 1:
                 loss = loss.item()
@@ -141,11 +146,18 @@ class ITG_Regressor(nn.Module):
         test_loss = []
 
         with torch.no_grad():
-            for X, y in dataloader:
+            for X, y, idx in dataloader:
                 y_hat = self.forward(X.float())
                 test_loss.append(self.loss_fn(y.unsqueeze(-1).float()).item(), y_hat)
 
         return np.mean(test_loss)
+    def predict(self, dataloader):
+        pred = [] 
+        for (x,y,idx) in dataloader: 
+            y_hat = self.forward(x.float())
+            pred.append(y_hat.squeeze().detach().numpy())
+
+        return np.array(pred)
 
 
 class ITGDataset(Dataset):

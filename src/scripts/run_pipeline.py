@@ -1,8 +1,9 @@
 # Load the required data
 
-from scripts.pipeline_tools import classifier_accuracy, prepare_data, regressor_uncertainty, select_unstable_data
+from scripts.pipeline_tools import classifier_accuracy, prepare_data, regressor_uncertainty, select_unstable_data, retrain_regressor, uncertainty_change
 from scripts.Models import ITGDatasetDF, load_model
 from sklearn.preprocessing import StandardScaler
+from torch.utils.data import DataLoader
 
 # TODO: Put some of these variables in a yaml config file
 
@@ -52,8 +53,12 @@ for model_name in models:
 # Train untrained models (may not be needed)
 
 # Sample subset of data to use in active learning (10K for now)
-
+train_sample = train_dataset.sample(10_000) # TODO: Needs to be the true training samples used!!!
 valid_sample = valid_dataset.sample(10_000)
+
+
+# remove the sampled data points from the dataset
+valid_dataset.remove(valid_sample.data.index)
 
 # print(valid_sample.data.columns)
 
@@ -62,10 +67,19 @@ select_unstable_data(valid_sample, 10, models['ITG_class'])
 classifier_accuracy(valid_sample, target_var='itg')
 
 # Run MC dropout on points that pass the ITG classifier and return 
-uncertain_loader = regressor_uncertainty(valid_sample, models['ITG_reg'])
+uncertain_loader, ucert_before = regressor_uncertainty(valid_sample, models['ITG_reg'], n_runs=3)
+train_loader = DataLoader(train_sample,batch_size=20, shuffle=True)
+valid_loader = DataLoader(valid_dataset,batch_size=20, shuffle=True)
+
+prediction_before = models['ITG_reg'].predict(uncertain_loader)
 
 # Retrain Regressor (Further research required)
+retrain_regressor(train_loader, uncertain_loader, valid_loader, models['ITG_reg'], 1e-3)
 
+prediction_after = models['ITG_reg'].predict(uncertain_loader)
+
+_, ucert_after = regressor_uncertainty(valid_sample, models['ITG_reg'], n_runs=3)
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
+uncertainty_change(ucert_before, ucert_after)
 
 # Pipeline diagnosis (How has the uncertainty changed for original training points)
