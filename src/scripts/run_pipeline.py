@@ -58,7 +58,7 @@ valid_sample = valid_dataset.sample(10_000)
 # print(valid_sample.data.columns)
 
 # Pass points through the ITG Classifier and return points that pass (what threshold?)
-select_unstable_data(valid_sample, 10, models['ITG_class'], target_col='efiitg_gb',target_var='itg') 
+select_unstable_data(valid_sample, 10, models['ITG_class']) 
 classifier_accuracy(valid_sample, target_var='itg')
 
 # Run MC dropout on points that pass the ITG classifier 

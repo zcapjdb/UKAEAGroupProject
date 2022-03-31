@@ -48,27 +48,24 @@ def prepare_data(train_path, valid_path, target_column, target_var):
 
 
 # classifier tools
-def select_unstable_data(dataset, batch_size, classifier, target_col, target_var):
+def select_unstable_data(dataset, batch_size, classifier):
     # create a data loader
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     # get initial size of the dataset 
     init_size = len(dataloader.dataset)
 
-    cols = list(dataset.data.columns)
+    # cols = list(dataset.data.columns)
 
-    train_idx = [cols.index(col) for col in train_keys]
+    # train_idx = [cols.index(col) for col in train_keys]
 
     failed_count = 0
 
     temp_dataset = copy.deepcopy(dataset)
 
     for i, batch in enumerate(tqdm(dataloader)):
-
-        x = batch[:,train_idx]
-        y = batch[:,cols.index(target_col)]
-        idx = batch[:,cols.index('index')].type(torch.int)
-
+        x,y,idx = batch
+        
         y_hat = classifier(x.float())
 
         # TODO: Verify which cutoff to use for the classifer
@@ -93,7 +90,6 @@ def regressor_uncertainty(dataloader, regressor, keep = 0.1):
     Returns the most uncertain points.
 
     """
-
     regressor.eval()
     regressor.enable_dropout()
 
@@ -101,7 +97,7 @@ def regressor_uncertainty(dataloader, regressor, keep = 0.1):
     runs = []
     for i in tqdm(range(100)):
         step_list = []
-        for step, (x, y, z) in enumerate(dataloader):
+        for step, (x, y, idx) in enumerate(dataloader):
 
             predictions = regressor(x.float()).detach().numpy()
             step_list.append(predictions)

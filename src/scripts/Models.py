@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
+from scripts.utils import train_keys
 
 # Class definitions
 class ITG_Classifier(nn.Module):
@@ -250,7 +251,11 @@ class ITGDatasetDF(Dataset):
         return len(self.data.index)
 
     def __getitem__(self, idx):
-        return self.data.iloc[idx].to_numpy()
+
+        x = self.data[train_keys].iloc[idx].to_numpy()
+        y = self.data['itg'].iloc[idx]
+        idx = self.data['index'].iloc[idx]
+        return x,y,idx
 
 
 # General Model functions
