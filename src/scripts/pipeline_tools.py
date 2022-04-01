@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from scripts.utils import train_keys
-from scripts.Models import ITGDatasetDF
+from scripts.Models import ITGDatasetDF, ITGDataset
 from tqdm.auto import tqdm 
 import copy 
 
@@ -55,36 +55,35 @@ def select_unstable_data(dataset, batch_size, classifier):
     # get initial size of the dataset 
     init_size = len(dataloader.dataset)
 
-    # cols = list(dataset.data.columns)
+    #temp_dataset = copy.deepcopy(dataset)
 
-    # train_idx = [cols.index(col) for col in train_keys]
-
-    failed_count = 0
-
-    temp_dataset = copy.deepcopy(dataset)
-
-    for i, batch in enumerate(tqdm(dataloader)):
-        x,y,idx = batch
+    stable_points = []
+    misclassified = []
+    for i, (x, y, z, idx) in enumerate(tqdm(dataloader)):
 
         y_hat = classifier(x.float())
 
         # TODO: Verify which cutoff to use for the classifer
-        pred_class = torch.round(y_hat.squeeze().detach())
-        pred_class = pred_class.type(torch.int)
+        pred_class = torch.round(y_hat.squeeze().detach()).numpy()
+        pred_class = pred_class.astype(int)
 
-        failed = np.where(pred_class != y.numpy())[0]
-        failed_count += len(failed)
+        stable_points.append(idx[np.where(pred_class == 0)[0]])
+        misclassified.append(idx[np.where(pred_class != y.numpy())[0]])
 
-        temp_dataset.data.drop(index=idx[failed], inplace=True)
-        
-    dataset.data = temp_dataset.data
+        #temp_dataset.data.drop(index=idx[drop_points], inplace=True)
     
-    fin_size = len(dataset)
+    stable_points = np.concatenate(np.array(stable_points))
+    misclassified = np.concatenate(np.array(misclassified))
+    drop_points = np.unique(np.concatenate([stable_points, misclassified]))
+    print(drop_points.shape)
+    dataset.remove(drop_points)
 
-    assert fin_size + failed_count == init_size
+    print(f"Percentage of misclassified points:  {100*len(misclassified) / init_size}%")
+    print(f'\nDropped {init_size - len(dataset.data)} rows')
+
 
 # Regressor tools
-def retrain_regressor(train_loader, new_loader, val_loader, model,learning_rate, epochs=5):
+def retrain_regressor(train_loader, new_loader, val_loader, model,learning_rate, epochs=5, validation_step = True):
     print('\nRetraining regressor...')
     model.train()
 
@@ -105,10 +104,10 @@ def retrain_regressor(train_loader, new_loader, val_loader, model,learning_rate,
             # loss = loss.item()
             # print(f'Loss: {loss.item():.4f}')
         
-        print("Validation Step: ", epoch)
-        test_loss = model.validation_step(val_loader)
-        # test_loss = test_loss.item()
-        # print(f'Test loss: {test_loss.item():.4f}')
+        if validation_step:
+            print("Validation Step: ", epoch)
+            test_loss = model.validation_step(val_loader)
+            print(f'Test loss: {test_loss.item():.4f}')
 
 def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
     """
@@ -117,7 +116,15 @@ def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
 
     """
     print('\nRunning MC Dropout....\n')
-    dataloader =  DataLoader(dataset, shuffle=False)
+    x_array = dataset.data[train_keys].values
+    y_array = dataset.data["efiitg_gb"].values
+    idx_array = dataset.data["index"].values
+
+    dataset2 = ITGDataset(x_array, y_array)
+    dataset2.indices = idx_array
+
+    dataloader = DataLoader(dataset, shuffle=False)
+    dataloader_numpy =  DataLoader(dataset2, shuffle=False)
 
     data_copy = copy.deepcopy(dataset)
 
@@ -129,6 +136,7 @@ def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
     for i in tqdm(range(n_runs)):
         step_list = []
         for step, (x, y, idx) in enumerate(dataloader):
+        #for step, (x,y) in enumerate(dataloader):
 
             predictions = regressor(x.float()).detach().numpy()
             step_list.append(predictions)
@@ -137,8 +145,12 @@ def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
         runs.append(flattened_predictions)
 
     out_std = np.std(np.array(runs), axis=0)
+    n_out_std = out_std.shape[0]
 
-    n_out_std = len(out_std)
+    for i in tqdm(range(n_runs)):
+        for step, (x, y) in enumerate(dataloader_numpy):
+
+            predictions = regressor(x.float()).detach().numpy()
 
     drop_indices = np.argsort(out_std)[:n_out_std -int(n_out_std * keep)]
     # TODO: Check if this line does what I expect

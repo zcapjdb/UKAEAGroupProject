@@ -124,10 +124,10 @@ class ITG_Regressor(nn.Module):
         num_batches = len(dataloader)
 
         losses = []
-        for batch, (X, y, idx) in enumerate(dataloader):
+        for batch, (X, y, z, idx) in enumerate(dataloader):
             batch_size = len(X)
             y_hat = self.forward(X.float())
-            loss = self.loss_function(y.unsqueeze(-1).float(), y_hat) 
+            loss = self.loss_function(z.unsqueeze(-1).float(), y_hat) 
 
             # Backpropagation
             optimizer.zero_grad()
@@ -146,14 +146,15 @@ class ITG_Regressor(nn.Module):
         test_loss = []
 
         with torch.no_grad():
-            for X, y, idx in tqdm(dataloader):
+            for X, y, z, idx in tqdm(dataloader):
                 y_hat = self.forward(X.float())
-                test_loss.append(self.loss_function(y.unsqueeze(-1).float(), y_hat).item())
+                test_loss.append(self.loss_function(z.unsqueeze(-1).float(), z_hat).item())
 
         return np.mean(test_loss)
+
     def predict(self, dataloader):
         pred = [] 
-        for (x,y,idx) in dataloader: 
+        for (x,y,z,idx) in dataloader: 
             y_hat = self.forward(x.float())
             pred.append(y_hat.squeeze().detach().numpy())
 
@@ -220,7 +221,7 @@ class ITGDataset(Dataset):
 
 class ITGDatasetDF(Dataset):
     # DataFrame version of ITGDataset
-    def __init__(self, df: pd.DataFrame, target_column: str, target_var: str):
+    def __init__(self, df: pd.DataFrame, target_column: str, target_var: str, keep_index: bool = False):
         self.data = df
         self.target = target_column
         self.label = target_var 
@@ -228,7 +229,8 @@ class ITGDatasetDF(Dataset):
         # make sure the dataframe contains the variable information we need
         assert target_column and target_var in list(self.data.columns)
 
-        self.data["index"] = self.data.index
+        if not keep_index:
+            self.data["index"] = self.data.index
 
     def scale(self, scaler):
         # Scale features in the scaler object and leave the rest as is
@@ -249,25 +251,32 @@ class ITGDatasetDF(Dataset):
 
     def sample(self, batch_size):
         return ITGDatasetDF(
-            self.data.sample(batch_size), self.target, self.label
+            self.data.sample(batch_size), self.target, self.label, keep_index=True
         )
 
     def add(self, rows):
         rows["index"] = np.arange(len(self.data), len(self.data) + len(rows))
         self.data = pd.concat([self.data, rows], axis=0)
 
+    # Not sure if needed yet
+    # return a copy of the dataset with only the specified indices
+    #def subset(self, indices):
+    #    return ITGDatasetDF(self.data.iloc[indices], self.target, self.label)
+
     def remove(self, indices):
-        self.data.drop(index = indices, inplace = True)
+        #self.data.drop(index = indices, inplace = True) I'm not sure this does what I want
+        self.data[~self.data["index"].isin(indices)]
 
     def __len__(self):
         return len(self.data.index)
 
     def __getitem__(self, idx):
-
+    
         x = self.data[train_keys].iloc[idx].to_numpy()
-        y = self.data['itg'].iloc[idx]
+        y = self.data[self.label].iloc[idx]
+        z = self.data[self.target].iloc[idx]
         idx = self.data['index'].iloc[idx]
-        return x,y,idx
+        return x,y,z,idx
 
 
 # General Model functions

@@ -42,7 +42,7 @@ train_dataset.scale(scaler)
 valid_dataset.scale(scaler)
 
 # Use subsample of validation data for now
-valid_dataset = valid_dataset.sample(100_000)
+#valid_dataset = valid_dataset.sample(100_000)
 
 # Load pretrained models
 models = {}
@@ -66,25 +66,26 @@ valid_sample = valid_dataset.sample(10_000)
 valid_dataset.remove(valid_sample.data.index)
 
 # print(valid_sample.data.columns)
-
+print(len(valid_sample))
 # Pass points through the ITG Classifier and return points that pass (what threshold?)
-select_unstable_data(valid_sample, 10, models['ITG_class']) 
-classifier_accuracy(valid_sample, target_var='itg')
+select_unstable_data(valid_sample, 100, models['ITG_class']) 
+#classifier_accuracy(valid_sample, target_var='itg')
 
 # Run MC dropout on points that pass the ITG classifier and return 
-uncertain_loader, ucert_before = regressor_uncertainty(valid_sample, models['ITG_reg'], n_runs=3)
-train_loader = DataLoader(train_sample,batch_size=1000, shuffle=True)
-valid_loader = DataLoader(valid_dataset,batch_size=2048, shuffle=True)
+print(len(valid_sample))
+#uncertain_loader, ucert_before = regressor_uncertainty(valid_sample, models['ITG_reg'], n_runs=10)
+#train_loader = DataLoader(train_sample,batch_size=1000, shuffle=True)
+#valid_loader = DataLoader(valid_dataset,batch_size=2048, shuffle=True)
 
-prediction_before = models['ITG_reg'].predict(uncertain_loader)
+#prediction_before = models['ITG_reg'].predict(uncertain_loader)
 
 # Retrain Regressor (Further research required)
-retrain_regressor(train_loader, uncertain_loader, valid_loader, models['ITG_reg'], 1e-3)
+#retrain_regressor(train_loader, uncertain_loader, valid_loader, models['ITG_reg'], 1e-3, validation_step=False)
 
-prediction_after = models['ITG_reg'].predict(uncertain_loader)
+#prediction_after = models['ITG_reg'].predict(uncertain_loader)
 
-_, ucert_after = regressor_uncertainty(valid_sample, models['ITG_reg'], n_runs=3)
+#_, ucert_after = regressor_uncertainty(valid_sample, models['ITG_reg'], n_runs=10)
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
-uncertainty_change(ucert_before, ucert_after)
+#uncertainty_change(ucert_before, ucert_after)
 
 # Pipeline diagnosis (How has the uncertainty changed for original training points)
