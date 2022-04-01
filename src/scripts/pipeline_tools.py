@@ -91,18 +91,21 @@ def retrain_regressor(train_loader, new_loader, val_loader, model,learning_rate,
     #instantiate optimiser
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
     
-    for epoch in tqdm(range(epochs)): 
+    for epoch in tqdm(range(epochs)):
+        print("Train Step: ", epoch) 
         loss = model.train_step(new_loader, opt)
 
         # loss = loss.item()
 
         # print(f'Loss: {loss.item():.4f}')
 
-        if epoch % 2 ==0: 
+        if epoch % 2 == 0: 
+            print("Using Old Data")
             loss = model.train_step(train_loader, opt)
             # loss = loss.item()
             # print(f'Loss: {loss.item():.4f}')
         
+        print("Validation Step: ", epoch)
         test_loss = model.validation_step(val_loader)
         # test_loss = test_loss.item()
         # print(f'Test loss: {test_loss.item():.4f}')

@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
 from scripts.utils import train_keys
+from tqdm.auto import tqdm 
 
 # Class definitions
 class ITG_Classifier(nn.Module):
@@ -101,18 +102,21 @@ class ITG_Regressor(nn.Module):
             if m.__class__.__name__.startswith("Dropout"):
                 m.train()
 
-    def loss_function(self, y, y_hat):
-        # Loss function missing regularization term (to be added using Adam optimizer)
-        lambda_stab = 1e-3
-        k_stab = 5
-        if y.sum() == 0:
-            c_good = 0
-            c_stab = torch.mean(y_hat - k_stab)
+    # def loss_function(self, y, y_hat):
+    #     # Loss function missing regularization term (to be added using Adam optimizer)
+    #     lambda_stab = 1e-3
+    #     k_stab = 5
+    #     if y.sum() == 0:
+    #         c_good = 0
+    #         c_stab = torch.mean(y_hat - k_stab)
 
-        else:
-            c_good = torch.mean(torch.square(y - y_hat))
-            c_stab = 0
-        return c_good + lambda_stab * k_stab
+    #     else:
+    #         c_good = torch.mean(torch.square(y - y_hat))
+    #         c_stab = 0
+    #     return c_good + lambda_stab * k_stab
+    def loss_function(self, y, y_hat):
+        MSE_loss = nn.MSELoss()
+        return MSE_loss(y_hat, y.float())
 
     def train_step(self, dataloader, optimizer):
 
@@ -123,21 +127,17 @@ class ITG_Regressor(nn.Module):
         for batch, (X, y, idx) in enumerate(dataloader):
             batch_size = len(X)
             y_hat = self.forward(X.float())
-            loss = self.loss_function(y.unsqueeze(-1).float(), y_hat)
-
-            print(type(loss))
+            loss = self.loss_function(y.unsqueeze(-1).float(), y_hat) 
 
             # Backpropagation
             optimizer.zero_grad()
-            loss.backward()
-            
+            loss.backward()            
             optimizer.step()
-            
+
             loss = loss.item()
             losses.append(loss)
 
             if batch == num_batches - 1:
-                loss = loss.item()
                 print(f"loss: {loss:>7f}")
 
         return np.mean(losses)
@@ -146,9 +146,9 @@ class ITG_Regressor(nn.Module):
         test_loss = []
 
         with torch.no_grad():
-            for X, y, idx in dataloader:
+            for X, y, idx in tqdm(dataloader):
                 y_hat = self.forward(X.float())
-                test_loss.append(self.loss_fn(y.unsqueeze(-1).float()).item(), y_hat)
+                test_loss.append(self.loss_function(y.unsqueeze(-1).float(), y_hat).item())
 
         return np.mean(test_loss)
     def predict(self, dataloader):

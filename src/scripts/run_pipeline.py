@@ -10,20 +10,23 @@ from torch.utils.data import DataLoader
 pretrained = {
     "ITG_class": {
         "trained": True,
-        "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/classifier_model.pt",
+        #"save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/classifier_model.pt",
+        "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/classifier_model.pt",
     },
     "ITG_reg": {
         "trained": True,
-        "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/regression_model.pt",
+        #"save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/regression_model.pt",
+        "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/regression_model.pt",
     },
 }
 
 # Data loading
 
-TRAIN_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
+#TRAIN_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
+TRAIN_PATH = "/unix/atlastracking/jbarr/train_data_clipped.pkl"
 
-VALIDATION_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
-
+#VALIDATION_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
+VALIDATION_PATH = "/unix/atlastracking/jbarr/valid_data_clipped.pkl"
 
 
 train_data, val_data = prepare_data(TRAIN_PATH, VALIDATION_PATH, target_column='efiitg_gb', target_var='itg')
@@ -38,6 +41,8 @@ valid_dataset = ITGDatasetDF(train_data, target_column='efiitg_gb', target_var='
 train_dataset.scale(scaler)
 valid_dataset.scale(scaler)
 
+# Use subsample of validation data for now
+valid_dataset = valid_dataset.sample(100_000)
 
 # Load pretrained models
 models = {}
@@ -68,8 +73,8 @@ classifier_accuracy(valid_sample, target_var='itg')
 
 # Run MC dropout on points that pass the ITG classifier and return 
 uncertain_loader, ucert_before = regressor_uncertainty(valid_sample, models['ITG_reg'], n_runs=3)
-train_loader = DataLoader(train_sample,batch_size=20, shuffle=True)
-valid_loader = DataLoader(valid_dataset,batch_size=20, shuffle=True)
+train_loader = DataLoader(train_sample,batch_size=1000, shuffle=True)
+valid_loader = DataLoader(valid_dataset,batch_size=2048, shuffle=True)
 
 prediction_before = models['ITG_reg'].predict(uncertain_loader)
 
