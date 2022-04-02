@@ -143,7 +143,8 @@ class ITG_Regressor(nn.Module):
         test_loss = []
 
         with torch.no_grad():
-            for X, y, z, idx in tqdm(dataloader):
+            #for X, y, z, idx in tqdm(dataloader):
+            for X, y, z in tqdm(dataloader):
                 z_hat = self.forward(X.float())
                 test_loss.append(
                     self.loss_function(z.unsqueeze(-1).float(), z_hat).item()

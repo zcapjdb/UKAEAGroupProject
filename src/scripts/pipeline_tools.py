@@ -23,25 +23,11 @@ def prepare_data(train_path, valid_path, target_column, target_var):
     train_data = train_data[keep_keys]
     validation_data = validation_data[keep_keys]
 
-    nt, nv = train_data.shape[0], validation_data.shape[0]
-    nt_nan, nv_nan = (
-        train_data[target_column].isna().sum(),
-        validation_data[target_column].isna().sum(),
-    )
-
     train_data = train_data.dropna()
     validation_data = validation_data.dropna()
 
-    # Make sure the right number of NaN's have been dropped
-    assert train_data.shape[0] + nt_nan == nt
-    assert validation_data.shape[0] + nv_nan == nv
-
     train_data[target_var] = np.where(train_data[target_column] != 0, 1, 0)
     validation_data[target_var] = np.where(validation_data[target_column] != 0, 1, 0)
-
-    # Make sure that the class label creation has been done correctly
-    assert len(train_data[target_var].unique()) == 2
-    assert len(validation_data[target_var].unique()) == 2
 
     return train_data, validation_data
 
@@ -93,7 +79,7 @@ def retrain_regressor(
     val_loader,
     model,
     learning_rate,
-    epochs=10,
+    epochs=5,
     validation_step=True,
 ):
     print("\nRetraining regressor...")
@@ -198,8 +184,13 @@ def uncertainty_change(x, y):
 
     increase = len(theta[theta < 45]) * 100 / total
     decrease = len(theta[theta > 45]) * 100 / total
-    no_chnage = 100 - increase - decrease
+    no_change = 100 - increase - decrease
+
+    diff = y - x
+    increase = np.sum(diff >= 0) * 100 / diff.shape[0]
+    decrease = np.sum(diff < 0) * 100 / diff.shape[0]
+
 
     print(
-        f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_chnage:.3f} "
+        f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_change:.3f} "
     )

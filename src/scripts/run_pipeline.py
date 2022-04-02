@@ -8,9 +8,10 @@ from scripts.pipeline_tools import (
     retrain_regressor,
     uncertainty_change,
 )
-from scripts.Models import ITGDatasetDF, load_model
+from scripts.Models import ITGDatasetDF, load_model, ITGDataset
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
+from scripts.utils import train_keys
 
 # TODO: Put some of these variables in a yaml config file
 
@@ -83,8 +84,15 @@ select_unstable_data(valid_sample, 100, models["ITG_class"])
 uncertain_loader, ucert_before = regressor_uncertainty(
     valid_sample, models["ITG_reg"], n_runs=10
 )
+#TODO: Why for the previous function we pass in a dataset but for the next function we pass in a dataloader?
 train_loader = DataLoader(train_sample, batch_size=1000, shuffle=True)
-valid_loader = DataLoader(valid_dataset, batch_size=2048, shuffle=True)
+
+# Switching validation dataset to numpy arrays to see if it is quicker
+x_array = valid_dataset.data[train_keys].values
+y_array = valid_dataset.data["itg"].values
+z_array = valid_dataset.data["efiitg_gb"].values
+dataset_numpy = ITGDataset(x_array, y_array, z_array)
+valid_loader = DataLoader(dataset_numpy, batch_size=10_000, shuffle=True)
 
 prediction_before = models["ITG_reg"].predict(uncertain_loader)
 
@@ -95,7 +103,7 @@ retrain_regressor(
     valid_loader,
     models["ITG_reg"],
     1e-4,
-    validation_step=False,
+    validation_step=True,
 )
 
 prediction_after = models["ITG_reg"].predict(uncertain_loader)
