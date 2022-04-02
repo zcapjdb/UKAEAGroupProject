@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
 from scripts.utils import train_keys
-from tqdm.auto import tqdm 
+from tqdm.auto import tqdm
 
 # Class definitions
 class ITG_Classifier(nn.Module):
@@ -126,19 +126,16 @@ class ITG_Regressor(nn.Module):
         losses = []
         for batch, (X, y, z, idx) in enumerate(dataloader):
             batch_size = len(X)
-            y_hat = self.forward(X.float())
-            loss = self.loss_function(z.unsqueeze(-1).float(), y_hat) 
+            z_hat = self.forward(X.float())
+            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat)
 
             # Backpropagation
             optimizer.zero_grad()
-            loss.backward()            
+            loss.backward()
             optimizer.step()
 
             loss = loss.item()
             losses.append(loss)
-
-            if batch == num_batches - 1:
-                print(f"loss: {loss:>7f}")
 
         return np.mean(losses)
 
@@ -147,14 +144,16 @@ class ITG_Regressor(nn.Module):
 
         with torch.no_grad():
             for X, y, z, idx in tqdm(dataloader):
-                y_hat = self.forward(X.float())
-                test_loss.append(self.loss_function(z.unsqueeze(-1).float(), z_hat).item())
+                z_hat = self.forward(X.float())
+                test_loss.append(
+                    self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
+                )
 
         return np.mean(test_loss)
 
     def predict(self, dataloader):
-        pred = [] 
-        for (x,y,z,idx) in dataloader: 
+        pred = []
+        for (x, y, z, idx) in dataloader:
             y_hat = self.forward(x.float())
             pred.append(y_hat.squeeze().detach().numpy())
 
@@ -221,10 +220,16 @@ class ITGDataset(Dataset):
 
 class ITGDatasetDF(Dataset):
     # DataFrame version of ITGDataset
-    def __init__(self, df: pd.DataFrame, target_column: str, target_var: str, keep_index: bool = False):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        target_column: str,
+        target_var: str,
+        keep_index: bool = False,
+    ):
         self.data = df
         self.target = target_column
-        self.label = target_var 
+        self.label = target_var
 
         # make sure the dataframe contains the variable information we need
         assert target_column and target_var in list(self.data.columns)
@@ -234,15 +239,15 @@ class ITGDatasetDF(Dataset):
 
     def scale(self, scaler):
         # Scale features in the scaler object and leave the rest as is
-        scaled = scaler.transform(self.data.drop([self.label, 'index'], axis = 1))
+        scaled = scaler.transform(self.data.drop([self.label, "index"], axis=1))
 
         cols = scaler.feature_names_in_
 
-        temp_df = pd.DataFrame(scaled, index=self.data.index,columns=cols )
+        temp_df = pd.DataFrame(scaled, index=self.data.index, columns=cols)
 
         assert set(list(temp_df.index)) == set(list(self.data.index))
 
-        temp_df['index'] = self.data['index']
+        temp_df["index"] = self.data["index"]
         temp_df[self.label] = self.data[self.label]
 
         self.data = temp_df
@@ -260,23 +265,23 @@ class ITGDatasetDF(Dataset):
 
     # Not sure if needed yet
     # return a copy of the dataset with only the specified indices
-    #def subset(self, indices):
+    # def subset(self, indices):
     #    return ITGDatasetDF(self.data.iloc[indices], self.target, self.label)
 
     def remove(self, indices):
-        #self.data.drop(index = indices, inplace = True) I'm not sure this does what I want
+        # self.data.drop(index = indices, inplace = True) I'm not sure this does what I want
         self.data = self.data[~self.data["index"].isin(indices)]
 
     def __len__(self):
         return len(self.data.index)
 
     def __getitem__(self, idx):
-    
-        x = self.data[train_keys].iloc[idx].to_numpy()
+
+        x = self.data[train_keys].iloc[idx].values
         y = self.data[self.label].iloc[idx]
         z = self.data[self.target].iloc[idx]
-        idx = self.data['index'].iloc[idx]
-        return x,y,z,idx
+        idx = self.data["index"].iloc[idx]
+        return x, y, z, idx
 
 
 # General Model functions

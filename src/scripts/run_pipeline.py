@@ -1,6 +1,13 @@
 # Load the required data
 
-from scripts.pipeline_tools import classifier_accuracy, prepare_data, regressor_uncertainty, select_unstable_data, retrain_regressor, uncertainty_change
+from scripts.pipeline_tools import (
+    classifier_accuracy,
+    prepare_data,
+    regressor_uncertainty,
+    select_unstable_data,
+    retrain_regressor,
+    uncertainty_change,
+)
 from scripts.Models import ITGDatasetDF, load_model
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
@@ -10,32 +17,34 @@ from torch.utils.data import DataLoader
 pretrained = {
     "ITG_class": {
         "trained": True,
-        #"save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/classifier_model.pt",
+        # "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/classifier_model.pt",
         "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/classifier_model.pt",
     },
     "ITG_reg": {
         "trained": True,
-        #"save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/regression_model.pt",
+        # "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/regression_model.pt",
         "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/regression_model.pt",
     },
 }
 
 # Data loading
 
-#TRAIN_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
+# TRAIN_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
 TRAIN_PATH = "/unix/atlastracking/jbarr/train_data_clipped.pkl"
 
-#VALIDATION_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
+# VALIDATION_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
 VALIDATION_PATH = "/unix/atlastracking/jbarr/valid_data_clipped.pkl"
 
 
-train_data, val_data = prepare_data(TRAIN_PATH, VALIDATION_PATH, target_column='efiitg_gb', target_var='itg')
+train_data, val_data = prepare_data(
+    TRAIN_PATH, VALIDATION_PATH, target_column="efiitg_gb", target_var="itg"
+)
 
 scaler = StandardScaler()
-scaler.fit_transform(train_data.drop(['itg'], axis = 1))
+scaler.fit_transform(train_data.drop(["itg"], axis=1))
 
-train_dataset = ITGDatasetDF(train_data, target_column='efiitg_gb', target_var='itg')
-valid_dataset = ITGDatasetDF(train_data, target_column='efiitg_gb', target_var='itg')
+train_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="itg")
+valid_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="itg")
 
 # # TODO: further testing of the scale function
 train_dataset.scale(scaler)
@@ -52,13 +61,14 @@ for model in pretrained:
         models[model] = trained_model
 
 for model_name in models:
-    print(f'Model: {model_name}')
+    print(f"Model: {model_name}")
     print(models[model_name])
 
 # Train untrained models (may not be needed)
 
 # Sample subset of data to use in active learning (10K for now)
-train_sample = train_dataset.sample(10_000) # TODO: Needs to be the true training samples used!!!
+ # TODO: Needs to be the true training samples used!!!
+train_sample = train_dataset.sample(10_000) 
 valid_sample = valid_dataset.sample(10_000)
 
 
@@ -66,23 +76,32 @@ valid_sample = valid_dataset.sample(10_000)
 valid_dataset.remove(valid_sample.data.index)
 
 # Pass points through the ITG Classifier and return points that pass (what threshold?)
-select_unstable_data(valid_sample, 100, models['ITG_class']) 
-#classifier_accuracy(valid_sample, target_var='itg')
+select_unstable_data(valid_sample, 100, models["ITG_class"])
+# classifier_accuracy(valid_sample, target_var='itg')
 
-# Run MC dropout on points that pass the ITG classifier and return 
-#uncertain_loader, ucert_before = regressor_uncertainty(valid_sample, models['ITG_reg'], n_runs=10)
-#train_loader = DataLoader(train_sample,batch_size=1000, shuffle=True)
-#valid_loader = DataLoader(valid_dataset,batch_size=2048, shuffle=True)
+# Run MC dropout on points that pass the ITG classifier and return
+uncertain_loader, ucert_before = regressor_uncertainty(
+    valid_sample, models["ITG_reg"], n_runs=10
+)
+train_loader = DataLoader(train_sample, batch_size=1000, shuffle=True)
+valid_loader = DataLoader(valid_dataset, batch_size=2048, shuffle=True)
 
-#prediction_before = models['ITG_reg'].predict(uncertain_loader)
+prediction_before = models["ITG_reg"].predict(uncertain_loader)
 
 # Retrain Regressor (Further research required)
-#retrain_regressor(train_loader, uncertain_loader, valid_loader, models['ITG_reg'], 1e-3, validation_step=False)
+retrain_regressor(
+    train_loader,
+    uncertain_loader,
+    valid_loader,
+    models["ITG_reg"],
+    1e-4,
+    validation_step=False,
+)
 
-#prediction_after = models['ITG_reg'].predict(uncertain_loader)
+prediction_after = models["ITG_reg"].predict(uncertain_loader)
 
-#_, ucert_after = regressor_uncertainty(valid_sample, models['ITG_reg'], n_runs=10)
+_, ucert_after = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=10)
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
-#uncertainty_change(ucert_before, ucert_after)
+uncertainty_change(ucert_before, ucert_after)
 
 # Pipeline diagnosis (How has the uncertainty changed for original training points)
