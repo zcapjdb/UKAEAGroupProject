@@ -55,8 +55,6 @@ def select_unstable_data(dataset, batch_size, classifier):
     # get initial size of the dataset 
     init_size = len(dataloader.dataset)
 
-    #temp_dataset = copy.deepcopy(dataset)
-
     stable_points = []
     misclassified = []
     for i, (x, y, z, idx) in enumerate(tqdm(dataloader)):
@@ -67,16 +65,23 @@ def select_unstable_data(dataset, batch_size, classifier):
         pred_class = torch.round(y_hat.squeeze().detach()).numpy()
         pred_class = pred_class.astype(int)
 
-        stable_points.append(idx[np.where(pred_class == 0)[0]])
-        misclassified.append(idx[np.where(pred_class != y.numpy())[0]])
+        stable = idx[np.where(pred_class == 0)[0]]
+        missed = idx[np.where(pred_class != y.numpy())[0]]
 
-        #temp_dataset.data.drop(index=idx[drop_points], inplace=True)
-    
-    stable_points = np.concatenate(np.array(stable_points))
-    misclassified = np.concatenate(np.array(misclassified))
-    drop_points = np.unique(np.concatenate([stable_points, misclassified]))
-    print(drop_points.shape)
+        stable_points.append(stable.detach().numpy())
+        misclassified.append(missed.detach().numpy())
+
+    # turn list of stable and misclassified points into flat arrays
+    stable_points = np.concatenate(np.asarray(stable_points, dtype = object), axis=0)
+    misclassified = np.concatenate(np.asarray(misclassified, dtype = object), axis=0)
+    print(f'\nStable points: {len(stable_points)}')
+    print(f'Misclassified points: {len(misclassified)}')
+
+    # merge the two arrays
+    drop_points = np.unique(np.concatenate((stable_points, misclassified), axis=0))
     dataset.remove(drop_points)
+
+    #TODO: make a subset of the data with the misclassified points to retrain the classifier
 
     print(f"Percentage of misclassified points:  {100*len(misclassified) / init_size}%")
     print(f'\nDropped {init_size - len(dataset.data)} rows')

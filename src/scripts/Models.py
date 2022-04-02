@@ -265,7 +265,7 @@ class ITGDatasetDF(Dataset):
 
     def remove(self, indices):
         #self.data.drop(index = indices, inplace = True) I'm not sure this does what I want
-        self.data[~self.data["index"].isin(indices)]
+        self.data = self.data[~self.data["index"].isin(indices)]
 
     def __len__(self):
         return len(self.data.index)
