@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from scripts.utils import train_keys
 
 # TODO: Put some of these variables in a yaml config file
+DEBUG = True
 
 pretrained = {
     "ITG_class": {
@@ -52,7 +53,8 @@ train_dataset.scale(scaler)
 valid_dataset.scale(scaler)
 
 # Use subsample of validation data for now
-#valid_dataset = valid_dataset.sample(100_000)
+if DEBUG:
+    valid_dataset = valid_dataset.sample(100_000)
 
 # Load pretrained models
 models = {}
@@ -77,13 +79,47 @@ valid_sample = valid_dataset.sample(10_000)
 valid_dataset.remove(valid_sample.data.index)
 
 # Pass points through the ITG Classifier and return points that pass (what threshold?)
-select_unstable_data(valid_sample, 100, models["ITG_class"])
+select_unstable_data(valid_sample, batch_size=100, classifier=models["ITG_class"])
 # classifier_accuracy(valid_sample, target_var='itg')
 
 # Run MC dropout on points that pass the ITG classifier and return
-uncertain_loader, ucert_before = regressor_uncertainty(
-    valid_sample, models["ITG_reg"], n_runs=10
+uncertain_loader, uncert_before = regressor_uncertainty(
+    valid_sample, models["ITG_reg"], n_runs=15, keep = 0.1
 )
+
+# Plot histogram of standard deviations of uncertainty loader
+if DEBUG:
+    import copy
+    from tqdm.auto import tqdm
+    import numpy as np
+    dataset = uncertain_loader.dataset
+    dataloader = DataLoader(dataset, shuffle=False)
+    data_copy = copy.deepcopy(dataset)
+    regressor = models["ITG_reg"]
+    regressor.eval()
+    regressor.enable_dropout()
+
+    # evaluate model on training data 100 times and return points with largest uncertainty
+    runs = []
+    for i in tqdm(range(15)):
+        step_list = []
+        for step, (x, y, z, idx) in enumerate(dataloader):
+
+            predictions = regressor(x.float()).detach().numpy()
+            step_list.append(predictions)
+
+        flattened_predictions = np.array(step_list).flatten()
+        runs.append(flattened_predictions)
+
+    out_std = np.std(np.array(runs), axis=0)
+
+    import matplotlib.pyplot as plt
+    plt.figure()
+    plt.hist(out_std, bins=50)
+    plt.show()
+    plt.savefig("standard_deviation_histogram_sanity_check.png")
+
+
 #TODO: Why for the previous function we pass in a dataset but for the next function we pass in a dataloader?
 train_loader = DataLoader(train_sample, batch_size=1000, shuffle=True)
 
@@ -92,7 +128,7 @@ x_array = valid_dataset.data[train_keys].values
 y_array = valid_dataset.data["itg"].values
 z_array = valid_dataset.data["efiitg_gb"].values
 dataset_numpy = ITGDataset(x_array, y_array, z_array)
-valid_loader = DataLoader(dataset_numpy, batch_size=10_000, shuffle=True)
+valid_loader = DataLoader(dataset_numpy, batch_size=int(0.1 *len(y_array)), shuffle=True)
 
 prediction_before = models["ITG_reg"].predict(uncertain_loader)
 
@@ -102,14 +138,16 @@ retrain_regressor(
     uncertain_loader,
     valid_loader,
     models["ITG_reg"],
-    1e-4,
+    learning_rate=5e-4,
+    epochs=5,
     validation_step=True,
 )
 
 prediction_after = models["ITG_reg"].predict(uncertain_loader)
 
-_, ucert_after = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=10)
+# TODO: This should pass a list of indices to make sure the same points are selected!!!
+_, uncert_after = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=15, keep=0.1)
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
-uncertainty_change(ucert_before, ucert_after)
+uncertainty_change(uncert_before, uncert_after)
 
 # Pipeline diagnosis (How has the uncertainty changed for original training points)

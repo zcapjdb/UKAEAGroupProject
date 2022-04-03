@@ -1,4 +1,3 @@
-from operator import index
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -115,7 +114,7 @@ class ITG_Regressor(nn.Module):
     #         c_stab = 0
     #     return c_good + lambda_stab * k_stab
     def loss_function(self, y, y_hat):
-        MSE_loss = nn.MSELoss()
+        MSE_loss = nn.MSELoss(reduction = "sum")
         return MSE_loss(y_hat, y.float())
 
     def train_step(self, dataloader, optimizer):
@@ -137,11 +136,12 @@ class ITG_Regressor(nn.Module):
             loss = loss.item()
             losses.append(loss)
 
-        return np.mean(losses)
+        return np.sum(losses) / size
 
     def validation_step(self, dataloader):
-        test_loss = []
+        size = len(dataloader.dataset)
 
+        test_loss = []
         with torch.no_grad():
             #for X, y, z, idx in tqdm(dataloader):
             for X, y, z in tqdm(dataloader):
@@ -150,7 +150,7 @@ class ITG_Regressor(nn.Module):
                     self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
                 )
 
-        return np.mean(test_loss)
+        return np.sum(test_loss) / size
 
     def predict(self, dataloader):
         pred = []

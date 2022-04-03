@@ -5,6 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from scripts.utils import train_keys
 from scripts.Models import ITGDatasetDF, ITGDataset
@@ -78,7 +79,7 @@ def retrain_regressor(
     new_loader,
     val_loader,
     model,
-    learning_rate,
+    learning_rate=1e-4,
     epochs=5,
     validation_step=True,
 ):
@@ -103,13 +104,13 @@ def retrain_regressor(
             loss = model.train_step(train_loader, opt)
             print(f"Loss: {loss.item():.4f}")
 
-        if validation_step:
+        if validation_step and epoch % 5 == 0:
             print("Validation Step: ", epoch)
             test_loss = model.validation_step(val_loader)
             print(f"Test loss: {test_loss.item():.4f}")
 
 
-def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
+def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot = False):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
     Returns the most uncertain points.
@@ -117,13 +118,13 @@ def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
     """
     print("\nRunning MC Dropout....\n")
 
-    dataloader = DataLoader(dataset, shuffle=False)
     data_copy = copy.deepcopy(dataset)
+    dataloader = DataLoader(data_copy, shuffle=False)
 
     regressor.eval()
     regressor.enable_dropout()
 
-    # evaluate model on training data 100 times and return points with largest uncertainty
+    # evaluate model on training data n_runs times and return points with largest uncertainty
     runs = []
     for i in tqdm(range(n_runs)):
         step_list = []
@@ -142,9 +143,29 @@ def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
     # TODO: Check if this line does what I expect
     idx_drop = data_copy.data["index"].iloc[drop_indices]
 
-    data_copy.remove(idx_drop)
+    #data_copy.remove(idx_drop)
+    #data_copy.data = data_copy.data.drop(idx_drop)
+    idx_list = []
+    for step, (x, y, z, idx) in enumerate(dataloader):
+        idx_list.append(idx.detach().numpy())
 
-    uncertain_dataloader = DataLoader(data_copy, shuffle=True)
+    idx_array = np.asarray(idx_list, dtype = object).flatten()
+    top_idx = np.argsort(out_std)[-int(n_out_std * keep):]
+    real_idx = idx_array[top_idx]
+    data_copy.data = data_copy.data[data_copy.data["index"].isin(real_idx)]
+    #data_copy.remove(real_idx)
+    uncertain_dataloader = DataLoader(data_copy, batch_size=100, shuffle=True)
+
+    if plot:
+        plt.figure()
+        plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep):]], bins=50)
+        plt.show()
+        plt.savefig("standard_deviation_histogram.png")
+
+        plt.figure()
+        plt.hist(out_std, bins=50)
+        plt.show()
+        plt.savefig("standard_deviation_histogram_most_uncertain.png")
 
     # # Using numpy is much faster, why!?
     # x_array = dataset.data[train_keys].values
@@ -159,8 +180,8 @@ def regressor_uncertainty(dataset, regressor, keep=0.1, n_runs=1):
     #     for step, (x, y) in enumerate(dataloader_numpy):
 
     #         predictions = regressor(x.float()).detach().numpy()
-
-    return uncertain_dataloader, out_std[-int(n_out_std * keep) :]
+    top_indices = np.argsort(out_std)[-int(len(out_std) * keep):]
+    return uncertain_dataloader, out_std[top_indices]
 
 
 # Active Learning diagonistic functions
@@ -186,7 +207,11 @@ def uncertainty_change(x, y):
     decrease = len(theta[theta > 45]) * 100 / total
     no_change = 100 - increase - decrease
 
+    with np.printoptions(threshold=np.inf):
+        print(x)
+        print(y)
     diff = y - x
+    print(diff)
     increase = np.sum(diff >= 0) * 100 / diff.shape[0]
     decrease = np.sum(diff < 0) * 100 / diff.shape[0]
 
