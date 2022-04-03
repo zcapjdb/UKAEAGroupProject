@@ -20,22 +20,27 @@ pretrained = {
     "ITG_class": {
         "trained": True,
         # "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/classifier_model.pt",
-        "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/classifier_model.pt",
+        # "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/classifier_model.pt",
+        "save_path": "/Users/thandikiremadula/Desktop/UKAEA_data/classifier_model.pt"
     },
     "ITG_reg": {
         "trained": True,
         # "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/regression_model.pt",
-        "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/regression_model.pt",
+        # "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/regression_model.pt",
+        "save_path": "/Users/thandikiremadula/Desktop/UKAEA_data/regression_model.pt"
     },
 }
 
 # Data loading
 
 # TRAIN_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
-TRAIN_PATH = "/unix/atlastracking/jbarr/train_data_clipped.pkl"
+# TRAIN_PATH = "/unix/atlastracking/jbarr/train_data_clipped.pkl"
+TRAIN_PATH = "/Users/thandikiremadula/Desktop/UKAEA_data/train_data_clipped.pkl"
 
 # VALIDATION_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
-VALIDATION_PATH = "/unix/atlastracking/jbarr/valid_data_clipped.pkl"
+# VALIDATION_PATH = "/unix/atlastracking/jbarr/valid_data_clipped.pkl"
+
+VALIDATION_PATH = "/Users/thandikiremadula/Desktop/UKAEA_data/valid_data_clipped.pkl"
 
 
 train_data, val_data = prepare_data(
