@@ -101,10 +101,12 @@ def retrain_regressor(
 
         if epoch % 2 == 0:
             print("Using Original Training Data:")
+            # Try smaller learning rate for original data
+            opt = torch.optim.Adam(model.parameters(), lr= 0.1 *learning_rate)
             loss = model.train_step(train_loader, opt)
             print(f"Loss: {loss.item():.4f}")
 
-        if validation_step and epoch % 5 == 0:
+        if validation_step and epoch % 10 == 0:
             print("Validation Step: ", epoch)
             test_loss = model.validation_step(val_loader)
             print(f"Test loss: {test_loss.item():.4f}")
@@ -154,7 +156,7 @@ def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot = False
     real_idx = idx_array[top_idx]
     data_copy.data = data_copy.data[data_copy.data["index"].isin(real_idx)]
     #data_copy.remove(real_idx)
-    uncertain_dataloader = DataLoader(data_copy, batch_size=100, shuffle=True)
+    uncertain_dataloader = DataLoader(data_copy, batch_size=len(data_copy), shuffle=True)
 
     if plot:
         plt.figure()
@@ -207,13 +209,14 @@ def uncertainty_change(x, y):
     decrease = len(theta[theta > 45]) * 100 / total
     no_change = 100 - increase - decrease
 
+    diff = y - x
     with np.printoptions(threshold=np.inf):
         print(x)
         print(y)
-    diff = y - x
-    print(diff)
-    increase = np.sum(diff >= 0) * 100 / diff.shape[0]
-    decrease = np.sum(diff < 0) * 100 / diff.shape[0]
+        print(diff)
+
+    #increase = np.sum(diff >= 0) * 100 / diff.shape[0]
+    #decrease = np.sum(diff < 0) * 100 / diff.shape[0]
 
 
     print(

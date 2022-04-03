@@ -20,27 +20,23 @@ pretrained = {
     "ITG_class": {
         "trained": True,
         # "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/classifier_model.pt",
-        # "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/classifier_model.pt",
-        "save_path": "/Users/thandikiremadula/Desktop/UKAEA_data/classifier_model.pt"
+        "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/classifier_model.pt",
     },
     "ITG_reg": {
         "trained": True,
         # "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/regression_model.pt",
-        # "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/regression_model.pt",
-        "save_path": "/Users/thandikiremadula/Desktop/UKAEA_data/regression_model.pt"
+        "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/regression_model.pt",
     },
 }
 
 # Data loading
 
 # TRAIN_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
-# TRAIN_PATH = "/unix/atlastracking/jbarr/train_data_clipped.pkl"
-TRAIN_PATH = "/Users/thandikiremadula/Desktop/UKAEA_data/train_data_clipped.pkl"
+TRAIN_PATH = "/unix/atlastracking/jbarr/train_data_clipped.pkl"
 
 # VALIDATION_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
-# VALIDATION_PATH = "/unix/atlastracking/jbarr/valid_data_clipped.pkl"
+VALIDATION_PATH = "/unix/atlastracking/jbarr/valid_data_clipped.pkl"
 
-VALIDATION_PATH = "/Users/thandikiremadula/Desktop/UKAEA_data/valid_data_clipped.pkl"
 
 
 train_data, val_data = prepare_data(
@@ -89,7 +85,7 @@ select_unstable_data(valid_sample, batch_size=100, classifier=models["ITG_class"
 
 # Run MC dropout on points that pass the ITG classifier and return
 uncertain_loader, uncert_before = regressor_uncertainty(
-    valid_sample, models["ITG_reg"], n_runs=15, keep = 0.1
+    valid_sample, models["ITG_reg"], n_runs=15, keep = 0.25
 )
 
 # Plot histogram of standard deviations of uncertainty loader
@@ -116,11 +112,11 @@ if DEBUG:
         flattened_predictions = np.array(step_list).flatten()
         runs.append(flattened_predictions)
 
-    out_std = np.std(np.array(runs), axis=0)
+    uncert_before = np.std(np.array(runs), axis=0)
 
     import matplotlib.pyplot as plt
     plt.figure()
-    plt.hist(out_std, bins=50)
+    plt.hist(uncert_before, bins=50)
     plt.show()
     plt.savefig("standard_deviation_histogram_sanity_check.png")
 
@@ -143,15 +139,43 @@ retrain_regressor(
     uncertain_loader,
     valid_loader,
     models["ITG_reg"],
-    learning_rate=5e-4,
-    epochs=5,
+    learning_rate=1e-3,
+    epochs=100,
     validation_step=True,
 )
 
 prediction_after = models["ITG_reg"].predict(uncertain_loader)
 
 # TODO: This should pass a list of indices to make sure the same points are selected!!!
-_, uncert_after = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=15, keep=0.1)
+#_, uncert_after = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=15, keep=0.25)
+if DEBUG:
+    dataset = uncertain_loader.dataset
+    dataloader = DataLoader(dataset, shuffle=False)
+    data_copy = copy.deepcopy(dataset)
+    regressor = models["ITG_reg"]
+    regressor.eval()
+    regressor.enable_dropout()
+
+    # evaluate model on training data 100 times and return points with largest uncertainty
+    runs = []
+    for i in tqdm(range(15)):
+        step_list = []
+        for step, (x, y, z, idx) in enumerate(dataloader):
+
+            predictions = regressor(x.float()).detach().numpy()
+            step_list.append(predictions)
+
+        flattened_predictions = np.array(step_list).flatten()
+        runs.append(flattened_predictions)
+
+    uncert_after = np.std(np.array(runs), axis=0)
+
+    plt.figure()
+    plt.scatter(uncert_before, uncert_after, s=2, alpha=1)
+    plt.plot([uncert_before.min(), uncert_before.max()], [uncert_before.min(), uncert_before.max()], 'k--', lw=2)
+    plt.show()
+    plt.savefig("uncertainty_scatter_plot.png")
+
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
 uncertainty_change(uncert_before, uncert_after)
 
