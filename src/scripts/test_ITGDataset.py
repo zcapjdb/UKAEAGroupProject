@@ -34,12 +34,19 @@ def test_sample(test_dataset):
     # Make sure the sampled data frame inices match the index column 
     assert sample_col == sample_index
 
-def test_remove(test_dataset):
+def test_remove_one(test_dataset):
     test_dataset.remove([1,2,3])
 
     remainig_idx = list(test_dataset.data.index)
 
     assert remainig_idx == [6,5,4]
+
+def test_remove_two(test_dataset): 
+    drop_indices = list(test_dataset.data.iloc[[0,1,2]].index) 
+    
+    test_dataset.remove(drop_indices)
+
+    assert list(test_dataset.data.index) == [3,2,1]
     
 
 
