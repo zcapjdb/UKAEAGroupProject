@@ -75,7 +75,6 @@ def select_unstable_data(dataset, batch_size, classifier):
 
 # Regressor tools
 def retrain_regressor(
-    train_loader,
     new_loader,
     val_loader,
     model,
@@ -99,20 +98,13 @@ def retrain_regressor(
         loss = model.train_step(new_loader, opt)
         print(f"Loss: {loss.item():.4f}")
 
-        if epoch % 2 == 0:
-            print("Using Original Training Data:")
-            # Try smaller learning rate for original data
-            opt = torch.optim.Adam(model.parameters(), lr= 0.1 *learning_rate)
-            loss = model.train_step(train_loader, opt)
-            print(f"Loss: {loss.item():.4f}")
-
         if validation_step and epoch % 10 == 0:
             print("Validation Step: ", epoch)
             test_loss = model.validation_step(val_loader)
             print(f"Test loss: {test_loss.item():.4f}")
 
 
-def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot = False):
+def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot=False):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
     Returns the most uncertain points.
@@ -145,22 +137,22 @@ def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot = False
     # TODO: Check if this line does what I expect
     idx_drop = data_copy.data["index"].iloc[drop_indices]
 
-    #data_copy.remove(idx_drop)
-    #data_copy.data = data_copy.data.drop(idx_drop)
+    # data_copy.remove(idx_drop)
+    # data_copy.data = data_copy.data.drop(idx_drop)
     idx_list = []
     for step, (x, y, z, idx) in enumerate(dataloader):
         idx_list.append(idx.detach().numpy())
 
-    idx_array = np.asarray(idx_list, dtype = object).flatten()
-    top_idx = np.argsort(out_std)[-int(n_out_std * keep):]
+    idx_array = np.asarray(idx_list, dtype=object).flatten()
+    top_idx = np.argsort(out_std)[-int(n_out_std * keep) :]
     real_idx = idx_array[top_idx]
     data_copy.data = data_copy.data[data_copy.data["index"].isin(real_idx)]
-    #data_copy.remove(real_idx)
-    uncertain_dataloader = DataLoader(data_copy, batch_size=len(data_copy), shuffle=True)
+    # data_copy.remove(real_idx)
+    # uncertain_dataloader = DataLoader(data_copy, batch_size=len(data_copy), shuffle=True)
 
     if plot:
         plt.figure()
-        plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep):]], bins=50)
+        plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=50)
         plt.show()
         plt.savefig("standard_deviation_histogram.png")
 
@@ -182,8 +174,8 @@ def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot = False
     #     for step, (x, y) in enumerate(dataloader_numpy):
 
     #         predictions = regressor(x.float()).detach().numpy()
-    top_indices = np.argsort(out_std)[-int(len(out_std) * keep):]
-    return uncertain_dataloader, out_std[top_indices]
+    top_indices = np.argsort(out_std)[-int(len(out_std) * keep) :]
+    return data_copy, out_std[top_indices]
 
 
 # Active Learning diagonistic functions
@@ -215,9 +207,8 @@ def uncertainty_change(x, y):
         print(y)
         print(diff)
 
-    #increase = np.sum(diff >= 0) * 100 / diff.shape[0]
-    #decrease = np.sum(diff < 0) * 100 / diff.shape[0]
-
+    # increase = np.sum(diff >= 0) * 100 / diff.shape[0]
+    # decrease = np.sum(diff < 0) * 100 / diff.shape[0]
 
     print(
         f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_change:.3f} "

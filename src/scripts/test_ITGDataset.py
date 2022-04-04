@@ -77,6 +77,11 @@ def get_train_val():
 def test_index_preservation(get_train_val):
     train_data, valid_data = get_train_val
 
+    train_idx_before = train_data.index
+    valid_idx_before = valid_data.index
+
+    unique_before = set((list(train_idx_before) + list(valid_idx_before)))
+
     train_data = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="itg")
     valid_data = ITGDatasetDF(valid_data, target_column="efiitg_gb", target_var="itg")
 
@@ -88,3 +93,19 @@ def test_index_preservation(get_train_val):
     unique = set((list(train_idx) + list(valid_idx)))
 
     assert len(unique) == total
+    assert unique == unique_before
+
+
+def test_add(get_train_val):
+    train_data, valid_data = get_train_val
+
+    train_data = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="itg")
+    valid_data = ITGDatasetDF(valid_data, target_column="efiitg_gb", target_var="itg")
+
+    unique_before = set((list(train_data.data.index) + list(valid_data.data.index)))
+
+    train_data.add(valid_data)
+
+    unique_after = set(list(train_data.data.index))
+
+    assert unique_after == unique_before

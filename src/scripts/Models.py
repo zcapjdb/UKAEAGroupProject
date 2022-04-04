@@ -114,7 +114,7 @@ class ITG_Regressor(nn.Module):
     #         c_stab = 0
     #     return c_good + lambda_stab * k_stab
     def loss_function(self, y, y_hat):
-        MSE_loss = nn.MSELoss(reduction = "sum")
+        MSE_loss = nn.MSELoss(reduction="sum")
         return MSE_loss(y_hat, y.float())
 
     def train_step(self, dataloader, optimizer):
@@ -143,7 +143,7 @@ class ITG_Regressor(nn.Module):
 
         test_loss = []
         with torch.no_grad():
-            #for X, y, z, idx in tqdm(dataloader):
+            # for X, y, z, idx in tqdm(dataloader):
             for X, y, z in tqdm(dataloader):
                 z_hat = self.forward(X.float())
                 test_loss.append(
@@ -260,9 +260,10 @@ class ITGDatasetDF(Dataset):
             self.data.sample(batch_size), self.target, self.label, keep_index=True
         )
 
-    def add(self, rows):
-        rows["index"] = np.arange(len(self.data), len(self.data) + len(rows))
-        self.data = pd.concat([self.data, rows], axis=0)
+    def add(self, dataset):
+        # rows["index"] = np.arange(len(self.data), len(self.data) + len(rows))
+        # self.data = pd.concat([self.data, rows], axis=0)
+        self.data = pd.concat([self.data, dataset.data], axis=0)
 
     # Not sure if needed yet
     # return a copy of the dataset with only the specified indices
@@ -270,7 +271,9 @@ class ITGDatasetDF(Dataset):
     #    return ITGDatasetDF(self.data.iloc[indices], self.target, self.label)
 
     def remove(self, indices):
-        self.data.drop(index = indices, inplace = True) # I'm not sure this does what I want
+        self.data.drop(
+            index=indices, inplace=True
+        )  # I'm not sure this does what I want
         # self.data = self.data[~self.data["index"].isin(indices)]
 
     def __len__(self):
