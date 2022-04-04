@@ -14,7 +14,6 @@ from torch.utils.data import DataLoader
 from scripts.utils import train_keys
 
 # TODO: Put some of these variables in a yaml config file
-DEBUG = False
 
 pretrained = {
     "ITG_class": {
@@ -56,10 +55,6 @@ valid_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="
 train_dataset.scale(scaler)
 valid_dataset.scale(scaler)
 
-# Use subsample of validation data for now
-if DEBUG:
-    valid_dataset = valid_dataset.sample(100_000)
-
 # Load pretrained models
 models = {}
 for model in pretrained:
@@ -95,40 +90,6 @@ train_sample.add(uncertain_datset)
 
 uncertain_loader = DataLoader(train_sample, batch_size=len(train_sample), shuffle=True)
 
-# Plot histogram of standard deviations of uncertainty loader
-if DEBUG:
-    import copy
-    from tqdm.auto import tqdm
-    import numpy as np
-
-    dataset = uncertain_loader.dataset
-    dataloader = DataLoader(dataset, shuffle=False)
-    data_copy = copy.deepcopy(dataset)
-    regressor = models["ITG_reg"]
-    regressor.eval()
-    regressor.enable_dropout()
-
-    # evaluate model on training data 100 times and return points with largest uncertainty
-    runs = []
-    for i in tqdm(range(15)):
-        step_list = []
-        for step, (x, y, z, idx) in enumerate(dataloader):
-
-            predictions = regressor(x.float()).detach().numpy()
-            step_list.append(predictions)
-
-        flattened_predictions = np.array(step_list).flatten()
-        runs.append(flattened_predictions)
-
-    uncert_before = np.std(np.array(runs), axis=0)
-
-    import matplotlib.pyplot as plt
-
-    plt.figure()
-    plt.hist(uncert_before, bins=50)
-    plt.show()
-    plt.savefig("standard_deviation_histogram_sanity_check.png")
-
 # Switching validation dataset to numpy arrays to see if it is quicker
 x_array = valid_dataset.data[train_keys].values
 y_array = valid_dataset.data["itg"].values
@@ -153,8 +114,6 @@ retrain_regressor(
 
 prediction_after = models["ITG_reg"].predict(uncertain_loader)
 
-# TODO: This should pass a list of indices to make sure the same points are selected!!!
-# _, uncert_after = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=15, keep=0.25)
 _, uncert_after,_ = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=15, keep=0.25, order_idx=data_idx)
 
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
