@@ -43,6 +43,7 @@ def select_unstable_data(dataset, batch_size, classifier):
 
     stable_points = []
     misclassified = []
+    print('\nRunning classifier selection...\n')
     for i, (x, y, z, idx) in enumerate(tqdm(dataloader)):
 
         y_hat = classifier(x.float())
@@ -81,10 +82,10 @@ def retrain_regressor(
     learning_rate=1e-4,
     epochs=5,
     validation_step=True,
-    scratch = False,
+    scratch=False,
 ):
     print("\nRetraining regressor...")
-    if scratch: 
+    if scratch:
         model.reset_weights()
 
     if validation_step:
@@ -107,7 +108,7 @@ def retrain_regressor(
             print(f"Test loss: {test_loss.item():.4f}")
 
 
-def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot=False):
+def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot=False, order_idx=None):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
     Returns the most uncertain points.
@@ -123,6 +124,7 @@ def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot=False):
 
     # evaluate model on training data n_runs times and return points with largest uncertainty
     runs = []
+
     for i in tqdm(range(n_runs)):
         step_list = []
         for step, (x, y, z, idx) in enumerate(dataloader):
@@ -136,23 +138,18 @@ def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot=False):
     out_std = np.std(np.array(runs), axis=0)
     n_out_std = out_std.shape[0]
 
-    drop_indices = np.argsort(out_std)[: n_out_std - int(n_out_std * keep)]
-    # TODO: Check if this line does what I expect
-    idx_drop = data_copy.data["index"].iloc[drop_indices]
-
-    # data_copy.remove(idx_drop)
-    # data_copy.data = data_copy.data.drop(idx_drop)
     idx_list = []
     for step, (x, y, z, idx) in enumerate(dataloader):
         idx_list.append(idx.detach().numpy())
 
     idx_array = np.asarray(idx_list, dtype=object).flatten()
     top_idx = np.argsort(out_std)[-int(n_out_std * keep) :]
+    drop_idx = np.argsort(out_std)[: n_out_std - int(n_out_std * keep)]
+    drop_idx = idx_array[drop_idx]
     real_idx = idx_array[top_idx]
-    data_copy.data = data_copy.data[data_copy.data["index"].isin(real_idx)]
-    # data_copy.remove(real_idx)
+    # data_copy.data = data_copy.data[data_copy.data["index"].isin(real_idx)]
+    data_copy.remove(drop_idx)
     # uncertain_dataloader = DataLoader(data_copy, batch_size=len(data_copy), shuffle=True)
-
     if plot:
         plt.figure()
         plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=50)
@@ -164,21 +161,19 @@ def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot=False):
         plt.show()
         plt.savefig("standard_deviation_histogram_most_uncertain.png")
 
-    # # Using numpy is much faster, why!?
-    # x_array = dataset.data[train_keys].values
-    # y_array = dataset.data["efiitg_gb"].values
-    # idx_array = dataset.data["index"].values
-
-    # dataset2 = ITGDataset(x_array, y_array)
-    # dataset2.indices = idx_array
-    # dataloader_numpy =  DataLoader(dataset2, shuffle=False)
-
-    # for i in tqdm(range(n_runs)):
-    #     for step, (x, y) in enumerate(dataloader_numpy):
-
-    #         predictions = regressor(x.float()).detach().numpy()
     top_indices = np.argsort(out_std)[-int(len(out_std) * keep) :]
-    return data_copy, out_std[top_indices]
+
+    if order_idx is not None:
+        reorder = np.array([np.where(idx_array == i) for i in order_idx]).flatten()
+        
+        real_idx = idx_array[reorder]
+
+
+        assert list(np.unique(real_idx)) == list(np.unique(order_idx))
+
+        assert real_idx.tolist() == order_idx.tolist(), print("Ordering error")
+
+    return data_copy, out_std[top_indices], real_idx
 
 
 # Active Learning diagonistic functions

@@ -87,7 +87,7 @@ select_unstable_data(valid_sample, batch_size=100, classifier=models["ITG_class"
 # classifier_accuracy(valid_sample, target_var='itg')
 
 # Run MC dropout on points that pass the ITG classifier and return
-uncertain_datset, uncert_before = regressor_uncertainty(
+uncertain_datset, uncert_before, data_idx = regressor_uncertainty(
     valid_sample, models["ITG_reg"], n_runs=15, keep=0.25
 )
 
@@ -155,38 +155,7 @@ prediction_after = models["ITG_reg"].predict(uncertain_loader)
 
 # TODO: This should pass a list of indices to make sure the same points are selected!!!
 # _, uncert_after = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=15, keep=0.25)
-if DEBUG:
-    dataset = uncertain_loader.dataset
-    dataloader = DataLoader(dataset, shuffle=False)
-    data_copy = copy.deepcopy(dataset)
-    regressor = models["ITG_reg"]
-    regressor.eval()
-    regressor.enable_dropout()
-
-    # evaluate model on training data 100 times and return points with largest uncertainty
-    runs = []
-    for i in tqdm(range(15)):
-        step_list = []
-        for step, (x, y, z, idx) in enumerate(dataloader):
-
-            predictions = regressor(x.float()).detach().numpy()
-            step_list.append(predictions)
-
-        flattened_predictions = np.array(step_list).flatten()
-        runs.append(flattened_predictions)
-
-    uncert_after = np.std(np.array(runs), axis=0)
-
-    plt.figure()
-    plt.scatter(uncert_before, uncert_after, s=2, alpha=1)
-    plt.plot(
-        [uncert_before.min(), uncert_before.max()],
-        [uncert_before.min(), uncert_before.max()],
-        "k--",
-        lw=2,
-    )
-    plt.show()
-    plt.savefig("uncertainty_scatter_plot.png")
+_, uncert_after,_ = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=15, keep=0.25, order_idx=data_idx)
 
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
 uncertainty_change(uncert_before, uncert_after)
