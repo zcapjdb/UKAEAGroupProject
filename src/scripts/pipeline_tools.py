@@ -152,15 +152,8 @@ def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot=False, 
         data_copy.remove(drop_idx)
     # uncertain_dataloader = DataLoader(data_copy, batch_size=len(data_copy), shuffle=True)
     if plot:
-        plt.figure()
-        plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=50)
-        plt.show()
-        plt.savefig("standard_deviation_histogram.png")
-
-        plt.figure()
-        plt.hist(out_std, bins=50)
-        plt.show()
-        plt.savefig("standard_deviation_histogram_most_uncertain.png")
+        
+        plot_uncertainties(out_std, keep)
 
     top_indices = np.argsort(out_std)[-int(len(out_std) * keep) :]
 
@@ -212,3 +205,16 @@ def uncertainty_change(x, y):
     print(
         f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_change:.3f} "
     )
+
+# plotting functions
+
+def plot_uncertainties(out_std: np.ndarray, keep: float):
+    plt.figure()
+    plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=50)
+    # plt.show()
+    plt.savefig("standard_deviation_histogram.png")
+
+    plt.figure()
+    plt.hist(out_std, bins=50)
+    # plt.show()
+    plt.savefig("standard_deviation_histogram_most_uncertain.png")
