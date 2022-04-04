@@ -148,7 +148,8 @@ def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot=False, 
     drop_idx = idx_array[drop_idx]
     real_idx = idx_array[top_idx]
     # data_copy.data = data_copy.data[data_copy.data["index"].isin(real_idx)]
-    data_copy.remove(drop_idx)
+    if order_idx is None:
+        data_copy.remove(drop_idx)
     # uncertain_dataloader = DataLoader(data_copy, batch_size=len(data_copy), shuffle=True)
     if plot:
         plt.figure()
