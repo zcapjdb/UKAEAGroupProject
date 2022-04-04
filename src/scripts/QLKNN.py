@@ -15,7 +15,7 @@ from scripts.utils import ScaleData
 class BaseQLKNN(pl.LightningModule):
     def __init__(
         self,
-        input_dim : int = 15,
+        n_input : int = 15,
         features : list = [150,70,30], #QLKNN architecture
         num_outputs: int = 1,
         activation: str ="tanh",
@@ -28,7 +28,7 @@ class BaseQLKNN(pl.LightningModule):
         
     ):
         super().__init__()
-        self.first = nn.Linear(input_dim, features[0])
+        self.first = nn.Linear(n_input, features[0])
         self.linear_layers = nn.ModuleList(
             [nn.Linear(features[i], features[i+1]) for i in range(len(features)-1)]
         )
@@ -50,7 +50,7 @@ class BaseQLKNN(pl.LightningModule):
             raise ValueError("That activation is unknown")
 
     def forward(self, x):
-        x = self.first(x)
+        x = self.first(x.float())
         for layer in self.linear_layers:
             x = self.dropout(self.activation(layer(x)))
         if self.num_outputs is not None:
@@ -79,7 +79,7 @@ class BaseQLKNN(pl.LightningModule):
         return rmse
     
     def inverse_transform(self,z):
-        znumpy = z.detach().numpy()
+        znumpy = z.cpu().numpy()
         scaled = znumpy*self.scaler.scale_[-1]+self.scaler.mean_[-1]
         return torch.Tensor(scaled)
 

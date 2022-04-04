@@ -53,8 +53,8 @@ def main(hyper_parameters):
             hyper_parameters['phys_loss']
         )
 
-
-        model = QLKNN(n_input=15, **hyper_parameters)
+        scaler = QLKNNDataset.scaler
+        model = BaseQLKNN(n_input=15, **hyper_parameters, scaler=scaler)
         #model = BaseQLKNN(learning_rate=hyper_parameters['learning_rate'], scaler=QLKNNDataset.scaler) #QLKNNDataset.scaler persists after initial on train_data
         print(model)
 

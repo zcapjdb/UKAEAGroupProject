@@ -122,6 +122,7 @@ def callbacks(
     top_k: int = 1,
     patience=25,
     swa_epoch=75,
+    monitor='val_loss'
 ) -> list:
     """
     Prepare the callbacks for training.
@@ -142,7 +143,7 @@ def callbacks(
         os.makedirs(log_dir)
 
     early_stop_callback = EarlyStopping(
-        monitor="val_loss", min_delta=0.0, patience=patience
+        monitor=monitor, min_delta=0.0, patience=patience
     )
     progress = TQDMProgressBar(refresh_rate=100)
 
@@ -150,15 +151,19 @@ def callbacks(
         swa_epoch_start=swa_epoch
     )  # TODO base this off max epochs
 
+    if monitor=='val_acc':
+        mode = 'max'
+    else:
+        mode = 'min'
     checkpoint_callback = ModelCheckpoint(
-        monitor="val_loss",
+        monitor=monitor,
         dirpath=log_dir,
-        filename="{experiment_name}-{epoch:02d}-{val_loss:.2f}",
+        filename="{experiment_name}-{epoch:02d}-{val_acc:.2f}",
         save_top_k=top_k,
-        mode="min",
+        mode=mode,
     )
 
-    return [early_stop_callback, progress, checkpoint_callback, SWA]
+    return [early_stop_callback, progress, checkpoint_callback]#, SWA]
 
 
 train_keys = [
@@ -199,8 +204,8 @@ target_keys = [
     "vcitem_gb_div_efetem_gb",
     "vfiitg_gb_div_efiitg_gb",
     "vfitem_gb_div_efetem_gb",
-    "vriitg_gb_div_efiitg_gb",
-    "vritem_gb_div_efetem_gb",
+  #  "vriitg_gb_div_efiitg_gb",
+  #  "vritem_gb_div_efetem_gb",
     "vteitg_gb_div_efiitg_gb",
     "vtiitg_gb_div_efiitg_gb",
 ]

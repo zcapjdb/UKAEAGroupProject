@@ -6,17 +6,16 @@ from torch.nn import functional as F
 import torch
 import pytorch_lightning as pl
 from torch.utils.data import Dataset
-
+import torchmetrics
 from utils import ScaleData
 
 
 class Classifier(pl.LightningModule):
-    def __init__(self):
+    def __init__(self,n_layers, nodes, inshape, multiclass=False, outshape=1, weights=None):
 
         super().__init__()
-        self.model = nn.Sequential()
 
-    def build_classifier(self, n_layers, nodes, inshape):
+        self.save_hyperparameters()
         layers = []
         for i in range(n_layers):
             if i == 0:
@@ -28,11 +27,22 @@ class Classifier(pl.LightningModule):
                 layers.append(nn.ReLU())
                 layers.append(nn.Dropout(0.1))
 
-        layers.append(nn.Linear(nodes[-1], 1))
-        layers.append(nn.Sigmoid())
-
+        layers.append(nn.Linear(nodes[-1], outshape))
+        self.multiclass = multiclass
+        self.weights = weights
+        if self.multiclass:
+            # don't use probabilities, cross_entropy takes care of that
+            self.loss = F.cross_entropy
+        else:
+            # use probabilities
+            layers.append(nn.Sigmoid())
+            self.loss = F.binary_cross_entropy
+            
         self.model = nn.Sequential(*layers)
-
+        self.train_accuracy = torchmetrics.Accuracy()
+        self.val_accuracy = torchmetrics.Accuracy()
+        self.test_accuracy = torchmetrics.Accuracy()
+        
     def forward(self, X):
         output = self.model(X.float())
 
@@ -45,27 +55,62 @@ class Classifier(pl.LightningModule):
     def step(self, batch, batch_idx):
         X, y = batch
         pred = self.forward(X.float()).squeeze()
-        loss = F.binary_cross_entropy(pred, y.float())
-        return loss
+        return y,pred
 
     def training_step(self, batch, batch_idx):
-        loss = self.step(batch, batch_idx)
+        y,pred = self.step(batch, batch_idx)
+        #if not self.multiclass:
+        #    y = y.int()
+        #else:
+        #    pred = pred.float()
+        pred = pred.float()
+        if not self.multiclass:
+            loss = self.loss(pred, y.float(), self.weights)
+        else:
+            loss = self.loss(pred, y.long(), self.weights)
+        self.train_accuracy(pred,y.int())
         self.log(
             "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
         )
+        self.log(
+            "train_acc", self.train_accuracy, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )        
         return {"loss": loss}
 
+    def train_epoch_end(self, outs):
+        self.log(
+            "train_acc", self.train_accuracy.compute())
+    
     def validation_step(self, batch, batch_idx):
-        loss = self.step(batch, batch_idx)
+        y,pred = self.step(batch, batch_idx)
+        pred = pred.float()
+        if not self.multiclass:
+            loss = self.loss(pred, y.float(), self.weights)
+        else:
+            loss = self.loss(pred, y.long(), self.weights)    
+        self.val_accuracy(pred,y.int())
         self.log(
             "val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
         )
 
+        return
+
+    def validation_epoch_end(self,outs):
+        self.log(
+            "val_acc", self.val_accuracy.compute())
+            
+
     def test_step(self, batch, batch_idx):
-        loss = self.step(batch, batch_idx)
+        y,pred = self.step(batch, batch_idx)
+        loss = self.loss(pred, y.float())
+        self.test_accuracy(pred,y.int())
         self.log(
             "test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
         )
+        
+    def test_epoch_end(self,outs):
+        self.log(
+            "test_acc", self.test_accuracy.compute())
 
 class ClassifierDataset(Dataset):
     """
