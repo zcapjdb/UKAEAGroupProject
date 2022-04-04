@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from scripts.utils import train_keys
 
 # TODO: Put some of these variables in a yaml config file
-DEBUG = True
+DEBUG = False
 
 pretrained = {
     "ITG_class": {
@@ -146,8 +146,9 @@ retrain_regressor(
     valid_loader,
     models["ITG_reg"],
     learning_rate=1e-3,
-    epochs=100,
+    epochs=2,
     validation_step=True,
+    scratch=False,
 )
 
 prediction_after = models["ITG_reg"].predict(uncertain_loader)

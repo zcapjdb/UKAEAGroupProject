@@ -81,8 +81,11 @@ def retrain_regressor(
     learning_rate=1e-4,
     epochs=5,
     validation_step=True,
+    scratch = False,
 ):
     print("\nRetraining regressor...")
+    if scratch: 
+        model.reset_weights()
 
     if validation_step:
         test_loss = model.validation_step(val_loader)
