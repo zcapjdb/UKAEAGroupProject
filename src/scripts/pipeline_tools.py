@@ -111,7 +111,7 @@ def retrain_regressor(
         loss = model.train_step(new_loader, opt)
         print(f"Loss: {loss.item():.4f}")
 
-        if validation_step and epoch % 5 == 0:
+        if validation_step and epoch % 10 == 0:
             print("Validation Step: ", epoch)
             test_loss = model.validation_step(val_loader)
             print(f"Test loss: {test_loss.item():.4f}")
@@ -148,6 +148,7 @@ def regressor_uncertainty(
 
     out_std = np.std(np.array(runs), axis=0)
     n_out_std = out_std.shape[0]
+    print(f"\nNumber of points passed for MC dropout: {n_out_std}")
 
     idx_list = []
     for step, (x, y, z, idx) in enumerate(dataloader):
@@ -163,8 +164,12 @@ def regressor_uncertainty(
         data_copy.remove(drop_idx)
     # uncertain_dataloader = DataLoader(data_copy, batch_size=len(data_copy), shuffle=True)
     if plot:
-
-        plot_uncertainties(out_std, keep)
+        if order_idx is not None:
+            tag = "Final"
+        else:
+            tag = "Initial"
+        
+        plot_uncertainties(out_std, keep, tag)
 
     top_indices = np.argsort(out_std)[-int(len(out_std) * keep) :]
 
@@ -210,10 +215,12 @@ def uncertainty_change(x, y, plot=True):
     no_change = 100 - increase - decrease
 
     diff = y - x
-    # with np.printoptions(threshold=np.inf):
-    #     print(x)
-    #     print(y)
-    #     print(diff)
+    with np.printoptions(threshold=np.inf):
+        print(x)
+        print(y)
+        print(diff)
+    
+
 
     if plot:
         plot_scatter(x, y)
@@ -226,16 +233,22 @@ def uncertainty_change(x, y, plot=True):
 # plotting functions
 
 
-def plot_uncertainties(out_std: np.ndarray, keep: float):
+def plot_uncertainties(out_std: np.ndarray, keep: float, tag= None):
     plt.figure()
     plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=50)
     # plt.show()
-    plt.savefig("standard_deviation_histogram.png")
+    name_uncertain = "standard_deviation_histogram_most_uncertain"
+    if tag is not None:
+        name_uncertain = f"{name_uncertain}_{tag}"
+    plt.savefig(f"{name_uncertain}.png")
 
     plt.figure()
     plt.hist(out_std, bins=50)
     # plt.show()
-    plt.savefig("standard_deviation_histogram_most_uncertain.png")
+    name = "standard_deviation_histogram"
+    if tag is not None:
+        name = f"{name}_{tag}"
+    plt.savefig(f"{name}.png")
 
 
 def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray):

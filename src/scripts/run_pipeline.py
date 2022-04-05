@@ -55,7 +55,7 @@ scaler.fit_transform(train_data.drop(["itg"], axis=1))
 train_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="itg")
 valid_dataset = ITGDatasetDF(val_data, target_column="efiitg_gb", target_var="itg")
 
-# # TODO: further testing of the scale function
+# TODO: further testing of the scale function
 train_dataset.scale(scaler)
 valid_dataset.scale(scaler)
 
@@ -87,7 +87,7 @@ select_unstable_data(valid_sample, batch_size=100, classifier=models["ITG_class"
 
 # Run MC dropout on points that pass the ITG classifier and return
 uncertain_dataset, uncert_before, data_idx = regressor_uncertainty(
-    valid_sample, models["ITG_reg"], n_runs=15, keep=0.25
+    valid_sample, models["ITG_reg"], n_runs=25, keep=0.25, plot = True
 )
 
 train_sample.add(uncertain_dataset)
@@ -110,17 +110,17 @@ retrain_regressor(
     uncertain_loader,
     valid_loader,
     models["ITG_reg"],
-    learning_rate=1e-3,
+    learning_rate=5e-4,
     epochs=50,
     validation_step=True,
-    scratch=True,
+    scratch=False,
 )
 
 # TODO: Fix to use reordered indices for 
 prediction_after = models["ITG_reg"].predict(uncertain_loader)
 
 _, uncert_after, _ = regressor_uncertainty(
-    valid_sample, models["ITG_reg"], n_runs=15, keep=0.25, order_idx=data_idx
+    valid_sample, models["ITG_reg"], n_runs=25, keep=0.25, order_idx=data_idx, plot = True
 )
 
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
