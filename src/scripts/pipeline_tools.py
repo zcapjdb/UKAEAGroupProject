@@ -93,6 +93,7 @@ def retrain_regressor(
     scratch=False,
 ):
     print("\nRetraining regressor...")
+    print(f"Training on {len(new_loader.dataset)} points")
     if scratch:
         model.reset_weights()
 
@@ -110,7 +111,7 @@ def retrain_regressor(
         loss = model.train_step(new_loader, opt)
         print(f"Loss: {loss.item():.4f}")
 
-        if validation_step and epoch % 10 == 0:
+        if validation_step and epoch % 5 == 0:
             print("Validation Step: ", epoch)
             test_loss = model.validation_step(val_loader)
             print(f"Test loss: {test_loss.item():.4f}")

@@ -53,7 +53,7 @@ scaler = StandardScaler()
 scaler.fit_transform(train_data.drop(["itg"], axis=1))
 
 train_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="itg")
-valid_dataset = ITGDatasetDF(valid_data, target_column="efiitg_gb", target_var="itg")
+valid_dataset = ITGDatasetDF(val_data, target_column="efiitg_gb", target_var="itg")
 
 # # TODO: further testing of the scale function
 train_dataset.scale(scaler)
@@ -86,11 +86,11 @@ select_unstable_data(valid_sample, batch_size=100, classifier=models["ITG_class"
 # classifier_accuracy(valid_sample, target_var='itg')
 
 # Run MC dropout on points that pass the ITG classifier and return
-uncertain_datset, uncert_before, data_idx = regressor_uncertainty(
+uncertain_dataset, uncert_before, data_idx = regressor_uncertainty(
     valid_sample, models["ITG_reg"], n_runs=15, keep=0.25
 )
 
-train_sample.add(uncertain_datset)
+train_sample.add(uncertain_dataset)
 
 uncertain_loader = DataLoader(train_sample, batch_size=len(train_sample), shuffle=True)
 
@@ -111,9 +111,9 @@ retrain_regressor(
     valid_loader,
     models["ITG_reg"],
     learning_rate=1e-3,
-    epochs=2,
+    epochs=50,
     validation_step=True,
-    scratch=False,
+    scratch=True,
 )
 
 prediction_after = models["ITG_reg"].predict(uncertain_loader)
