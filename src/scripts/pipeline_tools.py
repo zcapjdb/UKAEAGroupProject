@@ -168,14 +168,18 @@ def regressor_uncertainty(
     top_indices = np.argsort(out_std)[-int(len(out_std) * keep) :]
 
     if order_idx is not None:
+        # matching the real indices to the array position
         reorder = np.array([np.where(idx_array == i) for i in order_idx]).flatten()
 
         real_idx = idx_array[reorder]
 
-        top_indices = real_idx
+        # selecting the corresposing std ordered according to order_idx
+        top_indices = reorder
 
+        # Make sure the real indices match
         assert list(np.unique(real_idx)) == list(np.unique(order_idx))
 
+        # Make sure they are in the same order
         assert real_idx.tolist() == order_idx.tolist(), print("Ordering error")
 
     return data_copy, out_std[top_indices], real_idx
