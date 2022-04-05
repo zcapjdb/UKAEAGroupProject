@@ -192,16 +192,7 @@ def uncertainty_change(x, y):
     increase = len(theta[theta < 45]) * 100 / total
     decrease = len(theta[theta > 45]) * 100 / total
     no_change = 100 - increase - decrease
-
-    diff = y - x
-    with np.printoptions(threshold=np.inf):
-        print(x)
-        print(y)
-        print(diff)
-
-    # increase = np.sum(diff >= 0) * 100 / diff.shape[0]
-    # decrease = np.sum(diff < 0) * 100 / diff.shape[0]
-
+    
     print(
         f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_change:.3f} "
     )
