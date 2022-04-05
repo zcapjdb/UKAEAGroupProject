@@ -199,20 +199,10 @@ def classifier_accuracy(dataset, target_var):
 
 
 def uncertainty_change(x, y, plot=True):
-    theta = np.arctan2(y, x)
-    theta = np.rad2deg(theta)
-
-    total = theta.shape[0]
-
-    increase = len(theta[theta > 45]) * 100 / total
-    decrease = len(theta[theta < 45]) * 100 / total
+    total = x.shape[0]
+    increase = len(x[y > x]) * 100 / total
+    decrease = len(x[y < x]) * 100 / total
     no_change = 100 - increase - decrease
-
-    diff = y - x
-    # with np.printoptions(threshold=np.inf):
-    #     print(x)
-    #     print(y)
-    #     print(diff)
 
     if plot:
         plot_scatter(x, y)
