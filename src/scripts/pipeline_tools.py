@@ -93,6 +93,7 @@ def retrain_regressor(
     scratch=False,
 ):
     print("\nRetraining regressor...")
+    print(f"Training on {len(new_loader.dataset)} points")
     if scratch:
         model.reset_weights()
 
@@ -147,6 +148,7 @@ def regressor_uncertainty(
 
     out_std = np.std(np.array(runs), axis=0)
     n_out_std = out_std.shape[0]
+    print(f"\nNumber of points passed for MC dropout: {n_out_std}")
 
     idx_list = []
     for step, (x, y, z, idx) in enumerate(dataloader):
@@ -157,13 +159,17 @@ def regressor_uncertainty(
     drop_idx = np.argsort(out_std)[: n_out_std - int(n_out_std * keep)]
     drop_idx = idx_array[drop_idx]
     real_idx = idx_array[top_idx]
-    
+
     if order_idx is None:
         data_copy.remove(drop_idx)
-  
-    if plot:
 
-        plot_uncertainties(out_std, keep)
+    if plot:
+        if order_idx is not None:
+            tag = "Final"
+        else:
+            tag = "Initial"
+
+        plot_uncertainties(out_std, keep, tag)
 
     top_indices = np.argsort(out_std)[-int(len(out_std) * keep) :]
 
@@ -215,16 +221,22 @@ def uncertainty_change(x, y, plot=True):
 # plotting functions
 
 
-def plot_uncertainties(out_std: np.ndarray, keep: float):
+def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None):
     plt.figure()
     plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=50)
     # plt.show()
-    plt.savefig("standard_deviation_histogram.png")
+    name_uncertain = "standard_deviation_histogram_most_uncertain"
+    if tag is not None:
+        name_uncertain = f"{name_uncertain}_{tag}"
+    plt.savefig(f"{name_uncertain}.png")
 
     plt.figure()
     plt.hist(out_std, bins=50)
     # plt.show()
-    plt.savefig("standard_deviation_histogram_most_uncertain.png")
+    name = "standard_deviation_histogram"
+    if tag is not None:
+        name = f"{name}_{tag}"
+    plt.savefig(f"{name}.png")
 
 
 def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray):
