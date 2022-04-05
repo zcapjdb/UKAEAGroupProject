@@ -116,6 +116,7 @@ retrain_regressor(
     scratch=True,
 )
 
+# TODO: Fix to use reordered indices for 
 prediction_after = models["ITG_reg"].predict(uncertain_loader)
 
 _, uncert_after, _ = regressor_uncertainty(

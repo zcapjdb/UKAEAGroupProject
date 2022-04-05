@@ -169,12 +169,18 @@ def regressor_uncertainty(
     top_indices = np.argsort(out_std)[-int(len(out_std) * keep) :]
 
     if order_idx is not None:
+        # matching the real indices to the array position
         reorder = np.array([np.where(idx_array == i) for i in order_idx]).flatten()
 
         real_idx = idx_array[reorder]
 
+        # selecting the corresposing std ordered according to order_idx
+        top_indices = reorder
+
+        # Make sure the real indices match
         assert list(np.unique(real_idx)) == list(np.unique(order_idx))
 
+        # Make sure they are in the same order
         assert real_idx.tolist() == order_idx.tolist(), print("Ordering error")
 
     return data_copy, out_std[top_indices], real_idx
@@ -193,7 +199,7 @@ def classifier_accuracy(dataset, target_var):
     print(f"\nCorrectly Classified {accuracy:.3f} %")
 
 
-def uncertainty_change(x, y, plot=False):
+def uncertainty_change(x, y, plot=True):
     theta = np.arctan(y, x)
     theta = np.rad2deg(theta)
 
@@ -204,10 +210,10 @@ def uncertainty_change(x, y, plot=False):
     no_change = 100 - increase - decrease
 
     diff = y - x
-    with np.printoptions(threshold=np.inf):
-        print(x)
-        print(y)
-        print(diff)
+    # with np.printoptions(threshold=np.inf):
+    #     print(x)
+    #     print(y)
+    #     print(diff)
 
     if plot:
         plot_scatter(x, y)
