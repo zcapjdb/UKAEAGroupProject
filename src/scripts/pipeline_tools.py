@@ -157,10 +157,10 @@ def regressor_uncertainty(
     drop_idx = np.argsort(out_std)[: n_out_std - int(n_out_std * keep)]
     drop_idx = idx_array[drop_idx]
     real_idx = idx_array[top_idx]
-    # data_copy.data = data_copy.data[data_copy.data["index"].isin(real_idx)]
+    
     if order_idx is None:
         data_copy.remove(drop_idx)
-    # uncertain_dataloader = DataLoader(data_copy, batch_size=len(data_copy), shuffle=True)
+  
     if plot:
 
         plot_uncertainties(out_std, keep)
@@ -199,13 +199,13 @@ def classifier_accuracy(dataset, target_var):
 
 
 def uncertainty_change(x, y, plot=True):
-    theta = np.arctan(y, x)
+    theta = np.arctan2(y, x)
     theta = np.rad2deg(theta)
 
     total = theta.shape[0]
 
-    increase = len(theta[theta < 45]) * 100 / total
-    decrease = len(theta[theta > 45]) * 100 / total
+    increase = len(theta[theta > 45]) * 100 / total
+    decrease = len(theta[theta < 45]) * 100 / total
     no_change = 100 - increase - decrease
 
     diff = y - x
