@@ -155,13 +155,27 @@ class ITG_Regressor(nn.Module):
 
         return np.sum(test_loss) / size
 
-    def predict(self, dataloader):
+    def predict(self, dataloader, order_outputs=None):
         pred = []
+        index_ordering = []
         for (x, y, z, idx) in dataloader:
             y_hat = self.forward(x.float())
             pred.append(y_hat.squeeze().detach().numpy())
+            index_ordering.append(idx.detach().numpy())
+        
+        idx_array = np.asarray(index_ordering, dtype=object).flatten()
+        pred = np.asarray(pred).flatten()
+        
+        if order_outputs is not None:
+            reorder = np.array([np.where(idx_array == i) for i in order_outputs]).flatten()
+            pred = pred[reorder]
+            real_idx = idx_array[reorder]
+            # Make sure the reording has worked
+            assert real_idx.tolist() == order_outputs.tolist(), print("Ordering error")
 
-        return np.array(pred)
+
+
+        return pred, idx_array
 
 
 class ITGDataset(Dataset):
