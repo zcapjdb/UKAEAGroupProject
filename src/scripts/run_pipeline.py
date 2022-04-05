@@ -117,6 +117,6 @@ prediction_after = models["ITG_reg"].predict(uncertain_loader)
 _, uncert_after,_ = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=15, keep=0.25, order_idx=data_idx)
 
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
-uncertainty_change(uncert_before, uncert_after)
+uncertainty_change(uncert_before, uncert_after, plot = True)
 
 # Pipeline diagnosis (How has the uncertainty changed for original training points)

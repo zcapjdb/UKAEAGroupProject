@@ -183,7 +183,7 @@ def classifier_accuracy(dataset, target_var):
     print(f"\nCorrectly Classified {accuracy:.3f} %")
 
 
-def uncertainty_change(x, y):
+def uncertainty_change(x, y, plot = False):
     theta = np.arctan(y, x)
     theta = np.rad2deg(theta)
 
@@ -199,8 +199,8 @@ def uncertainty_change(x, y):
         print(y)
         print(diff)
 
-    # increase = np.sum(diff >= 0) * 100 / diff.shape[0]
-    # decrease = np.sum(diff < 0) * 100 / diff.shape[0]
+    if plot:
+        plot_scatter(x, y)
 
     print(
         f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_change:.3f} "
@@ -218,3 +218,12 @@ def plot_uncertainties(out_std: np.ndarray, keep: float):
     plt.hist(out_std, bins=50)
     # plt.show()
     plt.savefig("standard_deviation_histogram_most_uncertain.png")
+
+def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray):
+    plt.figure()
+    plt.scatter(initial_std, final_std, s = 3, alpha = 1)
+    # y = x dotted line to show no change
+    plt.plot([initial_std.min(), final_std.max()], [initial_std.min(), final_std.max()], "k--", lw=2)
+    plt.xlabel("Initial Standard Deviation")
+    plt.ylabel("Final Standard Deviation")
+    plt.savefig("scatter_plot.png")
