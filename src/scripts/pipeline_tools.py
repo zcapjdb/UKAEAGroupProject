@@ -159,16 +159,16 @@ def regressor_uncertainty(
     drop_idx = np.argsort(out_std)[: n_out_std - int(n_out_std * keep)]
     drop_idx = idx_array[drop_idx]
     real_idx = idx_array[top_idx]
-    
+
     if order_idx is None:
         data_copy.remove(drop_idx)
-  
+
     if plot:
         if order_idx is not None:
             tag = "Final"
         else:
             tag = "Initial"
-        
+
         plot_uncertainties(out_std, keep, tag)
 
     top_indices = np.argsort(out_std)[-int(len(out_std) * keep) :]
@@ -221,7 +221,7 @@ def uncertainty_change(x, y, plot=True):
 # plotting functions
 
 
-def plot_uncertainties(out_std: np.ndarray, keep: float, tag= None):
+def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None):
     plt.figure()
     plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=50)
     # plt.show()
