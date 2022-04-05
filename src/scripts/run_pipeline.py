@@ -19,37 +19,41 @@ pretrained = {
     "ITG_class": {
         "trained": True,
         # "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/classifier_model.pt",
-        # "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/classifier_model.pt",
-        "save_path": "/Users/thandikiremadula/Desktop/UKAEA_data/classifier_model.pt"
+        "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/classifier_model.pt",
+        # "save_path": "/Users/thandikiremadula/Desktop/UKAEA_data/classifier_model.pt"
     },
     "ITG_reg": {
         "trained": True,
         # "save_path": "/home/tmadula/UKAEAGroupProject/src/notebooks/regression_model.pt",
-        # "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/regression_model.pt",
-        "save_path": "/Users/thandikiremadula/Desktop/UKAEA_data/regression_model.pt"
+        "save_path": "/unix/atlastracking/jbarr/UKAEAGroupProject/src/notebooks/regression_model.pt",
+        # "save_path": "/Users/thandikiremadula/Desktop/UKAEA_data/regression_model.pt"
     },
 }
 
 # Data loading
 
 # TRAIN_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/train_data_clipped.pkl"
-# TRAIN_PATH = "/unix/atlastracking/jbarr/train_data_clipped.pkl"
-TRAIN_PATH = "/Users/thandikiremadula/Desktop/UKAEA_data/train_data_clipped.pkl"
+TRAIN_PATH = "/unix/atlastracking/jbarr/train_data_clipped.pkl"
+# TRAIN_PATH = "/Users/thandikiremadula/Desktop/UKAEA_data/train_data_clipped.pkl"
 
 # VALIDATION_PATH = "/share/rcifdata/jbarr/UKAEAGroupProject/data/valid_data_clipped.pkl"
-# VALIDATION_PATH = "/unix/atlastracking/jbarr/valid_data_clipped.pkl"
-VALIDATION_PATH = "/Users/thandikiremadula/Desktop/UKAEA_data/valid_data_clipped.pkl"
+VALIDATION_PATH = "/unix/atlastracking/jbarr/valid_data_clipped.pkl"
+# VALIDATION_PATH = "/Users/thandikiremadula/Desktop/UKAEA_data/valid_data_clipped.pkl"
 
 
 train_data, val_data = prepare_data(
-    TRAIN_PATH, VALIDATION_PATH, target_column="efiitg_gb", target_var="itg"
+    TRAIN_PATH,
+    VALIDATION_PATH,
+    target_column="efiitg_gb",
+    target_var="itg",
+    valid_size=1_000_000,
 )
 
 scaler = StandardScaler()
 scaler.fit_transform(train_data.drop(["itg"], axis=1))
 
 train_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="itg")
-valid_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="itg")
+valid_dataset = ITGDatasetDF(valid_data, target_column="efiitg_gb", target_var="itg")
 
 # # TODO: further testing of the scale function
 train_dataset.scale(scaler)
@@ -114,9 +118,11 @@ retrain_regressor(
 
 prediction_after = models["ITG_reg"].predict(uncertain_loader)
 
-_, uncert_after,_ = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=15, keep=0.25, order_idx=data_idx)
+_, uncert_after, _ = regressor_uncertainty(
+    valid_sample, models["ITG_reg"], n_runs=15, keep=0.25, order_idx=data_idx
+)
 
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
-uncertainty_change(uncert_before, uncert_after, plot = True)
+uncertainty_change(uncert_before, uncert_after, plot=True)
 
 # Pipeline diagnosis (How has the uncertainty changed for original training points)

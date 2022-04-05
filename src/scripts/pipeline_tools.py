@@ -14,9 +14,17 @@ import copy
 
 
 # Data preparation functions
-def prepare_data(train_path, valid_path, target_column, target_var):
+def prepare_data(
+    train_path, valid_path, target_column, target_var, train_size=None, valid_size=None
+):
     train_data = pd.read_pickle(train_path)
     validation_data = pd.read_pickle(valid_path)
+
+    if train_size is not None:
+        train_data = train_data.sample(train_size)
+
+    if valid_size is not None:
+        validation_data = validation_data.sample(valid_size)
 
     # Remove NaN's and add appropripate class labels
     keep_keys = train_keys + [target_column]
@@ -43,7 +51,7 @@ def select_unstable_data(dataset, batch_size, classifier):
 
     stable_points = []
     misclassified = []
-    print('\nRunning classifier selection...\n')
+    print("\nRunning classifier selection...\n")
     for i, (x, y, z, idx) in enumerate(tqdm(dataloader)):
 
         y_hat = classifier(x.float())
@@ -108,7 +116,9 @@ def retrain_regressor(
             print(f"Test loss: {test_loss.item():.4f}")
 
 
-def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot=False, order_idx=None):
+def regressor_uncertainty(
+    dataset, regressor, keep=0.25, n_runs=10, plot=False, order_idx=None
+):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
     Returns the most uncertain points.
@@ -152,16 +162,15 @@ def regressor_uncertainty(dataset, regressor, keep=0.25, n_runs=10, plot=False, 
         data_copy.remove(drop_idx)
     # uncertain_dataloader = DataLoader(data_copy, batch_size=len(data_copy), shuffle=True)
     if plot:
-        
+
         plot_uncertainties(out_std, keep)
 
     top_indices = np.argsort(out_std)[-int(len(out_std) * keep) :]
 
     if order_idx is not None:
         reorder = np.array([np.where(idx_array == i) for i in order_idx]).flatten()
-        
-        real_idx = idx_array[reorder]
 
+        real_idx = idx_array[reorder]
 
         assert list(np.unique(real_idx)) == list(np.unique(order_idx))
 
@@ -183,7 +192,7 @@ def classifier_accuracy(dataset, target_var):
     print(f"\nCorrectly Classified {accuracy:.3f} %")
 
 
-def uncertainty_change(x, y, plot = False):
+def uncertainty_change(x, y, plot=False):
     theta = np.arctan(y, x)
     theta = np.rad2deg(theta)
 
@@ -206,7 +215,9 @@ def uncertainty_change(x, y, plot = False):
         f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_change:.3f} "
     )
 
+
 # plotting functions
+
 
 def plot_uncertainties(out_std: np.ndarray, keep: float):
     plt.figure()
@@ -219,11 +230,17 @@ def plot_uncertainties(out_std: np.ndarray, keep: float):
     # plt.show()
     plt.savefig("standard_deviation_histogram_most_uncertain.png")
 
+
 def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray):
     plt.figure()
-    plt.scatter(initial_std, final_std, s = 3, alpha = 1)
+    plt.scatter(initial_std, final_std, s=3, alpha=1)
     # y = x dotted line to show no change
-    plt.plot([initial_std.min(), final_std.max()], [initial_std.min(), final_std.max()], "k--", lw=2)
+    plt.plot(
+        [initial_std.min(), final_std.max()],
+        [initial_std.min(), final_std.max()],
+        "k--",
+        lw=2,
+    )
     plt.xlabel("Initial Standard Deviation")
     plt.ylabel("Final Standard Deviation")
     plt.savefig("scatter_plot.png")
