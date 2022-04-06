@@ -1,4 +1,5 @@
 from itertools import count
+from turtle import color
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -93,16 +94,16 @@ def retrain_regressor(
     mode="warm_start",
     lamda=0.6,
     loc=0.0,
-    scale=0.001
+    scale=0.001,
 ):
     print("\nRetraining regressor...\n")
     print(f"Training on {len(new_loader.dataset)} points")
-    
+
     if mode == "scratch":
-       
+
         model.reset_weights()
 
-    if mode =="warm_start":
+    if mode == "warm_start":
         model.shrink_perturb(lamda, loc, scale)
 
     if validation_step:
@@ -200,6 +201,55 @@ def regressor_uncertainty(
 
 
 # Active Learning diagonistic functions
+def get_mse(y_hat, y):
+    mse = np.mean((y - y_hat) ** 2)
+    return mse
+
+
+def mse_change(
+    prediction_before,
+    prediction_after,
+    prediction_order,
+    uncert_data_order,
+    uncertain_loader,
+    uncertainties=None,
+    plot=True,
+    data="novel",
+):
+    idxs = prediction_order.astype(int)
+    ground_truth = uncertain_loader.dataset.data.loc[idxs]
+    ground_truth = ground_truth["efiitg_gb"]
+    ground_truth = ground_truth.to_numpy()
+
+    if data == "train":
+        idx = np.isin(prediction_order, uncert_data_order, invert=True)
+
+    if data == "novel":
+        idx = np.isin(prediction_order, uncert_data_order)
+
+    pred_before = prediction_before[idx]
+    pred_after = prediction_after[idx]
+    ground_truth_subset = ground_truth[idx]
+
+    mse_before = get_mse(pred_before, ground_truth_subset)
+    mse_after = get_mse(pred_after, ground_truth_subset)
+
+    print(f'\nChange in MSE for {data} dataset: {mse_after-mse_before:.4f}\n')
+
+    if uncertainties is not None:
+        uncert_before, uncert_after = uncertainties
+        test_reoder = [np.where(uncert_data_order == i) for i in prediction_order]
+        test_reoder = [i[0] for i in test_reoder if len(i[0]) != 0]
+        test_reoder = np.asarray(test_reoder, dtype=object).flatten().astype(int)
+
+        data_idx_copy = uncert_data_order[test_reoder]
+
+        valid_uncert_before = uncert_before[test_reoder]
+        valid_uncert_after = uncert_after[test_reoder]
+    if plot:
+        plot_mse_change(
+            ground_truth_subset, pred_before, pred_after, uncertainties, data=data
+        )
 
 
 def classifier_accuracy(dataset, target_var):
@@ -260,3 +310,72 @@ def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray):
     plt.xlabel("Initial Standard Deviation")
     plt.ylabel("Final Standard Deviation")
     plt.savefig("scatter_plot.png")
+
+
+def plot_mse_change(
+    ground_truth, intial_prediction, final_prediction, uncertainties, data="novel"
+):
+    if uncertainties is not None:
+        uncert_before, uncert_after = uncertainties
+
+    mse_before = get_mse(intial_prediction, ground_truth)
+    mse_after = get_mse(final_prediction, ground_truth)
+    delta_mse = mse_after - mse_before
+
+    x_min = ground_truth.min()
+    x_max = ground_truth.max()
+
+    if data == "novel":
+        title = "Novel Data"
+        save_prefix = "novel"
+    elif data == "train":
+        title = "Training Data"
+        save_prefix = "train"
+
+    else:
+        print("Warning no data category selected....")
+        title = data
+        save_prefix = data
+
+    plt.figure()
+
+    if uncertainties is not None:
+        plt.scatter(ground_truth, intial_prediction, c=uncert_before)
+        plt.colorbar(label="$\sigma$")
+    else:
+        plt.scatter(ground_truth, intial_prediction, color='forestgreen')
+
+    plt.plot(
+        np.linspace(x_min, x_max, 50),
+        np.linspace(x_min, x_max, 50),
+        ls="--",
+        c="black",
+        label=f"MSE: {mse_before:.4f}",
+    )
+
+    plt.xlabel("Ground Truth")
+    plt.ylabel("Original Prediction")
+    plt.title(title)
+    plt.legend()
+    plt.savefig(f"{save_prefix}_mse_before.png", dpi=300)
+
+    plt.figure()
+    if uncertainties is not None:
+        plt.scatter(ground_truth, final_prediction, c=uncert_after)
+        plt.colorbar(label="$\sigma$")
+    else:
+        plt.scatter(ground_truth, final_prediction, color='forestgreen')
+
+    plt.plot(
+        np.linspace(x_min, x_max, 50),
+        np.linspace(x_min, x_max, 50),
+        ls="--",
+        c="black",
+        label=f"$\Delta$MSE: {delta_mse:.4f}",
+    )
+
+    plt.xlabel("Ground Truth")
+    plt.ylabel("Retrained Prediction")
+    plt.title(title)
+    plt.legend()
+    plt.savefig(f"{save_prefix}_mse_after.png", dpi=300)
