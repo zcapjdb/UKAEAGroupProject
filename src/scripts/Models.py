@@ -104,18 +104,17 @@ class ITG_Regressor(nn.Module):
     def reset_weights(self):
         self.model.apply(weight_reset)
 
-    # def loss_function(self, y, y_hat):
-    #     # Loss function missing regularization term (to be added using Adam optimizer)
-    #     lambda_stab = 1e-3
-    #     k_stab = 5
-    #     if y.sum() == 0:
-    #         c_good = 0
-    #         c_stab = torch.mean(y_hat - k_stab)
+    def shrink_perturb(self, lam, loc, scale):
+        noise_dist = torch.distributions.Normal(
+            torch.Tensor([loc]), torch.Tensor([scale])
+        )
+        noise = noise_dist.sample()
 
-    #     else:
-    #         c_good = torch.mean(torch.square(y - y_hat))
-    #         c_stab = 0
-    #     return c_good + lambda_stab * k_stab
+        with torch.no_grad():
+            for param in self.model.parameters():
+                param_update = (param * lam) + noise
+                param.copy_(param_update)
+
     def loss_function(self, y, y_hat):
         MSE_loss = nn.MSELoss(reduction="sum")
         return MSE_loss(y_hat, y.float())
@@ -162,18 +161,18 @@ class ITG_Regressor(nn.Module):
             y_hat = self.forward(x.float())
             pred.append(y_hat.squeeze().detach().numpy())
             index_ordering.append(idx.detach().numpy())
-        
+
         idx_array = np.asarray(index_ordering, dtype=object).flatten()
         pred = np.asarray(pred).flatten()
-        
+
         if order_outputs is not None:
-            reorder = np.array([np.where(idx_array == i) for i in order_outputs]).flatten()
+            reorder = np.array(
+                [np.where(idx_array == i) for i in order_outputs]
+            ).flatten()
             pred = pred[reorder]
             real_idx = idx_array[reorder]
             # Make sure the reording has worked
             assert real_idx.tolist() == order_outputs.tolist(), print("Ordering error")
-
-
 
         return pred, idx_array
 
