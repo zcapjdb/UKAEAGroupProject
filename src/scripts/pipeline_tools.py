@@ -90,12 +90,20 @@ def retrain_regressor(
     learning_rate=1e-4,
     epochs=5,
     validation_step=True,
-    scratch=False,
+    mode="warm_start",
+    lamda=0.6,
+    loc=0.0,
+    scale=0.001
 ):
-    print("\nRetraining regressor...")
+    print("\nRetraining regressor...\n")
     print(f"Training on {len(new_loader.dataset)} points")
-    if scratch:
+    
+    if mode == "scratch":
+       
         model.reset_weights()
+
+    if mode =="warm_start":
+        model.shrink_perturb(lamda, loc, scale)
 
     if validation_step:
         test_loss = model.validation_step(val_loader)
