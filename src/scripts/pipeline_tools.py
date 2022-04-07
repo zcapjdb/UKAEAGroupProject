@@ -127,7 +127,13 @@ def retrain_regressor(
 
 
 def regressor_uncertainty(
-    dataset, regressor, keep=0.25, n_runs=10, plot=False, order_idx=None
+    dataset,
+    regressor,
+    keep=0.25,
+    n_runs=10,
+    train_data=False,
+    plot=False,
+    order_idx=None,
 ):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
@@ -164,12 +170,14 @@ def regressor_uncertainty(
         idx_list.append(idx.detach().numpy())
 
     idx_array = np.asarray(idx_list, dtype=object).flatten()
-    top_idx = np.argsort(out_std)[-int(n_out_std * keep) :]
-    drop_idx = np.argsort(out_std)[: n_out_std - int(n_out_std * keep)]
-    drop_idx = idx_array[drop_idx]
-    real_idx = idx_array[top_idx]
 
-    if order_idx is None:
+    if not train_data:
+        top_idx = np.argsort(out_std)[-int(n_out_std * keep) :]
+        drop_idx = np.argsort(out_std)[: n_out_std - int(n_out_std * keep)]
+        drop_idx = idx_array[drop_idx]
+        real_idx = idx_array[top_idx]
+
+    if order_idx is None and train_data == False:
         data_copy.remove(drop_idx)
 
     if plot:
@@ -197,7 +205,11 @@ def regressor_uncertainty(
         # Make sure they are in the same order
         assert real_idx.tolist() == order_idx.tolist(), print("Ordering error")
 
-    return data_copy, out_std[top_indices], real_idx
+    if not train_data:
+        return data_copy, out_std[top_indices], real_idx
+
+    else:
+        return data_copy, out_std, idx_array
 
 
 # Active Learning diagonistic functions
@@ -215,17 +227,15 @@ def mse_change(
     uncertainties=None,
     plot=True,
     data="novel",
+    save_plots=False,
 ):
     idxs = prediction_order.astype(int)
     ground_truth = uncertain_loader.dataset.data.loc[idxs]
+    # TODO: Change hard coded variable
     ground_truth = ground_truth["efiitg_gb"]
     ground_truth = ground_truth.to_numpy()
 
-    if data == "train":
-        idx = np.isin(prediction_order, uncert_data_order, invert=True)
-
-    if data == "novel":
-        idx = np.isin(prediction_order, uncert_data_order)
+    idx = np.isin(prediction_order, uncert_data_order)
 
     pred_before = prediction_before[idx]
     pred_after = prediction_after[idx]
@@ -234,21 +244,16 @@ def mse_change(
     mse_before = get_mse(pred_before, ground_truth_subset)
     mse_after = get_mse(pred_after, ground_truth_subset)
 
-    print(f'\nChange in MSE for {data} dataset: {mse_after-mse_before:.4f}\n')
+    print(f"\nChange in MSE for {data} dataset: {mse_after-mse_before:.4f}\n")
 
-    if uncertainties is not None:
-        uncert_before, uncert_after = uncertainties
-        test_reoder = [np.where(uncert_data_order == i) for i in prediction_order]
-        test_reoder = [i[0] for i in test_reoder if len(i[0]) != 0]
-        test_reoder = np.asarray(test_reoder, dtype=object).flatten().astype(int)
-
-        data_idx_copy = uncert_data_order[test_reoder]
-
-        valid_uncert_before = uncert_before[test_reoder]
-        valid_uncert_after = uncert_after[test_reoder]
     if plot:
         plot_mse_change(
-            ground_truth_subset, pred_before, pred_after, uncertainties, data=data
+            ground_truth_subset,
+            pred_before,
+            pred_after,
+            uncertainties,
+            data=data,
+            save_plots=save_plots,
         )
 
 
@@ -273,6 +278,10 @@ def uncertainty_change(x, y, plot=True):
 
     print(
         f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_change:.3f} "
+    )
+
+    print(
+        f"Initial Average Uncertainty: {np.mean(x):.4f}, Final Average Uncertainty: {np.mean(y):.4f}"
     )
 
 
@@ -313,7 +322,12 @@ def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray):
 
 
 def plot_mse_change(
-    ground_truth, intial_prediction, final_prediction, uncertainties, data="novel"
+    ground_truth,
+    intial_prediction,
+    final_prediction,
+    uncertainties,
+    data="novel",
+    save_plots=False,
 ):
     if uncertainties is not None:
         uncert_before, uncert_after = uncertainties
@@ -333,7 +347,6 @@ def plot_mse_change(
         save_prefix = "train"
 
     else:
-        print("Warning no data category selected....")
         title = data
         save_prefix = data
 
@@ -343,7 +356,7 @@ def plot_mse_change(
         plt.scatter(ground_truth, intial_prediction, c=uncert_before)
         plt.colorbar(label="$\sigma$")
     else:
-        plt.scatter(ground_truth, intial_prediction, color='forestgreen')
+        plt.scatter(ground_truth, intial_prediction, color="forestgreen")
 
     plt.plot(
         np.linspace(x_min, x_max, 50),
@@ -357,14 +370,15 @@ def plot_mse_change(
     plt.ylabel("Original Prediction")
     plt.title(title)
     plt.legend()
-    plt.savefig(f"{save_prefix}_mse_before.png", dpi=300)
+    if save_plots:
+        plt.savefig(f"{save_prefix}_mse_before.png", dpi=300)
 
     plt.figure()
     if uncertainties is not None:
         plt.scatter(ground_truth, final_prediction, c=uncert_after)
         plt.colorbar(label="$\sigma$")
     else:
-        plt.scatter(ground_truth, final_prediction, color='forestgreen')
+        plt.scatter(ground_truth, final_prediction, color="forestgreen")
 
     plt.plot(
         np.linspace(x_min, x_max, 50),
@@ -378,4 +392,6 @@ def plot_mse_change(
     plt.ylabel("Retrained Prediction")
     plt.title(title)
     plt.legend()
-    plt.savefig(f"{save_prefix}_mse_after.png", dpi=300)
+
+    if save_plots:
+        plt.savefig(f"{save_prefix}_mse_after.png", dpi=300)
