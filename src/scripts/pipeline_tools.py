@@ -103,7 +103,7 @@ def retrain_regressor(
 
         model.reset_weights()
 
-    if mode == "warm_start":
+    if mode == "shrink_perturb":
         model.shrink_perturb(lamda, loc, scale)
 
     if validation_step:
@@ -114,16 +114,21 @@ def retrain_regressor(
 
     # instantiate optimiser
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
+    train_loss = []
+    val_loss = []
     for epoch in range(epochs):
         print("Train Step: ", epoch)
         loss = model.train_step(new_loader, opt)
         print(f"Loss: {loss.item():.4f}")
+        train_loss.append(loss.item())
 
         if validation_step and epoch % 10 == 0:
             print("Validation Step: ", epoch)
             test_loss = model.validation_step(val_loader)
             print(f"Test loss: {test_loss.item():.4f}")
+            val_loss.append(test_loss.item())
+    
+    return train_loss, val_loss
 
 
 def regressor_uncertainty(
@@ -140,7 +145,10 @@ def regressor_uncertainty(
     Returns the most uncertain points.
 
     """
-    print("\nRunning MC Dropout....\n")
+    if train_data:
+        print("\nRunning MC Dropout on Training Data....\n")
+    else: 
+        print("\nRunning MC Dropout on Novel Data....\n")
 
     data_copy = copy.deepcopy(dataset)
     dataloader = DataLoader(data_copy, shuffle=False)
