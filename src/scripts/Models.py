@@ -28,6 +28,18 @@ class ITG_Classifier(nn.Module):
             nn.Sigmoid(),
         )
 
+    def shrink_perturb(self, lam, loc, scale):
+        if lam != 1:
+            noise_dist = torch.distributions.Normal(
+                torch.Tensor([loc]), torch.Tensor([scale])
+            )
+            noise = noise_dist.sample()
+
+            with torch.no_grad():
+                for param in self.model.parameters():
+                    param_update = (param * lam) + noise
+                    param.copy_(param_update)
+
     def forward(self, x):
         y_hat = self.model(x)
         return y_hat

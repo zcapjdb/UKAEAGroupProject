@@ -96,6 +96,9 @@ def retrain_classifier(
     epochs=10,
     batch_size=100,
     validation_step=True,
+    lam=1,
+    loc=0.0,
+    scale=0.01,
     patience=None,
     verbose=False,
 ):
@@ -114,6 +117,9 @@ def retrain_classifier(
     valid_loader = DataLoader(
         valid_dataset, batch_size=int(0.1 * len(y_array)), shuffle=True
     )
+
+    # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
+    classifier.shrink_perturb(lam, loc, scale)
 
     # instantiate optimiser
     opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate)
