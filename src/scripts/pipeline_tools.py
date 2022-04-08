@@ -95,6 +95,7 @@ def retrain_regressor(
     lamda=0.6,
     loc=0.0,
     scale=0.001,
+    patience = None
 ):
     print("\nRetraining regressor...\n")
     print(f"Training on {len(new_loader.dataset)} points")
@@ -110,6 +111,9 @@ def retrain_regressor(
         test_loss = model.validation_step(val_loader)
         print(f"Initial loss: {test_loss.item():.4f}")
 
+    if not patience:
+        patience = epochs
+
     model.train()
 
     # instantiate optimiser
@@ -124,9 +128,14 @@ def retrain_regressor(
 
         if validation_step and epoch % 10 == 0:
             print("Validation Step: ", epoch)
-            test_loss = model.validation_step(val_loader)
-            print(f"Test loss: {test_loss.item():.4f}")
-            val_loss.append(test_loss.item())
+            test_loss = model.validation_step(val_loader).item()
+            print(f"Test loss: {test_loss:.4f}")
+            val_loss.append(test_loss)
+
+        if len(val_losses) > patience:
+            if np.mean(val_losses[-patience:]) < test_loss:
+                print("Early stopping criterion reached")
+                break
     
     return train_loss, val_loss
 

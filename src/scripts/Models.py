@@ -34,7 +34,7 @@ class ITG_Classifier(nn.Module):
 
     def train_step(self, dataloader, optimizer):
         # Initalise loss function
-        BCE = nn.BCELoss(reduction="sum")
+        BCE = nn.BCELoss()
 
         size = len(dataloader.dataset)
         num_batches = len(dataloader)
@@ -52,13 +52,14 @@ class ITG_Classifier(nn.Module):
             
             losses.append(loss.item())
 
-        print(f"Average loss: {np.sum(losses) / size:.4f}")
-        return np.sum(losses) / size
+        average_loss = np.mean(losses)
+        print(f"Average loss: {average_loss:.4f}")
+        return average_loss
 
     def validation_step(self, dataloader):
         size = len(dataloader.dataset)
         # Initalise loss function
-        BCE = nn.BCELoss(reduction="sum")
+        BCE = nn.BCELoss()
 
         test_loss = []
         correct = 0
@@ -66,14 +67,14 @@ class ITG_Classifier(nn.Module):
         with torch.no_grad():
             for X, y, z in dataloader:
                 y_hat = self.forward(X.float())
-                test_loss.append(BCE(y.unsqueeze(-1).float(), y_hat).item())
+                test_loss.append(BCE(y_hat, y.unsqueeze(-1).float()).item())
 
                 # calculate test accuracy
                 pred_class = torch.round(y_hat.squeeze())
                 correct += torch.sum(pred_class == y.float()).item()
 
         correct /= size
-        average_loss = np.sum(test_loss) / size
+        average_loss = np.mean(test_loss)
         print(f"Test accuracy: {correct:>7f}, loss: {average_loss:>7f}")
         return average_loss, correct
 
@@ -316,7 +317,7 @@ def weight_reset(m):
 
 
 def train_model(
-    model, train_loader, val_loader, epochs, learning_rate, weight_decay=None
+    model, train_loader, val_loader, epochs, learning_rate, weight_decay=None, patience=None,
 ):
 
     # Initialise the optimiser
@@ -328,21 +329,33 @@ def train_model(
     losses = []
     validation_losses = []
 
+    if not patience:
+        patience = epochs
+
     if model.type == "classifier":
         val_acc = []
 
         for epoch in range(epochs):
+            print(f"Epoch: {epoch}")
             loss = model.train_step(train_loader, opt)
             losses.append(loss)
 
             val_loss, acc = model.validation_step(val_loader)
-            validation_losses.append(validation_losses)
+            validation_losses.append(val_loss)
             val_acc.append(acc)
+
+            # if validation loss is not lower than the average of the last n losses then stop
+            if len(validation_losses) > patience:
+                if np.mean(validation_losses[-patience:]) < val_loss:
+                    print("Early stopping criterion reached")
+                    break
+
         return losses, validation_losses, val_acc
 
     elif model.type == "regressor":
 
         for epoch in range(epochs):
+            print(f"Epoch: {epoch}")
             loss = model.train_step(train_loader, opt)
             losses.append(loss)
 
