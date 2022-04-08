@@ -130,8 +130,8 @@ def retrain_regressor(
             print(f"Test loss: {test_loss:.4f}")
             val_loss.append(test_loss)
 
-        if len(val_losses) > patience:
-            if np.mean(val_losses[-patience:]) < test_loss:
+        if len(val_loss) > patience:
+            if np.mean(val_loss[-patience:]) < test_loss:
                 print("Early stopping criterion reached")
                 break
     

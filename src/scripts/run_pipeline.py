@@ -87,7 +87,7 @@ select_unstable_data(valid_sample, batch_size=100, classifier=models["ITG_class"
 
 # Run MC dropout on points that pass the ITG classifier and return
 uncertain_dataset, uncert_before, data_idx = regressor_uncertainty(
-    valid_sample, models["ITG_reg"], n_runs=25, keep=0.25, plot=True
+    valid_sample, models["ITG_reg"], n_runs=25, keep=0.25, plot=False, valid_dataset=valid_dataset
 )
 
 train_sample.add(uncertain_dataset)
@@ -111,19 +111,18 @@ retrain_regressor(
     valid_loader,
     models["ITG_reg"],
     learning_rate=5e-4,
-    epochs=50,
+    epochs=5,
     validation_step=True,
-    scratch=False,
 )
 
 # TODO: Fix to use reordered indices for
 prediction_after = models["ITG_reg"].predict(uncertain_loader)
 
 _, uncert_after, _ = regressor_uncertainty(
-    valid_sample, models["ITG_reg"], n_runs=25, keep=0.25, order_idx=data_idx, plot=True
+    valid_sample, models["ITG_reg"], n_runs=25, keep=0.25, order_idx=data_idx, plot=False, valid_dataset=valid_dataset
 )
 
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
-uncertainty_change(uncert_before, uncert_after, plot=True)
+uncertainty_change(uncert_before, uncert_after, plot=False)
 
 # Pipeline diagnosis (How has the uncertainty changed for original training points)

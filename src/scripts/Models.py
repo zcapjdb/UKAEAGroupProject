@@ -110,15 +110,16 @@ class ITG_Regressor(nn.Module):
         self.model.apply(weight_reset)
 
     def shrink_perturb(self, lam, loc, scale):
-        noise_dist = torch.distributions.Normal(
-            torch.Tensor([loc]), torch.Tensor([scale])
-        )
-        noise = noise_dist.sample()
+        if lam != 1:
+            noise_dist = torch.distributions.Normal(
+                torch.Tensor([loc]), torch.Tensor([scale])
+            )
+            noise = noise_dist.sample()
 
-        with torch.no_grad():
-            for param in self.model.parameters():
-                param_update = (param * lam) + noise
-                param.copy_(param_update)
+            with torch.no_grad():
+                for param in self.model.parameters():
+                    param_update = (param * lam) + noise
+                    param.copy_(param_update)
 
     def loss_function(self, y, y_hat):
         MSE_loss = nn.MSELoss(reduction="sum")
