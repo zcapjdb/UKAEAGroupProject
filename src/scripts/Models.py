@@ -40,6 +40,7 @@ class ITG_Classifier(nn.Module):
         num_batches = len(dataloader)
 
         losses = []
+        correct = 0
         for batch, (X, y, z, idx) in enumerate(dataloader):
 
             y_hat = self.forward(X.float())
@@ -52,8 +53,13 @@ class ITG_Classifier(nn.Module):
 
             losses.append(loss.item())
 
+            # calculate train accuracy
+            pred_class = torch.round(y_hat.squeeze())
+            correct += torch.sum(pred_class == y.float()).item()
+
+        correct /= size
         average_loss = np.mean(losses)
-        print(f"Average loss: {average_loss:.4f}")
+        print(f"Train accuracy: {correct:>7f}, loss: {average_loss:>7f}")
         return average_loss
 
     def validation_step(self, dataloader):

@@ -73,14 +73,74 @@ def select_unstable_data(dataset, batch_size, classifier):
     print(f"\nStable points: {len(stable_points)}")
     print(f"Misclassified points: {len(misclassified)}")
 
-    # merge the two arrays
+    # create new dataset with misclassified points
+    misclassified_dataset = copy.deepcopy(dataset)
+    misclassified_dataset.data = misclassified_dataset.data.loc[misclassified]
+
+    # merge the two arrays of stable and misclassified points
     drop_points = np.unique(np.concatenate((stable_points, misclassified), axis=0))
     dataset.remove(drop_points)
 
-    # TODO: make a subset of the data with the misclassified points to retrain the classifier
 
     print(f"Percentage of misclassified points:  {100*len(misclassified) / init_size}%")
     print(f"\nDropped {init_size - len(dataset.data)} rows")
+
+    return dataset, misclassified_dataset
+
+# Function to retrain the classifier on the misclassified points
+def retrain_classifier(
+    misclassified_dataset,
+    valid_dataset,
+    classifier,
+    learning_rate=5e-4,
+    epochs=10,
+    batch_size=100,
+    validation_step=True,
+    patience=None,
+    verbose=False,
+):
+    print("\nRetraining classifier...\n")
+    print(f"Training on {len(misclassified_dataset)} points")
+
+    # create data loaders
+    train_loader = DataLoader(misclassified_dataset, batch_size=batch_size, shuffle=True)
+
+    # Switching validation dataset to numpy arrays to see if it is quicker
+    x_array = valid_dataset.data[train_keys].values
+    y_array = valid_dataset.data["itg"].values
+    z_array = valid_dataset.data["efiitg_gb"].values
+    valid_dataset = ITGDataset(x_array, y_array, z_array)
+
+    valid_loader = DataLoader(
+        valid_dataset, batch_size=int(0.1 * len(y_array)), shuffle=True
+    )
+
+    # instantiate optimiser
+    opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate)
+    train_loss = []
+    val_loss = []
+    val_acc = []
+
+    if not patience:
+        patience = epochs
+
+    for epoch in range(epochs):
+        print("Train Step: ", epoch)
+        loss = classifier.train_step(train_loader, opt)
+        train_loss.append(loss.item())
+
+        if (validation_step and epoch % 5 == 0) or epoch == epochs - 1:
+            print("Validation Step: ", epoch)
+            validation_loss, validation_accuracy = classifier.validation_step(valid_loader)
+            val_loss.append(validation_loss)
+            val_acc.append(validation_accuracy)
+
+        if len(val_loss) > patience:
+            if np.mean(val_loss[-patience:]) < test_loss:
+                print("Early stopping criterion reached")
+                break
+
+    return train_loss, val_loss
 
 
 # Regressor tools
@@ -122,7 +182,7 @@ def retrain_regressor(
         print(f"Loss: {loss.item():.4f}")
         train_loss.append(loss.item())
 
-        if validation_step and epoch % 10 == 0:
+        if (validation_step and epoch % 10 == 0) or epoch == epochs - 1:
             print("Validation Step: ", epoch)
             test_loss = model.validation_step(val_loader).item()
             print(f"Test loss: {test_loss:.4f}")
