@@ -103,6 +103,7 @@ def retrain_regressor(
     # Standard shrink_perturb params, lambda = 0.6, loc = 0, scale = 0.01
     model.shrink_perturb(lamda, loc, scale)
 
+
     if validation_step:
         test_loss = model.validation_step(val_loader)
         print(f"Initial loss: {test_loss.item():.4f}")
@@ -116,6 +117,7 @@ def retrain_regressor(
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
     train_loss = []
     val_loss = []
+
     for epoch in range(epochs):
         print("Train Step: ", epoch)
         loss = model.train_step(new_loader, opt)
@@ -144,6 +146,7 @@ def regressor_uncertainty(
     train_data=False,
     plot=False,
     order_idx=None,
+    valid_dataset=None
 ):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
@@ -191,6 +194,17 @@ def regressor_uncertainty(
         real_idx = idx_array[top_idx]
 
     if order_idx is None and train_data == False:
+        # Add 100 - x% back into the validation data set
+        print(f'no valid before : {len(valid_dataset)}')
+        temp_dataset = copy.deepcopy(dataset)
+        temp_dataset.remove(indices=real_idx)
+        valid_dataset.add(temp_dataset)
+
+        print(f'no valid after : {len(valid_dataset)}')
+
+        del temp_dataset
+        
+        # Remove them from the sample
         data_copy.remove(drop_idx)
 
     if plot:
@@ -238,7 +252,7 @@ def mse_change(
     uncert_data_order,
     uncertain_loader,
     uncertainties=None,
-    plot=True,
+    plot=False,
     data="novel",
     save_plots=False,
 ):
