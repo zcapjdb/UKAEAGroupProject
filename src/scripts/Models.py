@@ -73,7 +73,7 @@ class ITG_Classifier(nn.Module):
         correct /= size
         average_loss = np.mean(losses)
         logging.debug(f"Train accuracy: {correct:>7f}, loss: {average_loss:>7f}")
-        return average_loss
+        return average_loss, correct
 
     def validation_step(self, dataloader):
         size = len(dataloader.dataset)
@@ -344,6 +344,8 @@ def train_model(
     learning_rate,
     weight_decay=None,
     patience=None,
+    checkpoint = None,
+    checkpoint_path = None,
 ):
 
     # Initialise the optimiser
@@ -354,35 +356,31 @@ def train_model(
 
     losses = []
     validation_losses = []
+    train_accuracy = []
+    val_accuracy = []
 
     if not patience:
         patience = epochs
 
-    if model.type == "classifier":
-        val_acc = []
+    if model.type not in ["regression", "classification"]:
+        raise ValueError("Model type not recognised")
 
-        for epoch in range(epochs):
+    for epoch in range(epochs):
 
-            logging.debug(f"Epoch: {epoch}")
+        logging.debug(f"Epoch: {epoch}")
 
-            loss = model.train_step(train_loader, opt)
+        if model.type == "classifier":
+            loss, train_acc = model.train_step(train_loader, opt)
             losses.append(loss)
+            train_accuracy.append(train_acc)
 
-            val_loss, acc = model.validation_step(val_loader)
+            val_loss, val_acc = model.validation_step(val_loader)
             validation_losses.append(val_loss)
-            val_acc.append(acc)
+            val_accuracy.append(val_acc)
 
-            # if validation loss is not lower than the average of the last n losses then stop
-            if len(validation_losses) > patience:
-                if np.mean(validation_losses[-patience:]) < val_loss:
-                    logging.debug("Early stopping criterion reached")
-                    break
-
-        return losses, validation_losses, val_acc
-
-    elif model.type == "regressor":
-
-        for epoch in range(epochs):
+            stopping_metric = val_accuracy
+        
+        elif model.type == "regressor":
             logging.debug(f"Epoch: {epoch}")
             loss = model.train_step(train_loader, opt)
             losses.append(loss)
@@ -390,10 +388,38 @@ def train_model(
             val_loss = model.validation_step(val_loader)
             validation_losses.append(validation_losses)
 
+            stopping_metric = val_loss
+
+        
+        # if validation loss is not lower than the average of the last n losses then stop
+        if len(stopping_metric) > patience:
+            if np.mean(stopping_metric[-patience:]) < val_loss:
+                logging.debug("Early stopping criterion reached")
+                break
+
+        if checkpoint_path:
+            if checkpoint is None:
+                checkpoint = epochs
+
+            state = {
+                'epoch': epoch,
+                'state_dict': model.state_dict(),
+                'optimizer': opt.state_dict(),
+                'train_losses': losses,
+                'train_acc': train_accuracy,
+                'validation_losses': validation_losses,
+                'val_acc': val_acc,
+            }
+
+            if epoch % checkpoint == 0:
+                torch.save(state, checkpoint_path + f"{checkpoint_path}_{epoch}.pt")
+
+    if model.type == "classifier":
+        return losses, train_accuracy, validation_losses, val_accuracy
+    
+    elif model.type == "regressor":
         return losses, validation_losses
 
-    else:
-        raise ValueError("Model type not recognised")
 
 
 def load_model(model, save_path):
