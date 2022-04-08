@@ -127,6 +127,7 @@ def retrain_classifier(
     # instantiate optimiser
     opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate)
     train_loss = []
+    train_acc = []
     val_loss = []
     val_acc = []
 
@@ -137,8 +138,9 @@ def retrain_classifier(
 
         logging.debug(f"Train Step:  {epoch}")
 
-        loss = classifier.train_step(train_loader, opt)
+        loss, acc = classifier.train_step(train_loader, opt)
         train_loss.append(loss.item())
+        train_acc.append(acc.item())
 
         if (validation_step and epoch % 5 == 0) or epoch == epochs - 1:
 
@@ -153,7 +155,7 @@ def retrain_classifier(
                 logging.debug("Early stopping criterion reached")
                 break
 
-    return train_loss, val_loss
+    return train_loss, train_acc, val_loss, val_acc
 
 
 # Regressor tools

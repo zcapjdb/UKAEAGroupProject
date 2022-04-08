@@ -99,7 +99,7 @@ valid_sample, misclassified_sample = select_unstable_data(valid_sample, batch_si
 
 if RETRAIN_CLASSIFIER == True:
     # retrain the classifier on the misclassified points
-    models["ITG_class"] = retrain_classifier(
+    train_loss, train_acc, val_loss, val_acc = retrain_classifier(
         misclassified_sample,
         valid_dataset,
         models["ITG_class"],
