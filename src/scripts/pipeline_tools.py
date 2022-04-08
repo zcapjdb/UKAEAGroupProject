@@ -254,7 +254,8 @@ def regressor_uncertainty(
             predictions = regressor(x.float()).detach().numpy()
             step_list.append(predictions)
 
-        flattened_predictions = np.array(step_list).flatten()
+        flat_list = [item for sublist in step_list for item in sublist]
+        flattened_predictions = np.array(flat_list).flatten()
         runs.append(flattened_predictions)
 
     out_std = np.std(np.array(runs), axis=0)
@@ -266,7 +267,8 @@ def regressor_uncertainty(
     for step, (x, y, z, idx) in enumerate(dataloader):
         idx_list.append(idx.detach().numpy())
 
-    idx_array = np.asarray(idx_list, dtype=object).flatten()
+    flat_list = [item for sublist in idx_list for item in sublist]
+    idx_array = np.asarray(flat_list, dtype=object).flatten()
 
     if not train_data:
         top_idx = np.argsort(out_std)[-int(n_out_std * keep) :]
