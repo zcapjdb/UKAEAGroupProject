@@ -235,7 +235,7 @@ def regressor_uncertainty(
 
     data_copy = copy.deepcopy(dataset)
     if train_data:
-        batch_size = 2**(np.log(len(dataset)))//4
+        batch_size = 2**(int(np.log(len(dataset))))//4
     else: 
         batch_size = len(dataset)
     
