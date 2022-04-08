@@ -8,6 +8,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
 from scripts.utils import train_keys
 from tqdm.auto import tqdm
+import logging
 
 # Class definitions
 class ITG_Classifier(nn.Module):
@@ -71,7 +72,7 @@ class ITG_Classifier(nn.Module):
 
         correct /= size
         average_loss = np.mean(losses)
-        print(f"Train accuracy: {correct:>7f}, loss: {average_loss:>7f}")
+        logging.debug(f"Train accuracy: {correct:>7f}, loss: {average_loss:>7f}")
         return average_loss
 
     def validation_step(self, dataloader):
@@ -93,7 +94,7 @@ class ITG_Classifier(nn.Module):
 
         correct /= size
         average_loss = np.mean(test_loss)
-        print(f"Test accuracy: {correct:>7f}, loss: {average_loss:>7f}")
+        logging.debug(f"Test accuracy: {correct:>7f}, loss: {average_loss:>7f}")
         return average_loss, correct
 
 
@@ -196,7 +197,7 @@ class ITG_Regressor(nn.Module):
             pred = pred[reorder]
             real_idx = idx_array[reorder]
             # Make sure the reording has worked
-            assert real_idx.tolist() == order_outputs.tolist(), print("Ordering error")
+            assert real_idx.tolist() == order_outputs.tolist(), logging.error("Ordering error")
 
         return pred, idx_array
 
@@ -361,7 +362,9 @@ def train_model(
         val_acc = []
 
         for epoch in range(epochs):
-            print(f"Epoch: {epoch}")
+
+            logging.debug(f"Epoch: {epoch}")
+
             loss = model.train_step(train_loader, opt)
             losses.append(loss)
 
@@ -372,7 +375,7 @@ def train_model(
             # if validation loss is not lower than the average of the last n losses then stop
             if len(validation_losses) > patience:
                 if np.mean(validation_losses[-patience:]) < val_loss:
-                    print("Early stopping criterion reached")
+                    logging.debug("Early stopping criterion reached")
                     break
 
         return losses, validation_losses, val_acc
@@ -380,7 +383,7 @@ def train_model(
     elif model.type == "regressor":
 
         for epoch in range(epochs):
-            print(f"Epoch: {epoch}")
+            logging.debug(f"Epoch: {epoch}")
             loss = model.train_step(train_loader, opt)
             losses.append(loss)
 
@@ -394,7 +397,7 @@ def train_model(
 
 
 def load_model(model, save_path):
-    print(f"Model Loaded: {model}")
+    logging.info(f"Model Loaded: {model}")
     if model == "ITG_class":
         classifier = ITG_Classifier()
         classifier.load_state_dict(torch.load(save_path))

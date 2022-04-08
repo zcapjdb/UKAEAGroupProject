@@ -12,7 +12,7 @@ from scripts.utils import train_keys
 from scripts.Models import ITGDatasetDF, ITGDataset
 from tqdm.auto import tqdm
 import copy
-
+import logging
 
 # Data preparation functions
 def prepare_data(
@@ -52,7 +52,9 @@ def select_unstable_data(dataset, batch_size, classifier):
 
     stable_points = []
     misclassified = []
-    print("\nRunning classifier selection...\n")
+
+    logging.info("Running classifier selection...")
+
     for i, (x, y, z, idx) in enumerate(tqdm(dataloader)):
 
         y_hat = classifier(x.float())
@@ -70,8 +72,9 @@ def select_unstable_data(dataset, batch_size, classifier):
     # turn list of stable and misclassified points into flat arrays
     stable_points = np.concatenate(np.asarray(stable_points, dtype=object), axis=0)
     misclassified = np.concatenate(np.asarray(misclassified, dtype=object), axis=0)
-    print(f"\nStable points: {len(stable_points)}")
-    print(f"Misclassified points: {len(misclassified)}")
+
+    logging.log(15, f"Stable points: {len(stable_points)}")
+    logging.log(15, f"Misclassified points: {len(misclassified)}")
 
     # create new dataset with misclassified points
     misclassified_dataset = copy.deepcopy(dataset)
@@ -82,8 +85,8 @@ def select_unstable_data(dataset, batch_size, classifier):
     dataset.remove(drop_points)
 
 
-    print(f"Percentage of misclassified points:  {100*len(misclassified) / init_size}%")
-    print(f"\nDropped {init_size - len(dataset.data)} rows")
+    logging.info(f"Percentage of misclassified points:  {100*len(misclassified) / init_size}%")
+    logging.log(15, f"Dropped {init_size - len(dataset.data)} rows")
 
     return dataset, misclassified_dataset
 
@@ -102,8 +105,8 @@ def retrain_classifier(
     patience=None,
     verbose=False,
 ):
-    print("\nRetraining classifier...\n")
-    print(f"Training on {len(misclassified_dataset)} points")
+    logging.info("Retraining classifier...\n")
+    logging.log(15, f"Training on {len(misclassified_dataset)} points")
 
     # create data loaders
     train_loader = DataLoader(misclassified_dataset, batch_size=batch_size, shuffle=True)
@@ -131,19 +134,23 @@ def retrain_classifier(
         patience = epochs
 
     for epoch in range(epochs):
-        print("Train Step: ", epoch)
+
+        logging.debug(f"Train Step:  {epoch}")
+
         loss = classifier.train_step(train_loader, opt)
         train_loss.append(loss.item())
 
         if (validation_step and epoch % 5 == 0) or epoch == epochs - 1:
-            print("Validation Step: ", epoch)
+
+            logging.debug("Validation Step:  {epoch}")
+
             validation_loss, validation_accuracy = classifier.validation_step(valid_loader)
             val_loss.append(validation_loss)
             val_acc.append(validation_accuracy)
 
         if len(val_loss) > patience:
             if np.mean(val_loss[-patience:]) < test_loss:
-                print("Early stopping criterion reached")
+                logging.debug("Early stopping criterion reached")
                 break
 
     return train_loss, val_loss
@@ -162,15 +169,15 @@ def retrain_regressor(
     scale=0.01,
     patience=None,
 ):
-    print("\nRetraining regressor...\n")
-    print(f"Training on {len(new_loader.dataset)} points")
+    logging.info("Retraining regressor...\n")
+    logging.log(15, f"Training on {len(new_loader.dataset)} points")
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
     model.shrink_perturb(lam, loc, scale)
 
     if validation_step:
         test_loss = model.validation_step(val_loader)
-        print(f"Initial loss: {test_loss.item():.4f}")
+        logging.log(15, f"Initial loss: {test_loss.item():.4f}")
 
     if not patience:
         patience = epochs
@@ -183,20 +190,22 @@ def retrain_regressor(
     val_loss = []
 
     for epoch in range(epochs):
-        print("Train Step: ", epoch)
         loss = model.train_step(new_loader, opt)
-        print(f"Loss: {loss.item():.4f}")
         train_loss.append(loss.item())
 
+        logging.log(15, f"Train Step: {epoch}")
+        logging.log(15, f"Loss: {loss.item():.4f}")
+
         if (validation_step and epoch % 10 == 0) or epoch == epochs - 1:
-            print("Validation Step: ", epoch)
             test_loss = model.validation_step(val_loader).item()
-            print(f"Test loss: {test_loss:.4f}")
             val_loss.append(test_loss)
+
+            logging.log(15, f"Validation Step: {epoch}")  
+            logging.log(15, f"Test loss: {test_loss:.4f}")
 
         if len(val_loss) > patience:
             if np.mean(val_loss[-patience:]) < test_loss:
-                print("Early stopping criterion reached")
+                logging.log(15, "Early stopping criterion reached")
                 break
 
     return train_loss, val_loss
@@ -218,9 +227,9 @@ def regressor_uncertainty(
 
     """
     if train_data:
-        print("\nRunning MC Dropout on Training Data....\n")
+        logging.info("Running MC Dropout on Training Data....\n")
     else:
-        print("\nRunning MC Dropout on Novel Data....\n")
+        logging.info("Running MC Dropout on Novel Data....\n")
 
     data_copy = copy.deepcopy(dataset)
     dataloader = DataLoader(data_copy, shuffle=False)
@@ -243,7 +252,8 @@ def regressor_uncertainty(
 
     out_std = np.std(np.array(runs), axis=0)
     n_out_std = out_std.shape[0]
-    print(f"\nNumber of points passed for MC dropout: {n_out_std}")
+
+    logging.log(15, f"Number of points passed for MC dropout: {n_out_std}")
 
     idx_list = []
     for step, (x, y, z, idx) in enumerate(dataloader):
@@ -259,12 +269,13 @@ def regressor_uncertainty(
 
     if order_idx is None and train_data == False:
         # Add 100 - x% back into the validation data set
-        print(f"no valid before : {len(valid_dataset)}")
+        logging.log(15, f"no valid before : {len(valid_dataset)}")
+
         temp_dataset = copy.deepcopy(dataset)
         temp_dataset.remove(indices=real_idx)
         valid_dataset.add(temp_dataset)
 
-        print(f"no valid after : {len(valid_dataset)}")
+        logging.log(15, f"no valid after : {len(valid_dataset)}")
 
         del temp_dataset
 
@@ -294,7 +305,7 @@ def regressor_uncertainty(
         assert list(np.unique(real_idx)) == list(np.unique(order_idx))
 
         # Make sure they are in the same order
-        assert real_idx.tolist() == order_idx.tolist(), print("Ordering error")
+        assert real_idx.tolist() == order_idx.tolist(), logging.error("Ordering error")
 
     if not train_data:
         return data_copy, out_std[top_indices], real_idx
@@ -335,7 +346,7 @@ def mse_change(
     mse_before = get_mse(pred_before, ground_truth_subset)
     mse_after = get_mse(pred_after, ground_truth_subset)
 
-    print(f"\nChange in MSE for {data} dataset: {mse_after-mse_before:.4f}\n")
+    logging.info(f"Change in MSE for {data} dataset: {mse_after-mse_before:.4f}\n")
 
     if plot:
         plot_mse_change(
@@ -357,11 +368,11 @@ def uncertainty_change(x, y, plot=True):
     if plot:
         plot_scatter(x, y)
 
-    print(
+    logging.info(
         f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_change:.3f} "
     )
 
-    print(
+    logging.info(
         f"Initial Average Uncertainty: {np.mean(x):.4f}, Final Average Uncertainty: {np.mean(y):.4f}"
     )
 

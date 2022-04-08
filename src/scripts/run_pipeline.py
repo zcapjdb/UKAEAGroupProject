@@ -13,6 +13,18 @@ from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
 from scripts.utils import train_keys
 
+import coloredlogs, verboselogs, logging
+
+
+level = "DEBUG"
+# Create logger object for use in pipeline
+verboselogs.install()
+logger = logging.getLogger(__name__)
+coloredlogs.install(level=level)
+
+# Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
+
+
 # TODO: Put some of these variables in a yaml config file
 
 pretrained = {
@@ -68,8 +80,8 @@ for model in pretrained:
         models[model] = trained_model
 
 for model_name in models:
-    print(f"Model: {model_name}")
-    print(models[model_name])
+    logging.log(15, f"Model: {model_name}")
+    logging.log(15, models[model_name])
 
 # Train untrained models (may not be needed)
 
