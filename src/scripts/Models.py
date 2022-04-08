@@ -352,7 +352,7 @@ def train_model(
 
 
 def load_model(model, save_path):
-    print(model)
+    print(f'Model Loaded: {model}')
     if model == "ITG_class":
         classifier = ITG_Classifier()
         classifier.load_state_dict(torch.load(save_path))
