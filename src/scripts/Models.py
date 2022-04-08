@@ -34,11 +34,12 @@ class ITG_Classifier(nn.Module):
 
     def train_step(self, dataloader, optimizer):
         # Initalise loss function
-        BCE = nn.BCELoss()
+        BCE = nn.BCELoss(reduction="sum")
 
         size = len(dataloader.dataset)
         num_batches = len(dataloader)
 
+        losses = []
         for batch, (X, y, z, idx) in enumerate(dataloader):
 
             y_hat = self.forward(X.float())
@@ -48,15 +49,16 @@ class ITG_Classifier(nn.Module):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            
+            losses.append(loss.item())
 
-            if batch == num_batches - 1:
-                loss = loss.item()
-                print(f"loss: {loss:>7f}")
+        print(f"Average loss: {np.sum(losses) / size:.4f}")
+        return np.sum(losses) / size
 
     def validation_step(self, dataloader):
         size = len(dataloader.dataset)
         # Initalise loss function
-        BCE = nn.BCELoss()
+        BCE = nn.BCELoss(reduction="sum")
 
         test_loss = []
         correct = 0
@@ -71,7 +73,9 @@ class ITG_Classifier(nn.Module):
                 correct += torch.sum(pred_class == y.float()).item()
 
         correct /= size
-        return np.mean(test_loss), correct
+        average_loss = np.sum(test_loss) / size
+        print(f"Test accuracy: {correct:>7f}, loss: {average_loss:>7f}")
+        return average_loss, correct
 
 
 class ITG_Regressor(nn.Module):
