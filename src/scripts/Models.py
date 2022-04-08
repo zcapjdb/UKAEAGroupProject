@@ -39,7 +39,7 @@ class ITG_Classifier(nn.Module):
         size = len(dataloader.dataset)
         num_batches = len(dataloader)
 
-        for batch, (X, y, idx) in enumerate(dataloader):
+        for batch, (X, y, z, idx) in enumerate(dataloader):
 
             y_hat = self.forward(X.float())
             loss = BCE(y_hat, y.unsqueeze(-1).float())
@@ -62,9 +62,9 @@ class ITG_Classifier(nn.Module):
         correct = 0
 
         with torch.no_grad():
-            for X, y, idx in dataloader:
+            for X, y, z in dataloader:
                 y_hat = self.forward(X.float())
-                test_loss.append(BCE(y.unsqueeze(-1).float()).item(), y_hat)
+                test_loss.append(BCE(y.unsqueeze(-1).float(), y_hat).item())
 
                 # calculate test accuracy
                 pred_class = torch.round(y_hat.squeeze())
@@ -324,7 +324,7 @@ def train_model(
     losses = []
     validation_losses = []
 
-    if model.type == "classifer":
+    if model.type == "classifier":
         val_acc = []
 
         for epoch in range(epochs):
@@ -346,6 +346,9 @@ def train_model(
             validation_losses.append(validation_losses)
 
         return losses, validation_losses
+
+    else:
+        raise ValueError("Model type not recognised")
 
 
 def load_model(model, save_path):
