@@ -232,7 +232,12 @@ def regressor_uncertainty(
         logging.info("Running MC Dropout on Novel Data....\n")
 
     data_copy = copy.deepcopy(dataset)
-    dataloader = DataLoader(data_copy, shuffle=False)
+    if train_data:
+        batch_size = 2**(np.log(len(dataset)))//4
+    else: 
+        batch_size = len(dataset)
+    
+    dataloader = DataLoader(data_copy, batch_size=batch_size, shuffle=False)
 
     regressor.eval()
     regressor.enable_dropout()
@@ -357,6 +362,7 @@ def mse_change(
             data=data,
             save_plots=save_plots,
         )
+    return mse_before, mse_after, (mse_after - mse_before)
 
 
 def uncertainty_change(x, y, plot=True):
@@ -368,13 +374,19 @@ def uncertainty_change(x, y, plot=True):
     if plot:
         plot_scatter(x, y)
 
+    av_uncert_before = np.mean(x)
+    av_uncer_after = np.mean(y)
+
     logging.info(
         f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_change:.3f} "
     )
 
     logging.info(
-        f"Initial Average Uncertainty: {np.mean(x):.4f}, Final Average Uncertainty: {np.mean(y):.4f}"
+        f"Initial Average Uncertainty: {av_uncert_before:.4f}, Final Average Uncertainty: {av_uncer_after:.4f}"
     )
+    return (av_uncer_after - av_uncert_before)
+
+    
 
 
 # plotting functions
