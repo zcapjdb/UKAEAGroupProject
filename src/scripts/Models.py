@@ -28,6 +28,18 @@ class ITG_Classifier(nn.Module):
             nn.Sigmoid(),
         )
 
+    def shrink_perturb(self, lam, loc, scale):
+        if lam != 1:
+            noise_dist = torch.distributions.Normal(
+                torch.Tensor([loc]), torch.Tensor([scale])
+            )
+            noise = noise_dist.sample()
+
+            with torch.no_grad():
+                for param in self.model.parameters():
+                    param_update = (param * lam) + noise
+                    param.copy_(param_update)
+
     def forward(self, x):
         y_hat = self.model(x)
         return y_hat
@@ -39,6 +51,8 @@ class ITG_Classifier(nn.Module):
         size = len(dataloader.dataset)
         num_batches = len(dataloader)
 
+        losses = []
+        correct = 0
         for batch, (X, y, z, idx) in enumerate(dataloader):
 
             y_hat = self.forward(X.float())
@@ -49,9 +63,16 @@ class ITG_Classifier(nn.Module):
             loss.backward()
             optimizer.step()
 
-            if batch == num_batches - 1:
-                loss = loss.item()
-                print(f"loss: {loss:>7f}")
+            losses.append(loss.item())
+
+            # calculate train accuracy
+            pred_class = torch.round(y_hat.squeeze())
+            correct += torch.sum(pred_class == y.float()).item()
+
+        correct /= size
+        average_loss = np.mean(losses)
+        print(f"Train accuracy: {correct:>7f}, loss: {average_loss:>7f}")
+        return average_loss
 
     def validation_step(self, dataloader):
         size = len(dataloader.dataset)
@@ -64,14 +85,16 @@ class ITG_Classifier(nn.Module):
         with torch.no_grad():
             for X, y, z in dataloader:
                 y_hat = self.forward(X.float())
-                test_loss.append(BCE(y.unsqueeze(-1).float(), y_hat).item())
+                test_loss.append(BCE(y_hat, y.unsqueeze(-1).float()).item())
 
                 # calculate test accuracy
                 pred_class = torch.round(y_hat.squeeze())
                 correct += torch.sum(pred_class == y.float()).item()
 
         correct /= size
-        return np.mean(test_loss), correct
+        average_loss = np.mean(test_loss)
+        print(f"Test accuracy: {correct:>7f}, loss: {average_loss:>7f}")
+        return average_loss, correct
 
 
 class ITG_Regressor(nn.Module):
@@ -105,15 +128,16 @@ class ITG_Regressor(nn.Module):
         self.model.apply(weight_reset)
 
     def shrink_perturb(self, lam, loc, scale):
-        noise_dist = torch.distributions.Normal(
-            torch.Tensor([loc]), torch.Tensor([scale])
-        )
-        noise = noise_dist.sample()
+        if lam != 1:
+            noise_dist = torch.distributions.Normal(
+                torch.Tensor([loc]), torch.Tensor([scale])
+            )
+            noise = noise_dist.sample()
 
-        with torch.no_grad():
-            for param in self.model.parameters():
-                param_update = (param * lam) + noise
-                param.copy_(param_update)
+            with torch.no_grad():
+                for param in self.model.parameters():
+                    param_update = (param * lam) + noise
+                    param.copy_(param_update)
 
     def loss_function(self, y, y_hat):
         MSE_loss = nn.MSELoss(reduction="sum")
@@ -312,7 +336,13 @@ def weight_reset(m):
 
 
 def train_model(
-    model, train_loader, val_loader, epochs, learning_rate, weight_decay=None
+    model,
+    train_loader,
+    val_loader,
+    epochs,
+    learning_rate,
+    weight_decay=None,
+    patience=None,
 ):
 
     # Initialise the optimiser
@@ -324,21 +354,33 @@ def train_model(
     losses = []
     validation_losses = []
 
+    if not patience:
+        patience = epochs
+
     if model.type == "classifier":
         val_acc = []
 
         for epoch in range(epochs):
+            print(f"Epoch: {epoch}")
             loss = model.train_step(train_loader, opt)
             losses.append(loss)
 
             val_loss, acc = model.validation_step(val_loader)
-            validation_losses.append(validation_losses)
+            validation_losses.append(val_loss)
             val_acc.append(acc)
+
+            # if validation loss is not lower than the average of the last n losses then stop
+            if len(validation_losses) > patience:
+                if np.mean(validation_losses[-patience:]) < val_loss:
+                    print("Early stopping criterion reached")
+                    break
+
         return losses, validation_losses, val_acc
 
     elif model.type == "regressor":
 
         for epoch in range(epochs):
+            print(f"Epoch: {epoch}")
             loss = model.train_step(train_loader, opt)
             losses.append(loss)
 
@@ -352,7 +394,7 @@ def train_model(
 
 
 def load_model(model, save_path):
-    print(f'Model Loaded: {model}')
+    print(f"Model Loaded: {model}")
     if model == "ITG_class":
         classifier = ITG_Classifier()
         classifier.load_state_dict(torch.load(save_path))

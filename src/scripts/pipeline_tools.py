@@ -73,14 +73,80 @@ def select_unstable_data(dataset, batch_size, classifier):
     print(f"\nStable points: {len(stable_points)}")
     print(f"Misclassified points: {len(misclassified)}")
 
-    # merge the two arrays
+    # create new dataset with misclassified points
+    misclassified_dataset = copy.deepcopy(dataset)
+    misclassified_dataset.data = misclassified_dataset.data.loc[misclassified]
+
+    # merge the two arrays of stable and misclassified points
     drop_points = np.unique(np.concatenate((stable_points, misclassified), axis=0))
     dataset.remove(drop_points)
 
-    # TODO: make a subset of the data with the misclassified points to retrain the classifier
 
     print(f"Percentage of misclassified points:  {100*len(misclassified) / init_size}%")
     print(f"\nDropped {init_size - len(dataset.data)} rows")
+
+    return dataset, misclassified_dataset
+
+# Function to retrain the classifier on the misclassified points
+def retrain_classifier(
+    misclassified_dataset,
+    valid_dataset,
+    classifier,
+    learning_rate=5e-4,
+    epochs=10,
+    batch_size=100,
+    validation_step=True,
+    lam=1,
+    loc=0.0,
+    scale=0.01,
+    patience=None,
+    verbose=False,
+):
+    print("\nRetraining classifier...\n")
+    print(f"Training on {len(misclassified_dataset)} points")
+
+    # create data loaders
+    train_loader = DataLoader(misclassified_dataset, batch_size=batch_size, shuffle=True)
+
+    # Switching validation dataset to numpy arrays to see if it is quicker
+    x_array = valid_dataset.data[train_keys].values
+    y_array = valid_dataset.data["itg"].values
+    z_array = valid_dataset.data["efiitg_gb"].values
+    valid_dataset = ITGDataset(x_array, y_array, z_array)
+
+    valid_loader = DataLoader(
+        valid_dataset, batch_size=int(0.1 * len(y_array)), shuffle=True
+    )
+
+    # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
+    classifier.shrink_perturb(lam, loc, scale)
+
+    # instantiate optimiser
+    opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate)
+    train_loss = []
+    val_loss = []
+    val_acc = []
+
+    if not patience:
+        patience = epochs
+
+    for epoch in range(epochs):
+        print("Train Step: ", epoch)
+        loss = classifier.train_step(train_loader, opt)
+        train_loss.append(loss.item())
+
+        if (validation_step and epoch % 5 == 0) or epoch == epochs - 1:
+            print("Validation Step: ", epoch)
+            validation_loss, validation_accuracy = classifier.validation_step(valid_loader)
+            val_loss.append(validation_loss)
+            val_acc.append(validation_accuracy)
+
+        if len(val_loss) > patience:
+            if np.mean(val_loss[-patience:]) < test_loss:
+                print("Early stopping criterion reached")
+                break
+
+    return train_loss, val_loss
 
 
 # Regressor tools
@@ -91,23 +157,23 @@ def retrain_regressor(
     learning_rate=1e-4,
     epochs=5,
     validation_step=True,
-    mode="warm_start",
-    lamda=0.6,
+    lam=1,
     loc=0.0,
-    scale=0.001,
+    scale=0.01,
+    patience=None,
 ):
     print("\nRetraining regressor...\n")
     print(f"Training on {len(new_loader.dataset)} points")
-    if mode == "scratch":
 
-        model.reset_weights()
-
-    if mode == "shrink_perturb":
-        model.shrink_perturb(lamda, loc, scale)
+    # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
+    model.shrink_perturb(lam, loc, scale)
 
     if validation_step:
         test_loss = model.validation_step(val_loader)
         print(f"Initial loss: {test_loss.item():.4f}")
+
+    if not patience:
+        patience = epochs
 
     model.train()
 
@@ -122,12 +188,17 @@ def retrain_regressor(
         print(f"Loss: {loss.item():.4f}")
         train_loss.append(loss.item())
 
-        if validation_step and epoch % 10 == 0:
+        if (validation_step and epoch % 10 == 0) or epoch == epochs - 1:
             print("Validation Step: ", epoch)
-            test_loss = model.validation_step(val_loader)
-            print(f"Test loss: {test_loss.item():.4f}")
-            val_loss.append(test_loss.item())
-    
+            test_loss = model.validation_step(val_loader).item()
+            print(f"Test loss: {test_loss:.4f}")
+            val_loss.append(test_loss)
+
+        if len(val_loss) > patience:
+            if np.mean(val_loss[-patience:]) < test_loss:
+                print("Early stopping criterion reached")
+                break
+
     return train_loss, val_loss
 
 
@@ -139,7 +210,7 @@ def regressor_uncertainty(
     train_data=False,
     plot=False,
     order_idx=None,
-    valid_dataset=None
+    valid_dataset=None,
 ):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
@@ -148,7 +219,7 @@ def regressor_uncertainty(
     """
     if train_data:
         print("\nRunning MC Dropout on Training Data....\n")
-    else: 
+    else:
         print("\nRunning MC Dropout on Novel Data....\n")
 
     data_copy = copy.deepcopy(dataset)
@@ -188,15 +259,15 @@ def regressor_uncertainty(
 
     if order_idx is None and train_data == False:
         # Add 100 - x% back into the validation data set
-        print(f'no valid before : {len(valid_dataset)}')
+        print(f"no valid before : {len(valid_dataset)}")
         temp_dataset = copy.deepcopy(dataset)
         temp_dataset.remove(indices=real_idx)
         valid_dataset.add(temp_dataset)
 
-        print(f'no valid after : {len(valid_dataset)}')
+        print(f"no valid after : {len(valid_dataset)}")
 
         del temp_dataset
-        
+
         # Remove them from the sample
         data_copy.remove(drop_idx)
 
@@ -275,16 +346,6 @@ def mse_change(
             data=data,
             save_plots=save_plots,
         )
-
-
-def classifier_accuracy(dataset, target_var):
-
-    n_total = len(dataset)
-    counts = dataset.data.groupby(target_var).count()
-
-    accuracy = counts.loc[0][0] * 100 / n_total
-
-    print(f"\nCorrectly Classified {accuracy:.3f} %")
 
 
 def uncertainty_change(x, y, plot=True):

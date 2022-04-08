@@ -1,11 +1,11 @@
 # Load the required data
 
 from scripts.pipeline_tools import (
-    classifier_accuracy,
     prepare_data,
     regressor_uncertainty,
     select_unstable_data,
     retrain_regressor,
+    retrain_classifier,
     uncertainty_change,
 )
 from scripts.Models import ITGDatasetDF, load_model, ITGDataset
@@ -40,6 +40,7 @@ TRAIN_PATH = "/unix/atlastracking/jbarr/train_data_clipped.pkl"
 VALIDATION_PATH = "/unix/atlastracking/jbarr/valid_data_clipped.pkl"
 # VALIDATION_PATH = "/Users/thandikiremadula/Desktop/UKAEA_data/valid_data_clipped.pkl"
 
+RETRAIN_CLASSIFIER = False
 
 train_data, val_data = prepare_data(
     TRAIN_PATH,
@@ -82,19 +83,38 @@ valid_sample = valid_dataset.sample(10_000)
 valid_dataset.remove(valid_sample.data.index)
 
 # Pass points through the ITG Classifier and return points that pass (what threshold?)
-select_unstable_data(valid_sample, batch_size=100, classifier=models["ITG_class"])
-# classifier_accuracy(valid_sample, target_var='itg')
+valid_sample, misclassified_sample = select_unstable_data(valid_sample, batch_size=100, classifier=models["ITG_class"])
+
+if RETRAIN_CLASSIFIER == True:
+    # retrain the classifier on the misclassified points
+    models["ITG_class"] = retrain_classifier(
+        misclassified_sample,
+        valid_dataset,
+        models["ITG_class"],
+        batch_size=100,
+        epochs=5,
+        verbose=True,
+    )
+#TODO: diagnose how well the classifier retraining does
+#TODO: verbose flag a good way to control the amount of output from different functins - not yet implemented
+# From first run through it does seem like training on the misclassified points hurts the validation dataset accuracy quite a bit
+
 
 # Run MC dropout on points that pass the ITG classifier and return
 uncertain_dataset, uncert_before, data_idx = regressor_uncertainty(
-    valid_sample, models["ITG_reg"], n_runs=25, keep=0.25, plot=True
+    valid_sample,
+    models["ITG_reg"],
+    n_runs=25,
+    keep=0.25,
+    plot=False,
+    valid_dataset=valid_dataset,
 )
 
 train_sample.add(uncertain_dataset)
 
 uncertain_loader = DataLoader(train_sample, batch_size=len(train_sample), shuffle=True)
 
-# Switching validation dataset to numpy arrays to see if it is quicker
+# Switching validation dataset to numpy arrays as it is much faster
 x_array = valid_dataset.data[train_keys].values
 y_array = valid_dataset.data["itg"].values
 z_array = valid_dataset.data["efiitg_gb"].values
@@ -111,19 +131,24 @@ retrain_regressor(
     valid_loader,
     models["ITG_reg"],
     learning_rate=5e-4,
-    epochs=50,
+    epochs=5,
     validation_step=True,
-    scratch=False,
 )
 
 # TODO: Fix to use reordered indices for
 prediction_after = models["ITG_reg"].predict(uncertain_loader)
 
 _, uncert_after, _ = regressor_uncertainty(
-    valid_sample, models["ITG_reg"], n_runs=25, keep=0.25, order_idx=data_idx, plot=True
+    valid_sample,
+    models["ITG_reg"],
+    n_runs=10,
+    keep=0.25,
+    order_idx=data_idx,
+    plot=False,
+    valid_dataset=valid_dataset,
 )
 
 # Pipeline diagnosis (Has the uncertainty decreased for new points)
-uncertainty_change(uncert_before, uncert_after, plot=True)
+uncertainty_change(uncert_before, uncert_after, plot=False)
 
 # Pipeline diagnosis (How has the uncertainty changed for original training points)
