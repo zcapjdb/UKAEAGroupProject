@@ -362,7 +362,7 @@ def train_model(
     if not patience:
         patience = epochs
 
-    if model.type not in ["regression", "classification"]:
+    if model.type not in ["classifier", "regressor"]:
         raise ValueError("Model type not recognised")
 
     for epoch in range(epochs):
@@ -412,7 +412,7 @@ def train_model(
             }
 
             if epoch % checkpoint == 0:
-                torch.save(state, checkpoint_path + f"{checkpoint_path}_{epoch}.pt")
+                torch.save(state, f"{checkpoint_path}_epoch_{epoch}.pt")
 
     if model.type == "classifier":
         return losses, train_accuracy, validation_losses, val_accuracy
