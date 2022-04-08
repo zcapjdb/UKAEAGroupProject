@@ -91,18 +91,16 @@ def retrain_regressor(
     learning_rate=1e-4,
     epochs=5,
     validation_step=True,
-    lamda=1,
+    lam=1,
     loc=0.0,
-    scale=0,
-    patience = None
+    scale=0.01,
+    patience=None,
 ):
     print("\nRetraining regressor...\n")
     print(f"Training on {len(new_loader.dataset)} points")
 
-    # By default, lambda = 1, loc = 0, scale = 0 which is equivalent to warm start
-    # Standard shrink_perturb params, lambda = 0.6, loc = 0, scale = 0.01
-    model.shrink_perturb(lamda, loc, scale)
-
+    # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
+    model.shrink_perturb(lam, loc, scale)
 
     if validation_step:
         test_loss = model.validation_step(val_loader)
@@ -134,7 +132,7 @@ def retrain_regressor(
             if np.mean(val_loss[-patience:]) < test_loss:
                 print("Early stopping criterion reached")
                 break
-    
+
     return train_loss, val_loss
 
 
@@ -146,7 +144,7 @@ def regressor_uncertainty(
     train_data=False,
     plot=False,
     order_idx=None,
-    valid_dataset=None
+    valid_dataset=None,
 ):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
@@ -155,7 +153,7 @@ def regressor_uncertainty(
     """
     if train_data:
         print("\nRunning MC Dropout on Training Data....\n")
-    else: 
+    else:
         print("\nRunning MC Dropout on Novel Data....\n")
 
     data_copy = copy.deepcopy(dataset)
@@ -195,15 +193,15 @@ def regressor_uncertainty(
 
     if order_idx is None and train_data == False:
         # Add 100 - x% back into the validation data set
-        print(f'no valid before : {len(valid_dataset)}')
+        print(f"no valid before : {len(valid_dataset)}")
         temp_dataset = copy.deepcopy(dataset)
         temp_dataset.remove(indices=real_idx)
         valid_dataset.add(temp_dataset)
 
-        print(f'no valid after : {len(valid_dataset)}')
+        print(f"no valid after : {len(valid_dataset)}")
 
         del temp_dataset
-        
+
         # Remove them from the sample
         data_copy.remove(drop_idx)
 
@@ -282,16 +280,6 @@ def mse_change(
             data=data,
             save_plots=save_plots,
         )
-
-
-def classifier_accuracy(dataset, target_var):
-
-    n_total = len(dataset)
-    counts = dataset.data.groupby(target_var).count()
-
-    accuracy = counts.loc[0][0] * 100 / n_total
-
-    print(f"\nCorrectly Classified {accuracy:.3f} %")
 
 
 def uncertainty_change(x, y, plot=True):

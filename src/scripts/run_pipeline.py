@@ -83,11 +83,15 @@ valid_dataset.remove(valid_sample.data.index)
 
 # Pass points through the ITG Classifier and return points that pass (what threshold?)
 select_unstable_data(valid_sample, batch_size=100, classifier=models["ITG_class"])
-# classifier_accuracy(valid_sample, target_var='itg')
 
 # Run MC dropout on points that pass the ITG classifier and return
 uncertain_dataset, uncert_before, data_idx = regressor_uncertainty(
-    valid_sample, models["ITG_reg"], n_runs=25, keep=0.25, plot=False, valid_dataset=valid_dataset
+    valid_sample,
+    models["ITG_reg"],
+    n_runs=25,
+    keep=0.25,
+    plot=False,
+    valid_dataset=valid_dataset,
 )
 
 train_sample.add(uncertain_dataset)
@@ -119,7 +123,13 @@ retrain_regressor(
 prediction_after = models["ITG_reg"].predict(uncertain_loader)
 
 _, uncert_after, _ = regressor_uncertainty(
-    valid_sample, models["ITG_reg"], n_runs=25, keep=0.25, order_idx=data_idx, plot=False, valid_dataset=valid_dataset
+    valid_sample,
+    models["ITG_reg"],
+    n_runs=25,
+    keep=0.25,
+    order_idx=data_idx,
+    plot=False,
+    valid_dataset=valid_dataset,
 )
 
 # Pipeline diagnosis (Has the uncertainty decreased for new points)

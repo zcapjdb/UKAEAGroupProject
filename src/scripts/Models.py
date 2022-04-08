@@ -49,7 +49,7 @@ class ITG_Classifier(nn.Module):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            
+
             losses.append(loss.item())
 
         average_loss = np.mean(losses)
@@ -318,7 +318,13 @@ def weight_reset(m):
 
 
 def train_model(
-    model, train_loader, val_loader, epochs, learning_rate, weight_decay=None, patience=None,
+    model,
+    train_loader,
+    val_loader,
+    epochs,
+    learning_rate,
+    weight_decay=None,
+    patience=None,
 ):
 
     # Initialise the optimiser
@@ -370,7 +376,7 @@ def train_model(
 
 
 def load_model(model, save_path):
-    print(f'Model Loaded: {model}')
+    print(f"Model Loaded: {model}")
     if model == "ITG_class":
         classifier = ITG_Classifier()
         classifier.load_state_dict(torch.load(save_path))
