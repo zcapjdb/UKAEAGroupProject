@@ -91,21 +91,17 @@ def retrain_regressor(
     learning_rate=1e-4,
     epochs=5,
     validation_step=True,
-    mode="warm_start",
-    lamda=0.6,
+    lamda=1,
     loc=0.0,
-    scale=0.001,
+    scale=0,
     patience = None
 ):
     print("\nRetraining regressor...\n")
     print(f"Training on {len(new_loader.dataset)} points")
 
-    if mode == "scratch":
-
-        model.reset_weights()
-
-    if mode == "shrink_perturb":
-        model.shrink_perturb(lamda, loc, scale)
+    # By default, lambda = 1, loc = 0, scale = 0 which is equivalent to warm start
+    # Standard shrink_perturb params, lambda = 0.6, loc = 0, scale = 0.01
+    model.shrink_perturb(lamda, loc, scale)
 
     if validation_step:
         test_loss = model.validation_step(val_loader)
