@@ -191,13 +191,18 @@ class ITG_Regressor(nn.Module):
         pred = np.asarray(pred).flatten()
 
         if order_outputs is not None:
-            reorder = np.array(
-                [np.where(idx_array == i) for i in order_outputs]
-            ).flatten()
+            assert len(order_outputs) == len(idx_array), logging.error(
+                "Index ordering passed is a different length to the number of predictions!"
+            )
+            reorder = [np.where(idx_array == i) for i in order_outputs]
+            reorder = np.concatenate(reorder).flatten()
+
             pred = pred[reorder]
             real_idx = idx_array[reorder]
             # Make sure the reording has worked
-            assert real_idx.tolist() == order_outputs.tolist(), logging.error("Ordering error")
+            assert real_idx.tolist() == order_outputs.tolist(), logging.error(
+                "Ordering error"
+            )
 
         return pred, idx_array
 
@@ -344,8 +349,8 @@ def train_model(
     learning_rate,
     weight_decay=None,
     patience=None,
-    checkpoint = None,
-    checkpoint_path = None,
+    checkpoint=None,
+    checkpoint_path=None,
 ):
 
     # Initialise the optimiser
@@ -378,8 +383,8 @@ def train_model(
             validation_losses.append(val_loss)
             val_accuracy.append(val_acc)
 
-            stopping_metric = val_accuracy
-        
+            stopping_metric = -val_accuracy
+
         elif model.type == "regressor":
             logging.debug(f"Epoch: {epoch}")
             loss = model.train_step(train_loader, opt)
@@ -390,10 +395,9 @@ def train_model(
 
             stopping_metric = val_loss
 
-        
-        # if validation loss is not lower than the average of the last n losses then stop
+        # if validation metric is not better than the average of the last n losses then stop
         if len(stopping_metric) > patience:
-            if np.mean(stopping_metric[-patience:]) < val_loss:
+            if np.mean(stopping_metric[-patience:]) < stopping_metric[-1]:
                 logging.debug("Early stopping criterion reached")
                 break
 
@@ -402,13 +406,13 @@ def train_model(
                 checkpoint = epochs
 
             state = {
-                'epoch': epoch,
-                'state_dict': model.state_dict(),
-                'optimizer': opt.state_dict(),
-                'train_losses': losses,
-                'train_acc': train_accuracy,
-                'validation_losses': validation_losses,
-                'val_acc': val_acc,
+                "epoch": epoch,
+                "state_dict": model.state_dict(),
+                "optimizer": opt.state_dict(),
+                "train_losses": losses,
+                "train_acc": train_accuracy,
+                "validation_losses": validation_losses,
+                "val_acc": val_acc,
             }
 
             if epoch % checkpoint == 0:
@@ -416,10 +420,9 @@ def train_model(
 
     if model.type == "classifier":
         return losses, train_accuracy, validation_losses, val_accuracy
-    
+
     elif model.type == "regressor":
         return losses, validation_losses
-
 
 
 def load_model(model, save_path):

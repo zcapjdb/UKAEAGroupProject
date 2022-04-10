@@ -84,11 +84,13 @@ def select_unstable_data(dataset, batch_size, classifier):
     drop_points = np.unique(np.concatenate((stable_points, misclassified), axis=0))
     dataset.remove(drop_points)
 
-
-    logging.info(f"Percentage of misclassified points:  {100*len(misclassified) / init_size}%")
+    logging.info(
+        f"Percentage of misclassified points:  {100*len(misclassified) / init_size}%"
+    )
     logging.log(15, f"Dropped {init_size - len(dataset.data)} rows")
 
     return dataset, misclassified_dataset
+
 
 # Function to retrain the classifier on the misclassified points
 def retrain_classifier(
@@ -109,7 +111,9 @@ def retrain_classifier(
     logging.log(15, f"Training on {len(misclassified_dataset)} points")
 
     # create data loaders
-    train_loader = DataLoader(misclassified_dataset, batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(
+        misclassified_dataset, batch_size=batch_size, shuffle=True
+    )
 
     # Switching validation dataset to numpy arrays to see if it is quicker
     x_array = valid_dataset.data[train_keys].values
@@ -146,7 +150,9 @@ def retrain_classifier(
 
             logging.debug("Validation Step:  {epoch}")
 
-            validation_loss, validation_accuracy = classifier.validation_step(valid_loader)
+            validation_loss, validation_accuracy = classifier.validation_step(
+                valid_loader
+            )
             val_loss.append(validation_loss)
             val_acc.append(validation_accuracy)
 
@@ -202,7 +208,7 @@ def retrain_regressor(
             test_loss = model.validation_step(val_loader).item()
             val_loss.append(test_loss)
 
-            logging.log(15, f"Validation Step: {epoch}")  
+            logging.log(15, f"Validation Step: {epoch}")
             logging.log(15, f"Test loss: {test_loss:.4f}")
 
         if len(val_loss) > patience:
@@ -235,10 +241,10 @@ def regressor_uncertainty(
 
     data_copy = copy.deepcopy(dataset)
     if train_data:
-        batch_size = 2**(int(np.log(len(dataset))))//4
-    else: 
+        batch_size = 2 ** (int(np.log(len(dataset)))) // 4
+    else:
         batch_size = len(dataset)
-    
+
     dataloader = DataLoader(data_copy, batch_size=batch_size, shuffle=False)
 
     regressor.eval()
@@ -388,9 +394,7 @@ def uncertainty_change(x, y, plot=True):
     logging.info(
         f"Initial Average Uncertainty: {av_uncert_before:.4f}, Final Average Uncertainty: {av_uncer_after:.4f}"
     )
-    return (av_uncer_after - av_uncert_before)
-
-    
+    return av_uncer_after - av_uncert_before
 
 
 # plotting functions
