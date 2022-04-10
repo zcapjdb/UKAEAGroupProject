@@ -8,9 +8,12 @@ pretrained:
         trained: True
 
 # Path to data used for training and validation
-paths:
+data:
     train: /path/to/train/
     validation: /path/to/validation/
+
+save_paths:
+    outputs: /path/to/outputs/
 
 retrain_classifier: False
 retrain_regressor: True
