@@ -1,5 +1,5 @@
 # Load the required data
-import os 
+import os
 from scripts.pipeline_tools import (
     prepare_data,
     regressor_uncertainty,
@@ -28,14 +28,12 @@ coloredlogs.install(level=level)
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
 
-with open('/home/tmadula/UKAEAGroupProject/src/scripts/pipeline_config.yaml') as f:
+with open("/home/tmadula/UKAEAGroupProject/src/scripts/pipeline_config.yaml") as f:
     cfg = yaml.load(f, Loader=yaml.FullLoader)
 
-pretrained = cfg['pretrained']
-paths = cfg['data']
-save_paths = cfg['save_paths']
-
-# RETRAIN_CLASSIFIER = False
+pretrained = cfg["pretrained"]
+paths = cfg["data"]
+save_paths = cfg["save_paths"]
 
 train_data, val_data = prepare_data(
     paths["train"], paths["validation"], target_column="efiitg_gb", target_var="itg"
@@ -64,27 +62,7 @@ for model in pretrained:
 # TODO: Needs to be the true training samples used!!!
 train_sample = train_dataset.sample(10_000)
 
-# # Pass points through the ITG Classifier and return points that pass (what threshold?)
-# valid_sample, misclassified_sample = select_unstable_data(valid_sample, batch_size=100, classifier=models["ITG_class"])
-
-# if RETRAIN_CLASSIFIER == True:
-#     # retrain the classifier on the misclassified points
-#     train_loss, train_acc, val_loss, val_acc = retrain_classifier(
-#         misclassified_sample,
-#         valid_dataset,
-#         models["ITG_class"],
-#         batch_size=100,
-#         epochs=5,
-#         verbose=True,
-    # )
-#TODO: diagnose how well the classifier retraining does
-#TODO: verbose flag a good way to control the amount of output from different functins - not yet implemented
-# From first run through it does seem like training on the misclassified points hurts the validation dataset accuracy quite a bit
-
-# should be added to config file 
 lam = 0.0
-init_epoch = 50
-iterations = 5
 
 train_losses = []
 test_losses = []
@@ -161,7 +139,7 @@ for i in range(cfg["iterations"]):
         learning_rate=1e-3,
         epochs=epochs,
         validation_step=True,
-        lam=0.6,
+        lam=lam,
     )
 
     train_losses.append(train_loss)
@@ -218,15 +196,15 @@ for i in range(cfg["iterations"]):
     n_train_points.append(n_train)
 
 output_dict = {
-    'train_losses': train_losses,
-    'test_losses': test_losses, 
-    'n_train_points': n_train_points,
-    'mse_before': mse_before,
-    'mse_after': mse_after,
-    'd_mse': d_mse, 
-    'd_uncert': d_train_uncert
+    "train_losses": train_losses,
+    "test_losses": test_losses,
+    "n_train_points": n_train_points,
+    "mse_before": mse_before,
+    "mse_after": mse_after,
+    "d_mse": d_mse,
+    "d_uncert": d_train_uncert,
 }
 
-output_path = os.path.join(save_paths['outputs'], f"pipeline_outputs_lam_{lam}.pkl")
-with open(output_path, 'wb') as f:
+output_path = os.path.join(save_paths["outputs"], f"pipeline_outputs_lam_{lam}.pkl")
+with open(output_path, "wb") as f:
     pickle.dump(output_dict, f)
