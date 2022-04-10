@@ -27,7 +27,7 @@ coloredlogs.install(level=level)
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
 
-with open("pipeline_config_jackson.yaml") as f:
+with open("../../pipeline_config_jackson.yaml") as f:
     cfg = yaml.load(f, Loader=yaml.FullLoader)
 
 PRETRAINED = cfg["pretrained"]
@@ -58,7 +58,7 @@ for model in PRETRAINED:
 
 # Sample subset of data to use in active learning (10K for now)
 # TODO: Needs to be the true training samples used!!!
-train_sample = train_dataset.sample(1000)
+train_sample = train_dataset.sample(10_000)
 
 
 train_losses = []
@@ -71,7 +71,7 @@ d_train_uncert = []
 
 for i in range(cfg["iterations"]):
     logging.info(f"Iteration: {i}\n")
-    valid_sample = valid_dataset.sample(1000)
+    valid_sample = valid_dataset.sample(10_000)
 
     # remove the sampled data points from the dataset
     valid_dataset.remove(valid_sample.data.index)
