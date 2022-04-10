@@ -13,7 +13,7 @@ from scripts.Models import ITGDatasetDF, load_model, ITGDataset
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
 from scripts.utils import train_keys
-import yaml 
+import yaml
 
 import coloredlogs, verboselogs, logging
 
@@ -27,7 +27,7 @@ coloredlogs.install(level=level)
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
 
-with open('pipeline_config_jackson.yaml') as f:
+with open("pipeline_config_jackson.yaml") as f:
     cfg = yaml.load(f, Loader=yaml.FullLoader)
 
 PRETRAINED = cfg["pretrained"]
@@ -75,11 +75,13 @@ for i in range(cfg["iterations"]):
 
     # remove the sampled data points from the dataset
     valid_dataset.remove(valid_sample.data.index)
-    
-    valid_sample, misclassified_sample = select_unstable_data(valid_sample, batch_size=100, classifier=models["ITG_class"])
+
+    valid_sample, misclassified_sample = select_unstable_data(
+        valid_sample, batch_size=100, classifier=models["ITG_class"]
+    )
 
     if cfg["retrain_classifier"]:
-    # retrain the classifier on the misclassified points
+        # retrain the classifier on the misclassified points
         train_loss, train_acc, val_loss, val_acc = retrain_classifier(
             misclassified_sample,
             valid_dataset,
@@ -90,20 +92,31 @@ for i in range(cfg["iterations"]):
         )
     # TODO: diagnose how well the classifier retraining does
     # From first run through it does seem like training on the misclassified points hurts the validation dataset accuracy quite a bit
-    
+
     uncertain_datset, uncert_before, data_idx = regressor_uncertainty(
-        valid_sample, models["ITG_reg"], n_runs=cfg["MC_dropout_runs"], keep=cfg["keep_prob"],valid_dataset=valid_dataset
+        valid_sample,
+        models["ITG_reg"],
+        n_runs=cfg["MC_dropout_runs"],
+        keep=cfg["keep_prob"],
+        valid_dataset=valid_dataset,
     )
 
     train_sample_origin, train_uncert_before, train_uncert_idx = regressor_uncertainty(
-        train_sample, models["ITG_reg"], n_runs=cfg["MC_dropout_runs"],train_data=True,
+        train_sample,
+        models["ITG_reg"],
+        n_runs=cfg["MC_dropout_runs"],
+        train_data=True,
     )
 
     train_sample.add(uncertain_datset)
 
-    uncertain_loader = DataLoader(train_sample, batch_size=len(train_sample), shuffle=True)
-    
-    prediction_before, prediction_idx_order = models["ITG_reg"].predict(uncertain_loader)
+    uncertain_loader = DataLoader(
+        train_sample, batch_size=len(train_sample), shuffle=True
+    )
+
+    prediction_before, prediction_idx_order = models["ITG_reg"].predict(
+        uncertain_loader
+    )
 
     # Switching validation dataset to numpy arrays as it is much quicker - should modularise
     x_array = valid_dataset.data[train_keys].values
@@ -115,7 +128,7 @@ for i in range(cfg["iterations"]):
     )
 
     # Retrain Regressor (Further research required)
-    epochs = cfg["initial_epoch"] * (i+1)
+    epochs = cfg["initial_epoch"] * (i + 1)
     train_loss, test_loss = retrain_regressor(
         uncertain_loader,
         valid_loader,
@@ -123,32 +136,55 @@ for i in range(cfg["iterations"]):
         learning_rate=1e-3,
         epochs=epochs,
         validation_step=True,
-        lam = 0.6
+        lam=0.6,
     )
 
     train_losses.append(train_loss)
     test_losses.append(test_loss)
-    
-    prediction_after,_ = models["ITG_reg"].predict(uncertain_loader, prediction_idx_order)
 
-    _, uncert_after,_ = regressor_uncertainty(valid_sample, models["ITG_reg"], n_runs=cfg["MC_dropout_runs"], keep=cfg["keep_prob"], order_idx=data_idx)
-    _, train_uncert_after,_ = regressor_uncertainty(train_sample_origin, models["ITG_reg"], n_runs=cfg["MC_dropout_runs"],order_idx=train_uncert_idx, train_data=True)
-   
+    prediction_after, _ = models["ITG_reg"].predict(
+        uncertain_loader, prediction_idx_order
+    )
+
+    _, uncert_after, _ = regressor_uncertainty(
+        valid_sample,
+        models["ITG_reg"],
+        n_runs=cfg["MC_dropout_runs"],
+        keep=cfg["keep_prob"],
+        order_idx=data_idx,
+    )
+    _, train_uncert_after, _ = regressor_uncertainty(
+        train_sample_origin,
+        models["ITG_reg"],
+        n_runs=cfg["MC_dropout_runs"],
+        order_idx=train_uncert_idx,
+        train_data=True,
+    )
+
     _ = uncertainty_change(x=uncert_before, y=uncert_after)
-    
-    d_train_uncert.append(uncertainty_change(x=train_uncert_before, y=train_uncert_after))
-    
-    _ = mse_change(prediction_before, prediction_after, prediction_idx_order, data_idx, uncertain_loader, [uncert_before, uncert_after])
+
+    d_train_uncert.append(
+        uncertainty_change(x=train_uncert_before, y=train_uncert_after)
+    )
+
+    _ = mse_change(
+        prediction_before,
+        prediction_after,
+        prediction_idx_order,
+        data_idx,
+        uncertain_loader,
+        [uncert_before, uncert_after],
+    )
 
     train_mse_before, train_mse_after, delta_mse = mse_change(
-    prediction_before,
-    prediction_after,
-    prediction_idx_order,
-    train_uncert_idx,
-    uncertain_loader,
-    uncertainties=[train_uncert_before, train_uncert_after],
-    data="train"
-     )
+        prediction_before,
+        prediction_after,
+        prediction_idx_order,
+        train_uncert_idx,
+        uncertain_loader,
+        uncertainties=[train_uncert_before, train_uncert_after],
+        data="train",
+    )
     mse_before.append(train_mse_before)
     mse_after.append(train_mse_after)
     d_mse.append(delta_mse)
