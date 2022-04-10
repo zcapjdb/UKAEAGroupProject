@@ -1,0 +1,23 @@
+# Use pre-trained model or train from scratch
+pretrained:
+    ITG_class:
+        save_path: /path/to/ITG_class_model.pt
+        trained: True
+    ITG_reg:
+        save_path: /path/to/ITG_reg_model.pt
+        trained: True
+
+# Path to data used for training and validation
+paths:
+    train: /path/to/train/
+    validation: /path/to/validation/
+
+retrain_classifier: False
+retrain_regressor: True
+
+# Pipeline parameters
+iterations: 3
+initial_epochs: 25
+MC_dropout_runs: 50
+keep_prob: 0.25 
+
