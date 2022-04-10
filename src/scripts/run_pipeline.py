@@ -1,5 +1,5 @@
 # Load the required data
-
+import os 
 from scripts.pipeline_tools import (
     prepare_data,
     regressor_uncertainty,
@@ -13,7 +13,8 @@ from scripts.Models import ITGDatasetDF, load_model, ITGDataset
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
 from scripts.utils import train_keys
-import yaml 
+import yaml
+import pickle
 
 import coloredlogs, verboselogs, logging
 
@@ -27,11 +28,12 @@ coloredlogs.install(level=level)
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
 
-with open('pipeline_config.yaml') as f:
+with open('/home/tmadula/UKAEAGroupProject/src/scripts/pipeline_config.yaml') as f:
     cfg = yaml.load(f, Loader=yaml.FullLoader)
 
 pretrained = cfg['pretrained']
 paths = cfg['data']
+save_paths = cfg['save_paths']
 
 # RETRAIN_CLASSIFIER = False
 
@@ -49,7 +51,6 @@ valid_dataset = ITGDatasetDF(val_data, target_column="efiitg_gb", target_var="it
 train_dataset.scale(scaler)
 valid_dataset.scale(scaler)
 
-# Load pretrained models
 # Load pretrained models
 print("Loaded the following models:\n")
 models = {}
@@ -81,8 +82,10 @@ train_sample = train_dataset.sample(10_000)
 #TODO: verbose flag a good way to control the amount of output from different functins - not yet implemented
 # From first run through it does seem like training on the misclassified points hurts the validation dataset accuracy quite a bit
 
-init_epoch = 5
-iterations = 1
+# should be added to config file 
+lam = 0.0
+init_epoch = 50
+iterations = 5
 
 train_losses = []
 test_losses = []
@@ -161,5 +164,20 @@ for i in range(iterations):
     mse_before.append(train_mse_before)
     mse_after.append(train_mse_after)
     d_mse.append(delta_mse)
-    print(len(prediction_idx_order))
-    n_train_points.append(len(prediction_idx_order))
+    n_train = len(train_sample_origin)
+    print(n_train)
+    n_train_points.append(n_train)
+
+output_dict = {
+    'train_losses': train_losses,
+    'test_losses': test_losses, 
+    'n_train_points': n_train_points,
+    'mse_before': mse_before,
+    'mse_after': mse_after,
+    'd_mse': d_mse, 
+    'd_uncert': d_train_uncert
+}
+
+output_path = os.path.join(save_paths['outputs'], f"pipeline_outputs_lam_{lam}.pkl")
+with open(output_path, 'wb') as f:
+    pickle.dump(output_dict, f)
