@@ -378,7 +378,7 @@ def train_model(
             validation_losses.append(val_loss)
             val_accuracy.append(val_acc)
 
-            stopping_metric = val_accuracy
+            stopping_metric = -val_accuracy
         
         elif model.type == "regressor":
             logging.debug(f"Epoch: {epoch}")
@@ -391,9 +391,9 @@ def train_model(
             stopping_metric = val_loss
 
         
-        # if validation loss is not lower than the average of the last n losses then stop
+        # if validation metric is not better than the average of the last n losses then stop
         if len(stopping_metric) > patience:
-            if np.mean(stopping_metric[-patience:]) < val_loss:
+            if np.mean(stopping_metric[-patience:]) < stopping_metric[-1]:
                 logging.debug("Early stopping criterion reached")
                 break
 
