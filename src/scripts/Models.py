@@ -188,14 +188,15 @@ class ITG_Regressor(nn.Module):
             index_ordering.append(idx.detach().numpy())
 
         idx_array = np.asarray(index_ordering, dtype=object).flatten()
+        idx_array = idx_array.astype(int)
         pred = np.asarray(pred).flatten()
 
         if order_outputs is not None:
             assert len(order_outputs) == len(idx_array), logging.error(
                 "Index ordering passed is a different length to the number of predictions!"
             )
-            reorder = [np.where(idx_array == i) for i in order_outputs]
-            reorder = np.concatenate(reorder).flatten()
+            reorder = np.array([np.where(idx_array == i) for i in order_outputs]).flatten()
+            # reorder = np.concatenate(reorder).flatten()
 
             pred = pred[reorder]
             real_idx = idx_array[reorder]

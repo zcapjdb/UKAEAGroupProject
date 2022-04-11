@@ -62,7 +62,8 @@ for model in pretrained:
 # TODO: Needs to be the true training samples used!!!
 train_sample = train_dataset.sample(10_000)
 
-lam = 0.0
+lam = 1.0
+logging.info(f"Training for lambda: {lam}")
 
 train_losses = []
 test_losses = []
@@ -74,7 +75,7 @@ d_train_uncert = []
 
 for i in range(cfg["iterations"]):
     logging.info(f"Iteration: {i}\n")
-    valid_sample = valid_dataset.sample(1000)
+    valid_sample = valid_dataset.sample(10_000)
 
     # remove the sampled data points from the dataset
     valid_dataset.remove(valid_sample.data.index)
@@ -131,7 +132,7 @@ for i in range(cfg["iterations"]):
     )
 
     # Retrain Regressor (Further research required)
-    epochs = cfg["initial_epoch"] * (i + 1)
+    epochs = cfg["initial_epochs"] * (i + 1)
     train_loss, test_loss = retrain_regressor(
         uncertain_loader,
         valid_loader,
