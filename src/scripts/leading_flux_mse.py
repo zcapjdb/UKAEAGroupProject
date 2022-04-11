@@ -33,6 +33,7 @@ PARAMS = {
 accelerator = "gpu"
 num_gpu = 3
 
+
 def main():
     leading_fluxes = ["efeetg_gb", "efetem_gb", "efiitg_gb"]
 
@@ -52,17 +53,17 @@ def main():
             model = QLKNN_Big(n_input=15, **PARAMS, batch_size=batch_size)
 
             train_loader = DataLoader(
-            train_data,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=10,
+                train_data,
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=10,
             )
 
             val_loader = DataLoader(
-            val_data,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=10,
+                val_data,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=10,
             )
 
             progress = TQDMProgressBar(refresh_rate=250)
@@ -92,6 +93,7 @@ def main():
             )
 
             trainer.fit(model, train_loader, val_loader)
+
 
 if __name__ == "__main__":
     main()

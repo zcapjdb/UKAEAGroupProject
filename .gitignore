@@ -135,3 +135,5 @@ logs/
 lightning_logs/
 submit.sh
 data/*
+*.png
+*.pt

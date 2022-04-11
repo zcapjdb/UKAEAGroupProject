@@ -57,11 +57,11 @@ def main():
 
         drop_data = scaler.fit_transform(drop_data)
 
-        x_train_data = drop_data[:,:-1]
-        y_train_data = drop_data[:,-1:]
-       
+        x_train_data = drop_data[:, :-1]
+        y_train_data = drop_data[:, -1:]
+
         assert x_train_data.shape[0] == y_train_data.shape[0]
-        assert x_train_data.shape[1] == len(joint_keys)-1
+        assert x_train_data.shape[1] == len(joint_keys) - 1
 
         n = 3_000
         idx = np.random.permutation(n)
@@ -75,10 +75,10 @@ def main():
         x_min0, x_max0 = x_train_data.min(), x_train_data.max()
 
         # Gaussian Process and Model fit:
-        print('Training Gaussian Process....')
+        print("Training Gaussian Process....")
         gp = SingleTaskGP(x_train_data, y_train_data)
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
-        fit_gpytorch_model(mll);
+        fit_gpytorch_model(mll)
 
         # Testing trained gaussian process:
         test_data = pd.read_pickle("/home/tmadula/data/UKAEA/valid_data_clipped.pkl")
@@ -86,15 +86,13 @@ def main():
 
         drop_data_test = scaler.transform(drop_data_test)
 
-        x_test_data = drop_data_test[:,:-1]
-        y_test_data = drop_data_test[:,-1:]
+        x_test_data = drop_data_test[:, :-1]
+        y_test_data = drop_data_test[:, -1:]
 
         # x_test_data = scaler.transform(x_test_data)
 
-
         assert x_test_data.shape[0] == y_test_data.shape[0]
-        assert x_test_data.shape[1] == len(joint_keys)-1
-
+        assert x_test_data.shape[1] == len(joint_keys) - 1
 
         x_test_data = torch.tensor(x_test_data)
         y_test_data = torch.tensor(y_test_data)
@@ -105,30 +103,33 @@ def main():
         x_min0, x_max0 = x_test_data.min(), x_test_data.max()
 
         # Get into evaluation (predictive posterior) mode
-        print('Evaluating on validation data....')
+        print("Evaluating on validation data....")
         gp.eval()
         gp.likelihood.eval()
 
-
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
-            
+
             observed_pred = gp.likelihood(gp(x_test_data))
-            
+
             mean = observed_pred.mean
             variance = observed_pred.variance
-        
+
         output = mean.detach().numpy()
         out_var = variance.detach().numpy().squeeze()
         output = output.squeeze()
 
-        predictions_dict[target] = {'n': n,'means': output, 'variances': out_var, 'scaler': scaler}
-        
-    file_name = f'/home/tmadula/submit/outputs/gp_outputs_{n}.pkl'
-    
+        predictions_dict[target] = {
+            "n": n,
+            "means": output,
+            "variances": out_var,
+            "scaler": scaler,
+        }
+
+    file_name = f"/home/tmadula/submit/outputs/gp_outputs_{n}.pkl"
+
     with open(file_name, "wb") as file:
-                pickle.dump(predictions_dict, file)
+        pickle.dump(predictions_dict, file)
+
 
 if __name__ == "__main__":
     main()
-
-

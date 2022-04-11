@@ -4,10 +4,7 @@ from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
 from pytorch_lightning.plugins import DDPPlugin
 
-from scripts.AutoEncoder import (
-    VariationalAutoencoder,
-    AutoEncoderDataset
-)
+from scripts.AutoEncoder import VariationalAutoencoder, AutoEncoderDataset
 from scripts.utils import train_keys, target_keys, prepare_model, callbacks
 
 hyper_parameters = {
@@ -48,8 +45,8 @@ def main():
 
     # Create model
     model = VariationalAutoencoder(
-        latent_dims=hyper_parameters['latent_dims'],
-         learning_rate=hyper_parameters['learning_rate']
+        latent_dims=hyper_parameters["latent_dims"],
+        learning_rate=hyper_parameters["learning_rate"],
     )
     print(model)
 

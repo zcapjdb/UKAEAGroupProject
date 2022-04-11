@@ -1,0 +1,13 @@
+pretrained:
+  ITG_class:
+    trained: True 
+    save_path: "/home/tmadula/UKAEAGroupProject/src/notebooks/classifier_model.pt"
+  ITG_reg: 
+    trained: True 
+    save_path: "/home/tmadula/UKAEAGroupProject/src/notebooks/regression_model.pt"
+
+data:
+  train: "/home/tmadula/data/UKAEA/train_data_clipped.pkl"
+  validation: "/home/tmadula/data/UKAEA/valid_data_clipped.pkl"
+plots:
+  save_path: "/Users/thandikiremadula/Desktop/test_plots"

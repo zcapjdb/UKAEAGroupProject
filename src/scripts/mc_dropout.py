@@ -30,6 +30,7 @@ def enable_dropout(model):
         if m.__class__.__name__.startswith("Dropout"):
             m.train()
 
+
 targets = target_keys[:5]
 for target in targets:
     print(f"Evaluating on {target}")
@@ -59,7 +60,7 @@ for target in targets:
     for i in tqdm(range(100)):
         step_list = []
         for step, (x, y) in enumerate(test_loader):
-            if len(x) < 10_000: # don't evaluate on the last batch due to smaller size
+            if len(x) < 10_000:  # don't evaluate on the last batch due to smaller size
                 break
             predictions = eval_model(x).detach().numpy()
             step_list.append(predictions)
