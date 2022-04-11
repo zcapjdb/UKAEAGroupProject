@@ -9,6 +9,7 @@ from scripts.pipeline_tools import (
     pandas_to_numpy_data,
     uncertainty_change,
     mse_change,
+    plot_classifier_retraining
 )
 from scripts.Models import (
     ITGDatasetDF, 
@@ -84,6 +85,13 @@ mse_after = []
 d_mse = []
 d_train_uncert = []
 
+class_train_loss = []
+class_val_loss = []
+class_missed_loss = []
+class_train_acc = []
+class_val_acc = []
+class_missed_acc = []
+
 for i in range(cfg["iterations"]):
     logging.info(f"Iteration: {i+1}\n")
     valid_sample = valid_dataset.sample(10_000)
@@ -99,7 +107,7 @@ for i in range(cfg["iterations"]):
 
     if cfg["retrain_classifier"]:
         # retrain the classifier on the misclassified points
-        train_loss, train_acc, val_loss, val_acc = retrain_classifier(
+        train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc = retrain_classifier(
             misclassified_sample,
             train_sample,
             valid_dataset,
@@ -109,6 +117,18 @@ for i in range(cfg["iterations"]):
             lam=lam,
             patience=cfg["patience"]
         )
+
+        save_path = os.path.join(SAVE_PATHS["plots"], f"Iteration_{i+1}")
+        plot_classifier_retraining(
+            train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc, save_path
+        )
+
+        class_train_loss.append(train_loss)
+        class_val_loss.append(val_loss)
+        class_missed_loss.append(missed_loss)
+        class_train_acc.append(train_acc)
+        class_val_acc.append(val_acc)
+        class_missed_acc.append(missed_acc)
     # TODO: diagnose how well the classifier retraining does
     # From first run through it does seem like training on the misclassified points hurts the validation dataset accuracy quite a bit
 
@@ -215,6 +235,12 @@ output_dict = {
     "mse_after": mse_after,
     "d_mse": d_mse,
     "d_uncert": d_train_uncert,
+    "class_train_loss": class_train_loss,
+    "class_val_loss": class_val_loss,
+    "class_missed_loss": class_missed_loss,
+    "class_train_acc": class_train_acc,
+    "class_val_acc": class_val_acc,
+    "class_missed_acc": class_missed_acc,
 }
 
 if not os.path.exists(SAVE_PATHS["outputs"]):

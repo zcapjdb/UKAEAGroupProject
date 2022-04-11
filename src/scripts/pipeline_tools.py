@@ -120,7 +120,8 @@ def retrain_classifier(
     patience=None,
 ):
     logging.info("Retraining classifier...\n")
-    logging.log(15, f"Training on {len(misclassified_dataset)} points")
+    data_size = len(misclassified_dataset) + len(training_dataset)
+    logging.log(15, f"Training on {data_size} points")
 
     train = copy.deepcopy(training_dataset)
     train.add(misclassified_dataset)
@@ -180,7 +181,7 @@ def retrain_classifier(
                 logging.debug("Early stopping criterion reached")
                 break
 
-    return train_loss, train_acc, val_loss, val_acc
+    return train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc
 
 
 # Regressor tools
@@ -543,3 +544,28 @@ def plot_mse_change(
 
     if save_plots:
         plt.savefig(f"{save_prefix}_mse_after.png", dpi=300)
+
+def plot_classifier_retraining(train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc, save_path=None):
+    plt.figure()
+    plt.plot(train_loss, label="Training Loss")
+    plt.plot(val_loss, label="Validation Loss")
+    plt.plot(missed_loss, label="Misclassified points Loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.legend()
+
+    if save_path is not None:
+        plt.savefig(f"{save_path}_classifier_loss_.png", dpi=300)
+    plt.clf()
+
+    plt.figure()
+    plt.plot(train_acc, label="Training Accuracy")
+    plt.plot(val_acc, label="Validation Accuracy")
+    plt.plot(missed_acc, label="Misclassified points Accuracy")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy")
+    plt.legend()
+
+    if save_path is not None:
+        plt.savefig(f"{save_path}_classifier_accuracy_.png", dpi=300)
+    plt.clf()
