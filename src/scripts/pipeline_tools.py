@@ -428,7 +428,7 @@ def uncertainty_change(x, y, plot=True):
     )
 
     logging.info(
-        f"Initial Average Uncertainty: {av_uncert_before:.4f}, Final Average Uncertainty: {av_uncer_after:.4f}"
+        f"Initial Average Uncertainty: {av_uncert_before:.4f}, Final Average Uncertainty: {av_uncer_after:.4f}\n"
     )
     return av_uncer_after - av_uncert_before
 

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
+import scripts.pipeline_tools as tools
 
 import numpy as np
 from sklearn.compose import ColumnTransformer
@@ -11,7 +12,7 @@ from tqdm.auto import tqdm
 import logging
 
 # Class definitions
-class ITG_Classifier(nn.Module):
+class Classifier(nn.Module):
     def __init__(self):
         super().__init__()
         self.type = "classifier"
@@ -98,7 +99,7 @@ class ITG_Classifier(nn.Module):
         return average_loss, correct
 
 
-class ITG_Regressor(nn.Module):
+class Regressor(nn.Module):
     def __init__(self):
         super().__init__()
         self.type = "regressor"
@@ -347,16 +348,29 @@ def weight_reset(m):
 
 def train_model(
     model,
-    train_loader,
-    val_loader,
+    train_dataset,
+    val_dataset,
     epochs,
-    learning_rate,
-    weight_decay=None,
+    learning_rate = 0.001,
+    weight_decay=True,
     patience=None,
     checkpoint=None,
     checkpoint_path=None,
+    save_path=None,
+    train_batch_size=None,
+    val_batch_size=None,
 ):
 
+    if train_batch_size is None:
+        train_batch_size = int(len(train_dataset) / 10)
+    if val_batch_size is None:
+        val_batch_size = int(len(val_dataset) / 10)
+    
+    train_loader = DataLoader(
+        train_dataset, batch_size=train_batch_size, shuffle=True
+    )
+
+    val_loader = tools.pandas_to_numpy_data(val_dataset, val_batch_size)
     # Initialise the optimiser
     if weight_decay:
         opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
@@ -387,7 +401,7 @@ def train_model(
             validation_losses.append(val_loss)
             val_accuracy.append(val_acc)
 
-            stopping_metric = -val_accuracy
+            stopping_metric = -np.asarray(val_accuracy)
 
         elif model.type == "regressor":
             logging.debug(f"Epoch: {epoch}")
@@ -397,7 +411,7 @@ def train_model(
             val_loss = model.validation_step(val_loader)
             validation_losses.append(validation_losses)
 
-            stopping_metric = val_loss
+            stopping_metric = np.asarray(val_loss)
 
         # if validation metric is not better than the average of the last n losses then stop
         if len(stopping_metric) > patience:
@@ -421,22 +435,25 @@ def train_model(
 
             if epoch % checkpoint == 0:
                 torch.save(state, f"{checkpoint_path}_epoch_{epoch}.pt")
+    
+    if save_path:
+        torch.save(model.state_dict(), save_path)
 
     if model.type == "classifier":
-        return losses, train_accuracy, validation_losses, val_accuracy
+        return model, [losses, train_accuracy, validation_losses, val_accuracy]
 
     elif model.type == "regressor":
-        return losses, validation_losses
+        return model, [losses, validation_losses]
 
 
 def load_model(model, save_path):
     logging.info(f"Model Loaded: {model}")
-    if model == "ITG_class":
-        classifier = ITG_Classifier()
+    if model == "Classifier":
+        classifier = Classifier()
         classifier.load_state_dict(torch.load(save_path))
         return classifier
 
-    elif model == "ITG_reg":
-        regressor = ITG_Regressor()
+    elif model == "Regressor":
+        regressor = Regressor()
         regressor.load_state_dict(torch.load(save_path))
         return regressor

@@ -66,28 +66,15 @@ for size in training_sample_sizes:
         valid_size=1_000,
     )
 
-    train_loader = DataLoader(
-        train_dataset, batch_size=512, shuffle=True, num_workers=4
-    )
-
     logging.info("Training on random subset of data")
     random_dataset = copy.deepcopy(train_full_dataset)
     random_dataset.data = random_dataset.data.sample(size, replace=False)
-    print(len(random_dataset))
-    random_loader = DataLoader(
-        random_dataset, batch_size=512, shuffle=True, num_workers=4
-    )
 
     random_classifier = models.ITG_Classifier()
-    (
-        random_train_loss,
-        random_train_acc,
-        random_val_loss,
-        random_val_acc,
-    ) = models.train_model(
+    random_losses = models.train_model(
         random_classifier,
-        random_loader,
-        valid_loader,
+        random_dataset,
+        valid_dataset,
         epochs=150,
         learning_rate=0.001,
         weight_decay=1e-4,
@@ -96,12 +83,14 @@ for size in training_sample_sizes:
         checkpoint=10,
     )
 
+    random_train_loss, random_train_acc, random_val_loss, random_val_acc = random_losses
+
     classifier = models.ITG_Classifier()
     logging.info("Training on autoencoder sampled data")
-    train_loss, train_acc, val_loss, val_acc = models.train_model(
+    _, losses = models.train_model(
         classifier,
-        train_loader,
-        valid_loader,
+        train_dataset,
+        valid_dataset,
         epochs=150,
         learning_rate=0.001,
         weight_decay=1e-4,
@@ -109,6 +98,8 @@ for size in training_sample_sizes:
         checkpoint_path=f"./checkpoints/size_{size}_v2",
         checkpoint=10,
     )
+
+    train_loss, train_acc, val_loss, val_acc = losses
 
     # Plot the training loss and validation loss
     plt.figure()

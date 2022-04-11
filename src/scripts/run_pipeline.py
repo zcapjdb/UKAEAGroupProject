@@ -10,7 +10,14 @@ from scripts.pipeline_tools import (
     uncertainty_change,
     mse_change,
 )
-from scripts.Models import ITGDatasetDF, load_model, ITGDataset
+from scripts.Models import (
+    ITGDatasetDF, 
+    ITGDataset, 
+    load_model, 
+    train_model, 
+    Classifier, 
+    Regressor
+)
 from torch.utils.data import DataLoader
 from scripts.utils import train_keys
 import yaml
@@ -31,7 +38,6 @@ with open(args.config) as f:
 verboselogs.install()
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=cfg["logging_level"])
-
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
 
@@ -42,6 +48,9 @@ SAVE_PATHS = cfg["save_paths"]
 train_dataset, valid_dataset = prepare_data(
     PATHS["train"], PATHS["validation"], target_column="efiitg_gb", target_var="itg"
 )
+# Sample subset of data to use in active learning (10K for now)
+# TODO: Needs to be the true training samples used!!!
+train_sample = train_dataset.sample(10_000)
 
 # Load pretrained models
 logging.info("Loaded the following models:\n")
@@ -51,11 +60,18 @@ for model in PRETRAINED:
         trained_model = load_model(model, PRETRAINED[model]["save_path"])
         models[model] = trained_model
 
-# Train untrained models (may not be needed)
+    else:
+        logging.info(f"{model} not trained - training now")
+        models[model] = Classifier() if model == "Classifier" else Regressor()
+        models[model], _ = train_model(
+            models[model],
+            train_sample,
+            valid_dataset,
+            save_path=PRETRAINED[model]["save_path"],
+            epochs=cfg["train_epochs"],
+            patience=cfg["train_patience"]
+        )
 
-# Sample subset of data to use in active learning (10K for now)
-# TODO: Needs to be the true training samples used!!!
-train_sample = train_dataset.sample(10_000)
 
 lam = cfg["lambda"]
 logging.info(f"Training for lambda: {lam}")
@@ -76,7 +92,7 @@ for i in range(cfg["iterations"]):
     valid_dataset.remove(valid_sample.data.index)
 
     valid_sample, misclassified_sample = select_unstable_data(
-        valid_sample, batch_size=100, classifier=models["ITG_class"]
+        valid_sample, batch_size=100, classifier=models["Classifier"]
     )
 
     epochs = cfg["initial_epoch"] * (i + 1)
@@ -87,7 +103,7 @@ for i in range(cfg["iterations"]):
             misclassified_sample,
             train_sample,
             valid_dataset,
-            models["ITG_class"],
+            models["Classifier"],
             batch_size=100,
             epochs=epochs,
             lam=lam,
@@ -96,9 +112,9 @@ for i in range(cfg["iterations"]):
     # TODO: diagnose how well the classifier retraining does
     # From first run through it does seem like training on the misclassified points hurts the validation dataset accuracy quite a bit
 
-    uncertain_datset, uncert_before, data_idx = regressor_uncertainty(
+    uncertain_dataset, uncert_before, data_idx = regressor_uncertainty(
         valid_sample,
-        models["ITG_reg"],
+        models["Regressor"],
         n_runs=cfg["MC_dropout_runs"],
         keep=cfg["keep_prob"],
         valid_dataset=valid_dataset,
@@ -106,18 +122,18 @@ for i in range(cfg["iterations"]):
 
     train_sample_origin, train_uncert_before, train_uncert_idx = regressor_uncertainty(
         train_sample,
-        models["ITG_reg"],
+        models["Regressor"],
         n_runs=cfg["MC_dropout_runs"],
         train_data=True,
     )
 
-    train_sample.add(uncertain_datset)
+    train_sample.add(uncertain_dataset)
 
     uncertain_loader = DataLoader(
         train_sample, batch_size=len(train_sample), shuffle=True
     )
 
-    prediction_before, prediction_idx_order = models["ITG_reg"].predict(
+    prediction_before, prediction_idx_order = models["Regressor"].predict(
         uncertain_loader
     )
 
@@ -129,8 +145,8 @@ for i in range(cfg["iterations"]):
     train_loss, test_loss = retrain_regressor(
         uncertain_loader,
         valid_loader_modified,
-        models["ITG_reg"],
-        learning_rate=1e-3,
+        models["Regressor"],
+        learning_rate=cfg["learning_rate"],
         epochs=epochs,
         validation_step=True,
         lam=lam,
@@ -140,27 +156,29 @@ for i in range(cfg["iterations"]):
     train_losses.append(train_loss)
     test_losses.append(test_loss)
 
-    prediction_after, _ = models["ITG_reg"].predict(
+    prediction_after, _ = models["Regressor"].predict(
         uncertain_loader, prediction_idx_order
     )
 
     _, uncert_after, _ = regressor_uncertainty(
         valid_sample,
-        models["ITG_reg"],
+        models["Regressor"],
         n_runs=cfg["MC_dropout_runs"],
         keep=cfg["keep_prob"],
         order_idx=data_idx,
     )
     _, train_uncert_after, _ = regressor_uncertainty(
         train_sample_origin,
-        models["ITG_reg"],
+        models["Regressor"],
         n_runs=cfg["MC_dropout_runs"],
         order_idx=train_uncert_idx,
         train_data=True,
     )
 
+    logging.info("Change in uncertainty for most uncertain data points:")
     _ = uncertainty_change(x=uncert_before, y=uncert_after)
 
+    logging.info("Change in uncertainty for training data:")
     d_train_uncert.append(
         uncertainty_change(x=train_uncert_before, y=train_uncert_after)
     )
