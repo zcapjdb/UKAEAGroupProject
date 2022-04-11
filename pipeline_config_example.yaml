@@ -1,9 +1,9 @@
 # Use pre-trained model or train from scratch
 pretrained:
-    ITG_class:
+    Classifier:
         save_path: /path/to/ITG_class_model.pt
         trained: True
-    ITG_reg:
+    Regressor:
         save_path: /path/to/ITG_reg_model.pt
         trained: True
 
@@ -23,9 +23,18 @@ save_paths:
 retrain_classifier: False
 retrain_regressor: True
 
+logging_level: DEBUG
+
 # Pipeline parameters
 iterations: 3
 initial_epochs: 25
 MC_dropout_runs: 50
 keep_prob: 0.25 
+patience: 25
+lambda: 0.6
+learning_rate: 0.001
+
+# if training models from scratch, the hyperparameters below are used
+train_epochs: 25
+train_patience: 33
 

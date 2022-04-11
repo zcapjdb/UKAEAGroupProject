@@ -4,6 +4,7 @@ from turtle import color
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from sklearn.preprocessing import StandardScaler
 from tqdm.auto import tqdm
 
 import numpy as np
@@ -15,7 +16,7 @@ import logging
 from scripts.utils import train_keys
 from scripts.Models import ITGDatasetDF, ITGDataset
 
-logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 # Data preparation functions
 def prepare_data(
@@ -42,7 +43,20 @@ def prepare_data(
     train_data[target_var] = np.where(train_data[target_column] != 0, 1, 0)
     validation_data[target_var] = np.where(validation_data[target_column] != 0, 1, 0)
 
-    return train_data, validation_data
+    scaler = StandardScaler()
+    scaler.fit_transform(train_data.drop([target_var], axis=1))
+
+    train_dataset = ITGDatasetDF(
+        train_data, target_column="efiitg_gb", target_var="itg"
+    )
+    valid_dataset = ITGDatasetDF(
+        validation_data, target_column="efiitg_gb", target_var="itg"
+    )
+
+    train_dataset.scale(scaler)
+    valid_dataset.scale(scaler)
+
+    return train_dataset, valid_dataset
 
 
 # classifier tools
@@ -111,21 +125,19 @@ def retrain_classifier(
     patience=None,
 ):
     logging.info("Retraining classifier...\n")
-    logging.log(15, f"Training on {len(misclassified_dataset)} points")
+    data_size = len(misclassified_dataset) + len(training_dataset)
+    logging.log(15, f"Training on {data_size} points")
 
     train = copy.deepcopy(training_dataset)
     train.add(misclassified_dataset)
 
     # create data loaders
-    train_loader = DataLoader(
-        train, batch_size=batch_size, shuffle=True
-    )
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
 
     missed_loader = DataLoader(
         misclassified_dataset, batch_size=batch_size, shuffle=True
     )
 
-    #TODO:  this is still broken
     valid_loader = pandas_to_numpy_data(valid_dataset)
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
@@ -138,13 +150,14 @@ def retrain_classifier(
     opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate)
     # create scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        opt, mode="min", factor=0.5, patience=0.5*patience
+        opt, mode="min", factor=0.5, patience=0.5 * patience
     )
     train_loss = []
     train_acc = []
     val_loss = []
     val_acc = []
-
+    missed_loss = []
+    missed_acc = []
 
     for epoch in range(epochs):
 
@@ -165,14 +178,16 @@ def retrain_classifier(
             val_acc.append(validation_accuracy)
 
             logging.debug(f"Evaluating on just the misclassified points")
-            missed_loss, missed_acc = classifier.validation_step(missed_loader)
+            miss_loss, miss_acc = classifier.validation_step(missed_loader)
+            missed_loss.append(miss_loss)
+            missed_acc.append(miss_acc)
 
         if len(val_loss) > patience:
             if np.mean(val_acc[-patience:]) > val_acc[-1]:
                 logging.debug("Early stopping criterion reached")
                 break
 
-    return train_loss, train_acc, val_loss, val_acc
+    return train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc
 
 
 # Regressor tools
@@ -206,7 +221,7 @@ def retrain_regressor(
     # instantiate optimiser
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        opt, mode="min", factor=0.5, patience=0.5*patience
+        opt, mode="min", factor=0.5, patience=0.5 * patience
     )
     train_loss = []
     val_loss = []
@@ -341,21 +356,21 @@ def regressor_uncertainty(
     else:
         return data_copy, out_std, idx_array
 
+
 def pandas_to_numpy_data(dataset, batch_size=None):
 
     x_array = dataset.data[train_keys].values
-    y_array = dataset.data[dataset.target].values
-    z_array = dataset.data[dataset.label].values
-    
+    y_array = dataset.data[dataset.label].values
+    z_array = dataset.data[dataset.target].values
+
     numpy_dataset = ITGDataset(x_array, y_array, z_array)
 
     if batch_size is None:
         batch_size = int(0.1 * len(y_array))
 
-    numpy_loader = DataLoader(
-        numpy_dataset, batch_size=batch_size, shuffle=True
-    )
+    numpy_loader = DataLoader(numpy_dataset, batch_size=batch_size, shuffle=True)
     return numpy_loader
+
 
 # Active Learning diagonistic functions
 def get_mse(y_hat, y):
@@ -426,7 +441,7 @@ def uncertainty_change(x, y, plot=False):
     )
 
     logging.info(
-        f"Initial Average Uncertainty: {av_uncert_before:.4f}, Final Average Uncertainty: {av_uncer_after:.4f}"
+        f"Initial Average Uncertainty: {av_uncert_before:.4f}, Final Average Uncertainty: {av_uncer_after:.4f}\n"
     )
     return av_uncer_after - av_uncert_before
 
@@ -552,6 +567,7 @@ def plot_mse_change(
     plt.legend()
 
     if save_plots:
+<<<<<<< HEAD
         filename = f"{save_prefix}_mse_after_it_{iteration}.png"
         save_dest = os.path.join(save_path,f"{lam}")
         if os.path.exists(save_dest):
@@ -561,3 +577,34 @@ def plot_mse_change(
             save_dest = os.path.join(save_dest,filename)
 
         plt.savefig(save_dest, dpi=300)
+=======
+        plt.savefig(f"{save_prefix}_mse_after.png", dpi=300)
+
+
+def plot_classifier_retraining(
+    train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc, save_path=None
+):
+    plt.figure()
+    plt.plot(train_loss, label="Training Loss")
+    plt.plot(val_loss, label="Validation Loss")
+    plt.plot(missed_loss, label="Misclassified points Loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.legend()
+
+    if save_path is not None:
+        plt.savefig(f"{save_path}_classifier_loss_.png", dpi=300)
+    plt.clf()
+
+    plt.figure()
+    plt.plot(train_acc, label="Training Accuracy")
+    plt.plot(val_acc, label="Validation Accuracy")
+    plt.plot(missed_acc, label="Misclassified points Accuracy")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy")
+    plt.legend()
+
+    if save_path is not None:
+        plt.savefig(f"{save_path}_classifier_accuracy_.png", dpi=300)
+    plt.clf()
+>>>>>>> 8f78c9f77359775e5c6efb1f16ad2dde970ed37f
