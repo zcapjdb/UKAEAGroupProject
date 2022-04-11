@@ -17,6 +17,9 @@ save_paths:
   plots: /path/to/save/plots
   outputs: /path/to/save/outputs
 
+save_paths:
+    outputs: /path/to/outputs/
+
 retrain_classifier: False
 retrain_regressor: True
 

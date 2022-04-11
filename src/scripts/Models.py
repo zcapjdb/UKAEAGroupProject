@@ -192,6 +192,10 @@ class ITG_Regressor(nn.Module):
         pred = np.asarray(pred).flatten()
 
         if order_outputs is not None:
+            assert len(np.unique(order_outputs)) == len(order_outputs), logging.error(
+                "The order_outputs array must be unique - duplicate indices found"
+            )
+
             assert len(order_outputs) == len(idx_array), logging.error(
                 "Index ordering passed is a different length to the number of predictions!"
             )

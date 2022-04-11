@@ -28,7 +28,8 @@ coloredlogs.install(level=level)
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
 
-with open("/home/tmadula/UKAEAGroupProject/src/scripts/pipeline_config.yaml") as f:
+
+with open("../../pipeline_config_jackson.yaml") as f:
     cfg = yaml.load(f, Loader=yaml.FullLoader)
 
 pretrained = cfg["pretrained"]
