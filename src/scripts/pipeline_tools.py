@@ -3,6 +3,7 @@ from turtle import color
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from sklearn.preprocessing import StandardScaler
 from tqdm.auto import tqdm
 
 import numpy as np
@@ -41,7 +42,16 @@ def prepare_data(
     train_data[target_var] = np.where(train_data[target_column] != 0, 1, 0)
     validation_data[target_var] = np.where(validation_data[target_column] != 0, 1, 0)
 
-    return train_data, validation_data
+    scaler = StandardScaler()
+    scaler.fit_transform(train_data.drop([target_var], axis=1))
+
+    train_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="itg")
+    valid_dataset = ITGDatasetDF(validation_data, target_column="efiitg_gb", target_var="itg")
+
+    train_dataset.scale(scaler)
+    valid_dataset.scale(scaler)
+
+    return train_dataset, valid_dataset
 
 
 # classifier tools

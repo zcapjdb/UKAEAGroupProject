@@ -58,7 +58,7 @@ for size in training_sample_sizes:
     train_path = f"/unix/atlastracking/jbarr/sampled_data_{size}.pkl"
 
     logging.info("Loading sample data")
-    train, _ = tools.prepare_data(
+    train_dataset, _ = tools.prepare_data(
         train_path,
         valid_path,
         target_column="efiitg_gb",
@@ -66,12 +66,6 @@ for size in training_sample_sizes:
         valid_size=1_000,
     )
 
-    scaler = StandardScaler()
-    scaler.fit_transform(train.drop(["itg"], axis=1))
-    train_dataset = models.ITGDatasetDF(
-        train, target_column="efiitg_gb", target_var="itg"
-    )
-    train_dataset.scale(scaler)
     train_loader = DataLoader(
         train_dataset, batch_size=512, shuffle=True, num_workers=4
     )

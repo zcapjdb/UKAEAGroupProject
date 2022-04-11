@@ -11,7 +11,6 @@ from scripts.pipeline_tools import (
     mse_change,
 )
 from scripts.Models import ITGDatasetDF, load_model, ITGDataset
-from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
 from scripts.utils import train_keys
 import yaml
@@ -40,18 +39,9 @@ PRETRAINED = cfg["pretrained"]
 PATHS = cfg["data"]
 SAVE_PATHS = cfg["save_paths"]
 
-train_data, val_data = prepare_data(
+train_dataset, valid_dataset = prepare_data(
     PATHS["train"], PATHS["validation"], target_column="efiitg_gb", target_var="itg"
 )
-
-scaler = StandardScaler()
-scaler.fit_transform(train_data.drop(["itg"], axis=1))
-
-train_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="itg")
-valid_dataset = ITGDatasetDF(val_data, target_column="efiitg_gb", target_var="itg")
-
-train_dataset.scale(scaler)
-valid_dataset.scale(scaler)
 
 # Load pretrained models
 logging.info("Loaded the following models:\n")
