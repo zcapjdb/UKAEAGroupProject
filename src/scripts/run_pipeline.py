@@ -28,7 +28,7 @@ coloredlogs.install(level=level)
 
 
 
-with open("../../pipeline_config_jackson.yaml") as f:
+with open("/home/tmadula/UKAEAGroupProject/src/scripts/pipeline_config.yaml") as f:
     cfg = yaml.load(f, Loader=yaml.FullLoader)
 
 pretrained = cfg["pretrained"]
@@ -62,7 +62,7 @@ for model in pretrained:
 # TODO: Needs to be the true training samples used!!!
 train_sample = train_dataset.sample(10_000)
 
-lam = 1.0
+lam = 0.2
 logging.info(f"Training for lambda: {lam}")
 
 train_losses = []
@@ -72,6 +72,7 @@ mse_before = []
 mse_after = []
 d_mse = []
 d_train_uncert = []
+d_novel_uncert = []
 
 for i in range(cfg["iterations"]):
     logging.info(f"Iteration: {i+1}\n")
@@ -84,7 +85,7 @@ for i in range(cfg["iterations"]):
         valid_sample, batch_size=100, classifier=models["ITG_class"]
     )
 
-    epochs = cfg["initial_epoch"] * (i + 1)
+    epochs = cfg["initial_epochs"] * (i + 1)
 
     if cfg["retrain_classifier"]:
         # retrain the classifier on the misclassified points
@@ -139,7 +140,7 @@ for i in range(cfg["iterations"]):
         epochs=epochs,
         validation_step=True,
         lam=lam,
-        patience=25
+        patience=10
     )
 
     train_losses.append(train_loss)
@@ -164,7 +165,7 @@ for i in range(cfg["iterations"]):
         train_data=True,
     )
 
-    _ = uncertainty_change(x=uncert_before, y=uncert_after)
+    d_novel_uncert.append(uncertainty_change(x=uncert_before, y=uncert_after))
 
     d_train_uncert.append(
         uncertainty_change(x=train_uncert_before, y=train_uncert_after)
@@ -177,6 +178,9 @@ for i in range(cfg["iterations"]):
         data_idx,
         uncertain_loader,
         [uncert_before, uncert_after],
+        save_path=save_paths['plots'], 
+        iteration=(i+1), 
+        lam = lam
     )
 
     train_mse_before, train_mse_after, delta_mse = mse_change(
@@ -187,6 +191,9 @@ for i in range(cfg["iterations"]):
         uncertain_loader,
         uncertainties=[train_uncert_before, train_uncert_after],
         data="train",
+        save_path=save_paths['plots'], 
+        iteration=(i+1),
+        lam = lam
     )
     mse_before.append(train_mse_before)
     mse_after.append(train_mse_after)
@@ -203,6 +210,7 @@ output_dict = {
     "mse_after": mse_after,
     "d_mse": d_mse,
     "d_uncert": d_train_uncert,
+    "d_novel_uncert": d_novel_uncert
 }
 
 if not os.path.exists(save_paths["outputs"]):

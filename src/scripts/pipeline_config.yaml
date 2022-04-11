@@ -19,6 +19,6 @@ retrain_regressor: True
 
 # Pipeline parameters
 iterations: 5
-initial_epochs: 50
-MC_dropout_runs: 15
+initial_epochs: 200
+MC_dropout_runs: 50
 keep_prob: 0.25 

@@ -1,3 +1,4 @@
+import os
 from itertools import count
 from turtle import color
 import torch
@@ -369,9 +370,12 @@ def mse_change(
     uncert_data_order,
     uncertain_loader,
     uncertainties=None,
-    plot=False,
+    plot=True,
     data="novel",
-    save_plots=False,
+    save_plots=True,
+    save_path = None, 
+    iteration=None,
+    lam = 1.0
 ):
     idxs = prediction_order.astype(int)
     ground_truth = uncertain_loader.dataset.data.loc[idxs]
@@ -398,11 +402,14 @@ def mse_change(
             uncertainties,
             data=data,
             save_plots=save_plots,
+            save_path=save_path, 
+            iteration=iteration, 
+            lam=lam
         )
     return mse_before, mse_after, (mse_after - mse_before)
 
 
-def uncertainty_change(x, y, plot=True):
+def uncertainty_change(x, y, plot=False):
     total = x.shape[0]
     increase = len(x[y > x]) * 100 / total
     decrease = len(x[y < x]) * 100 / total
@@ -467,6 +474,9 @@ def plot_mse_change(
     uncertainties,
     data="novel",
     save_plots=False,
+    save_path=None,
+    iteration=None,
+    lam=1.0
 ):
     if uncertainties is not None:
         uncert_before, uncert_after = uncertainties
@@ -510,7 +520,16 @@ def plot_mse_change(
     plt.title(title)
     plt.legend()
     if save_plots:
-        plt.savefig(f"{save_prefix}_mse_before.png", dpi=300)
+        filename = f"{save_prefix}_mse_before_it_{iteration}.png"
+        save_dest = os.path.join(save_path,f"{lam}")
+        
+        if os.path.exists(save_dest):
+            save_dest = os.path.join(save_dest,filename)
+        else:
+            os.mkdir(save_dest)
+            save_dest = os.path.join(save_dest,filename)
+        
+        plt.savefig(save_dest, dpi=300)
 
     plt.figure()
     if uncertainties is not None:
@@ -533,4 +552,12 @@ def plot_mse_change(
     plt.legend()
 
     if save_plots:
-        plt.savefig(f"{save_prefix}_mse_after.png", dpi=300)
+        filename = f"{save_prefix}_mse_after_it_{iteration}.png"
+        save_dest = os.path.join(save_path,f"{lam}")
+        if os.path.exists(save_dest):
+            save_dest = os.path.join(save_dest,filename)
+        else:
+            os.mkdir(save_dest)
+            save_dest = os.path.join(save_dest,filename)
+
+        plt.savefig(save_dest, dpi=300)
