@@ -9,15 +9,15 @@ from scripts.pipeline_tools import (
     pandas_to_numpy_data,
     uncertainty_change,
     mse_change,
-    plot_classifier_retraining
+    plot_classifier_retraining,
 )
 from scripts.Models import (
-    ITGDatasetDF, 
-    ITGDataset, 
-    load_model, 
-    train_model, 
-    Classifier, 
-    Regressor
+    ITGDatasetDF,
+    ITGDataset,
+    load_model,
+    train_model,
+    Classifier,
+    Regressor,
 )
 from torch.utils.data import DataLoader
 from scripts.utils import train_keys
@@ -70,7 +70,7 @@ for model in PRETRAINED:
             valid_dataset,
             save_path=PRETRAINED[model]["save_path"],
             epochs=cfg["train_epochs"],
-            patience=cfg["train_patience"]
+            patience=cfg["train_patience"],
         )
 
 
@@ -107,7 +107,14 @@ for i in range(cfg["iterations"]):
 
     if cfg["retrain_classifier"]:
         # retrain the classifier on the misclassified points
-        train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc = retrain_classifier(
+        (
+            train_loss,
+            train_acc,
+            val_loss,
+            val_acc,
+            missed_loss,
+            missed_acc,
+        ) = retrain_classifier(
             misclassified_sample,
             train_sample,
             valid_dataset,
@@ -115,7 +122,7 @@ for i in range(cfg["iterations"]):
             batch_size=100,
             epochs=epochs,
             lam=lam,
-            patience=cfg["patience"]
+            patience=cfg["patience"],
         )
 
         save_path = os.path.join(SAVE_PATHS["plots"], f"Iteration_{i+1}")
@@ -160,7 +167,6 @@ for i in range(cfg["iterations"]):
     # regressor_unceratinty adds points back into valid_dataset so new dataloader is needed
     valid_loader_modified = pandas_to_numpy_data(valid_dataset)
 
-
     # Retrain Regressor (Further research required)
     train_loss, test_loss = retrain_regressor(
         uncertain_loader,
@@ -170,7 +176,7 @@ for i in range(cfg["iterations"]):
         epochs=epochs,
         validation_step=True,
         lam=lam,
-        patience=cfg["patience"]
+        patience=cfg["patience"],
     )
 
     train_losses.append(train_loss)
@@ -246,6 +252,6 @@ output_dict = {
 if not os.path.exists(SAVE_PATHS["outputs"]):
     os.makedirs(SAVE_PATHS["outputs"])
 
-output_path = os.path.join(SAVE_PATHS["outputs"], f"pipeline_outputs_lam_{lam}_2.pkl")
+output_path = os.path.join(SAVE_PATHS["outputs"], f"pipeline_outputs_lam_{lam}.pkl")
 with open(output_path, "wb") as f:
     pickle.dump(output_dict, f)

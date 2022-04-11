@@ -15,7 +15,7 @@ import logging
 from scripts.utils import train_keys
 from scripts.Models import ITGDatasetDF, ITGDataset
 
-logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 # Data preparation functions
 def prepare_data(
@@ -45,8 +45,12 @@ def prepare_data(
     scaler = StandardScaler()
     scaler.fit_transform(train_data.drop([target_var], axis=1))
 
-    train_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb", target_var="itg")
-    valid_dataset = ITGDatasetDF(validation_data, target_column="efiitg_gb", target_var="itg")
+    train_dataset = ITGDatasetDF(
+        train_data, target_column="efiitg_gb", target_var="itg"
+    )
+    valid_dataset = ITGDatasetDF(
+        validation_data, target_column="efiitg_gb", target_var="itg"
+    )
 
     train_dataset.scale(scaler)
     valid_dataset.scale(scaler)
@@ -127,9 +131,7 @@ def retrain_classifier(
     train.add(misclassified_dataset)
 
     # create data loaders
-    train_loader = DataLoader(
-        train, batch_size=batch_size, shuffle=True
-    )
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
 
     missed_loader = DataLoader(
         misclassified_dataset, batch_size=batch_size, shuffle=True
@@ -147,13 +149,14 @@ def retrain_classifier(
     opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate)
     # create scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        opt, mode="min", factor=0.5, patience=0.5*patience
+        opt, mode="min", factor=0.5, patience=0.5 * patience
     )
     train_loss = []
     train_acc = []
     val_loss = []
     val_acc = []
-
+    missed_loss = []
+    missed_acc = []
 
     for epoch in range(epochs):
 
@@ -174,7 +177,9 @@ def retrain_classifier(
             val_acc.append(validation_accuracy)
 
             logging.debug(f"Evaluating on just the misclassified points")
-            missed_loss, missed_acc = classifier.validation_step(missed_loader)
+            miss_loss, miss_acc = classifier.validation_step(missed_loader)
+            missed_loss.append(miss_loss)
+            missed_acc.append(miss_acc)
 
         if len(val_loss) > patience:
             if np.mean(val_acc[-patience:]) > val_acc[-1]:
@@ -215,7 +220,7 @@ def retrain_regressor(
     # instantiate optimiser
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        opt, mode="min", factor=0.5, patience=0.5*patience
+        opt, mode="min", factor=0.5, patience=0.5 * patience
     )
     train_loss = []
     val_loss = []
@@ -350,21 +355,21 @@ def regressor_uncertainty(
     else:
         return data_copy, out_std, idx_array
 
+
 def pandas_to_numpy_data(dataset, batch_size=None):
 
     x_array = dataset.data[train_keys].values
     y_array = dataset.data[dataset.label].values
     z_array = dataset.data[dataset.target].values
-    
+
     numpy_dataset = ITGDataset(x_array, y_array, z_array)
 
     if batch_size is None:
         batch_size = int(0.1 * len(y_array))
 
-    numpy_loader = DataLoader(
-        numpy_dataset, batch_size=batch_size, shuffle=True
-    )
+    numpy_loader = DataLoader(numpy_dataset, batch_size=batch_size, shuffle=True)
     return numpy_loader
+
 
 # Active Learning diagonistic functions
 def get_mse(y_hat, y):
@@ -545,7 +550,10 @@ def plot_mse_change(
     if save_plots:
         plt.savefig(f"{save_prefix}_mse_after.png", dpi=300)
 
-def plot_classifier_retraining(train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc, save_path=None):
+
+def plot_classifier_retraining(
+    train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc, save_path=None
+):
     plt.figure()
     plt.plot(train_loss, label="Training Loss")
     plt.plot(val_loss, label="Validation Loss")

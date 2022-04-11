@@ -34,9 +34,9 @@ class Classifier(nn.Module):
         if lam != 1:
             with torch.no_grad():
                 for param in self.model.parameters():
-                    loc_tensor = loc*torch.ones_like(param)
-                    scale_tensor = scale*torch.ones_like(param)
-                    noise_dist = torch.distributions.Normal(loc_tensor,scale)
+                    loc_tensor = loc * torch.ones_like(param)
+                    scale_tensor = scale * torch.ones_like(param)
+                    noise_dist = torch.distributions.Normal(loc_tensor, scale)
                     noise = noise_dist.sample()
 
                     param_update = (param * lam) + noise
@@ -129,13 +129,13 @@ class Regressor(nn.Module):
     def reset_weights(self):
         self.model.apply(weight_reset)
 
-    def shrink_perturb(self,lam, loc, scale):
+    def shrink_perturb(self, lam, loc, scale):
         if lam != 1:
             with torch.no_grad():
                 for param in self.model.parameters():
-                    loc_tensor = loc*torch.ones_like(param)
-                    scale_tensor = scale*torch.ones_like(param)
-                    noise_dist = torch.distributions.Normal(loc_tensor,scale)
+                    loc_tensor = loc * torch.ones_like(param)
+                    scale_tensor = scale * torch.ones_like(param)
+                    noise_dist = torch.distributions.Normal(loc_tensor, scale)
                     noise = noise_dist.sample()
 
                     param_update = (param * lam) + noise
@@ -199,7 +199,9 @@ class Regressor(nn.Module):
             assert len(order_outputs) == len(idx_array), logging.error(
                 "Index ordering passed is a different length to the number of predictions!"
             )
-            reorder = np.array([np.where(idx_array == i) for i in order_outputs]).flatten()
+            reorder = np.array(
+                [np.where(idx_array == i) for i in order_outputs]
+            ).flatten()
             # reorder = np.concatenate(reorder).flatten()
 
             pred = pred[reorder]
@@ -351,7 +353,7 @@ def train_model(
     train_dataset,
     val_dataset,
     epochs,
-    learning_rate = 0.001,
+    learning_rate=0.001,
     weight_decay=True,
     patience=None,
     checkpoint=None,
@@ -365,10 +367,8 @@ def train_model(
         train_batch_size = int(len(train_dataset) / 10)
     if val_batch_size is None:
         val_batch_size = int(len(val_dataset) / 10)
-    
-    train_loader = DataLoader(
-        train_dataset, batch_size=train_batch_size, shuffle=True
-    )
+
+    train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
 
     val_loader = tools.pandas_to_numpy_data(val_dataset, val_batch_size)
     # Initialise the optimiser
@@ -435,7 +435,7 @@ def train_model(
 
             if epoch % checkpoint == 0:
                 torch.save(state, f"{checkpoint_path}_epoch_{epoch}.pt")
-    
+
     if save_path:
         torch.save(model.state_dict(), save_path)
 
