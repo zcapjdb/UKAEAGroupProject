@@ -62,7 +62,8 @@ for model in pretrained:
 # TODO: Needs to be the true training samples used!!!
 train_sample = train_dataset.sample(10_000)
 
-lam = 0.0
+lam = 1.0
+logging.info(f"Training for lambda: {lam}")
 
 train_losses = []
 test_losses = []

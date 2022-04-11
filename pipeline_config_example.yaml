@@ -9,8 +9,13 @@ pretrained:
 
 # Path to data used for training and validation
 data:
-    train: /path/to/train/
-    validation: /path/to/validation/
+  train: /path/to/train/data
+  validation: /path/to/validation/data
+
+
+save_paths:
+  plots: /path/to/save/plots
+  outputs: /path/to/save/outputs
 
 save_paths:
     outputs: /path/to/outputs/

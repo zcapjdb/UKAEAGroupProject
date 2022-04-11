@@ -31,13 +31,13 @@ class ITG_Classifier(nn.Module):
 
     def shrink_perturb(self, lam, loc, scale):
         if lam != 1:
-            noise_dist = torch.distributions.Normal(
-                torch.Tensor([loc]), torch.Tensor([scale])
-            )
-            noise = noise_dist.sample()
-
             with torch.no_grad():
                 for param in self.model.parameters():
+                    loc_tensor = loc*torch.ones_like(param)
+                    scale_tensor = scale*torch.ones_like(param)
+                    noise_dist = torch.distributions.Normal(loc_tensor,scale)
+                    noise = noise_dist.sample()
+
                     param_update = (param * lam) + noise
                     param.copy_(param_update)
 
@@ -128,10 +128,10 @@ class ITG_Regressor(nn.Module):
     def reset_weights(self):
         self.model.apply(weight_reset)
 
-    def shrink_perturb(model, lam, loc, scale):
+    def shrink_perturb(self,lam, loc, scale):
         if lam != 1:
             with torch.no_grad():
-                for param in model.parameters():
+                for param in self.model.parameters():
                     loc_tensor = loc*torch.ones_like(param)
                     scale_tensor = scale*torch.ones_like(param)
                     noise_dist = torch.distributions.Normal(loc_tensor,scale)
@@ -187,6 +187,7 @@ class ITG_Regressor(nn.Module):
             index_ordering.append(idx.detach().numpy())
 
         idx_array = np.asarray(index_ordering, dtype=object).flatten()
+        idx_array = idx_array.astype(int)
         pred = np.asarray(pred).flatten()
 
         if order_outputs is not None:
@@ -197,8 +198,8 @@ class ITG_Regressor(nn.Module):
             assert len(order_outputs) == len(idx_array), logging.error(
                 "Index ordering passed is a different length to the number of predictions!"
             )
-            reorder = [np.where(idx_array == i)[0] for i in order_outputs]
-            reorder = np.concatenate(reorder).flatten()
+            reorder = np.array([np.where(idx_array == i) for i in order_outputs]).flatten()
+            # reorder = np.concatenate(reorder).flatten()
 
             pred = pred[reorder]
             real_idx = idx_array[reorder]
