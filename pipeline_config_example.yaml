@@ -23,10 +23,13 @@ save_paths:
 retrain_classifier: False
 retrain_regressor: True
 
+logging_level: DEBUG
+
 # Pipeline parameters
 iterations: 3
 initial_epochs: 25
 MC_dropout_runs: 50
 keep_prob: 0.25 
 patience: 25
+lambda: 0.6
 

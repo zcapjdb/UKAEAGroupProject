@@ -16,27 +16,32 @@ from torch.utils.data import DataLoader
 from scripts.utils import train_keys
 import yaml
 import pickle
+import argparse
 
 
-level = "DEBUG"
+# add argument to pass config file
+parser = argparse.ArgumentParser()
+parser.add_argument("-c", "--config", help="config file", required=True)
+args = parser.parse_args()
+
+with open(args.config) as f:
+    cfg = yaml.load(f, Loader=yaml.FullLoader)
+
+
 # Create logger object for use in pipeline
 verboselogs.install()
 logger = logging.getLogger(__name__)
-coloredlogs.install(level=level)
+coloredlogs.install(level=cfg["logging_level"])
 
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
 
-
-with open("../../pipeline_config_jackson.yaml") as f:
-    cfg = yaml.load(f, Loader=yaml.FullLoader)
-
-pretrained = cfg["pretrained"]
-paths = cfg["data"]
-save_paths = cfg["save_paths"]
+PRETRAINED = cfg["pretrained"]
+PATHS = cfg["data"]
+SAVE_PATHS = cfg["save_paths"]
 
 train_data, val_data = prepare_data(
-    paths["train"], paths["validation"], target_column="efiitg_gb", target_var="itg"
+    PATHS["train"], PATHS["validation"], target_column="efiitg_gb", target_var="itg"
 )
 
 scaler = StandardScaler()
@@ -51,9 +56,9 @@ valid_dataset.scale(scaler)
 # Load pretrained models
 logging.info("Loaded the following models:\n")
 models = {}
-for model in pretrained:
-    if pretrained[model]["trained"] == True:
-        trained_model = load_model(model, pretrained[model]["save_path"])
+for model in PRETRAINED:
+    if PRETRAINED[model]["trained"] == True:
+        trained_model = load_model(model, PRETRAINED[model]["save_path"])
         models[model] = trained_model
 
 # Train untrained models (may not be needed)
@@ -62,7 +67,7 @@ for model in pretrained:
 # TODO: Needs to be the true training samples used!!!
 train_sample = train_dataset.sample(10_000)
 
-lam = 1.0
+lam = cfg["lambda"]
 logging.info(f"Training for lambda: {lam}")
 
 train_losses = []
@@ -95,7 +100,7 @@ for i in range(cfg["iterations"]):
             models["ITG_class"],
             batch_size=100,
             epochs=epochs,
-            lam=0.6,
+            lam=lam,
             patience=cfg["patience"]
         )
     # TODO: diagnose how well the classifier retraining does
@@ -192,7 +197,6 @@ for i in range(cfg["iterations"]):
     mse_after.append(train_mse_after)
     d_mse.append(delta_mse)
     n_train = len(train_sample_origin)
-    print(n_train)
     n_train_points.append(n_train)
 
 output_dict = {
@@ -205,9 +209,9 @@ output_dict = {
     "d_uncert": d_train_uncert,
 }
 
-if not os.path.exists(save_paths["outputs"]):
-    os.makedirs(save_paths["outputs"])
+if not os.path.exists(SAVE_PATHS["outputs"]):
+    os.makedirs(SAVE_PATHS["outputs"])
 
-output_path = os.path.join(save_paths["outputs"], f"pipeline_outputs_lam_{lam}_2.pkl")
+output_path = os.path.join(SAVE_PATHS["outputs"], f"pipeline_outputs_lam_{lam}_2.pkl")
 with open(output_path, "wb") as f:
     pickle.dump(output_dict, f)
