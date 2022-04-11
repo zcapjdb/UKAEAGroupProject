@@ -124,7 +124,6 @@ def retrain_classifier(
         misclassified_dataset, batch_size=batch_size, shuffle=True
     )
 
-    #TODO:  this is still broken
     valid_loader = pandas_to_numpy_data(valid_dataset)
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
@@ -343,8 +342,8 @@ def regressor_uncertainty(
 def pandas_to_numpy_data(dataset, batch_size=None):
 
     x_array = dataset.data[train_keys].values
-    y_array = dataset.data[dataset.target].values
-    z_array = dataset.data[dataset.label].values
+    y_array = dataset.data[dataset.label].values
+    z_array = dataset.data[dataset.target].values
     
     numpy_dataset = ITGDataset(x_array, y_array, z_array)
 

@@ -96,7 +96,7 @@ for i in range(cfg["iterations"]):
             batch_size=100,
             epochs=epochs,
             lam=0.6,
-            patience=25
+            patience=cfg["patience"]
         )
     # TODO: diagnose how well the classifier retraining does
     # From first run through it does seem like training on the misclassified points hurts the validation dataset accuracy quite a bit
@@ -139,7 +139,7 @@ for i in range(cfg["iterations"]):
         epochs=epochs,
         validation_step=True,
         lam=lam,
-        patience=25
+        patience=cfg["patience"]
     )
 
     train_losses.append(train_loss)
