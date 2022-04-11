@@ -84,7 +84,7 @@ class ITG_Classifier(nn.Module):
         correct = 0
 
         with torch.no_grad():
-            for X, y, z in dataloader:
+            for X, y, z, _ in dataloader:
                 y_hat = self.forward(X.float())
                 test_loss.append(BCE(y_hat, y.unsqueeze(-1).float()).item())
 
@@ -170,8 +170,7 @@ class ITG_Regressor(nn.Module):
 
         test_loss = []
         with torch.no_grad():
-            # for X, y, z, idx in tqdm(dataloader):
-            for X, y, z in tqdm(dataloader):
+            for X, y, z, _ in dataloader:
                 z_hat = self.forward(X.float())
                 test_loss.append(
                     self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
@@ -227,9 +226,9 @@ class ITGDataset(Dataset):
     # get a row at an index
     def __getitem__(self, idx):
         if self.z is not None:
-            return [self.X[idx], self.y[idx], self.z[idx]]
+            return self.X[idx], self.y[idx], self.z[idx], self.indices[idx]
         else:
-            return [self.X[idx], self.y[idx]]
+            return self.X[idx], self.y[idx], self.indices[idx]
 
     # method to add a new row to the dataset
     def add(self, x, y, z=None):

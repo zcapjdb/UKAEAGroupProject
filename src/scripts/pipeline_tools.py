@@ -3,16 +3,18 @@ from turtle import color
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from tqdm.auto import tqdm
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from scripts.utils import train_keys
-from scripts.Models import ITGDatasetDF, ITGDataset
-from tqdm.auto import tqdm
 import copy
 import logging
+from scripts.utils import train_keys
+from scripts.Models import ITGDatasetDF, ITGDataset
+
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 # Data preparation functions
 def prepare_data(
@@ -95,48 +97,53 @@ def select_unstable_data(dataset, batch_size, classifier):
 # Function to retrain the classifier on the misclassified points
 def retrain_classifier(
     misclassified_dataset,
+    training_dataset,
     valid_dataset,
     classifier,
     learning_rate=5e-4,
     epochs=10,
-    batch_size=100,
+    batch_size=128,
     validation_step=True,
     lam=1,
     loc=0.0,
     scale=0.01,
     patience=None,
-    verbose=False,
 ):
     logging.info("Retraining classifier...\n")
     logging.log(15, f"Training on {len(misclassified_dataset)} points")
 
+    train = copy.deepcopy(training_dataset)
+    train.add(misclassified_dataset)
+
     # create data loaders
     train_loader = DataLoader(
+        train, batch_size=batch_size, shuffle=True
+    )
+
+    missed_loader = DataLoader(
         misclassified_dataset, batch_size=batch_size, shuffle=True
     )
 
-    # Switching validation dataset to numpy arrays to see if it is quicker
-    x_array = valid_dataset.data[train_keys].values
-    y_array = valid_dataset.data["itg"].values
-    z_array = valid_dataset.data["efiitg_gb"].values
-    valid_dataset = ITGDataset(x_array, y_array, z_array)
-
-    valid_loader = DataLoader(
-        valid_dataset, batch_size=int(0.1 * len(y_array)), shuffle=True
-    )
+    #TODO:  this is still broken
+    valid_loader = pandas_to_numpy_data(valid_dataset)
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
     classifier.shrink_perturb(lam, loc, scale)
 
+    if not patience:
+        patience = epochs
+
     # instantiate optimiser
     opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate)
+    # create scheduler
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        opt, mode="min", factor=0.5, patience=0.5*patience
+    )
     train_loss = []
     train_acc = []
     val_loss = []
     val_acc = []
 
-    if not patience:
-        patience = epochs
 
     for epoch in range(epochs):
 
@@ -144,11 +151,11 @@ def retrain_classifier(
 
         loss, acc = classifier.train_step(train_loader, opt)
         train_loss.append(loss.item())
-        train_acc.append(acc.item())
+        train_acc.append(acc)
 
         if (validation_step and epoch % 5 == 0) or epoch == epochs - 1:
 
-            logging.debug("Validation Step:  {epoch}")
+            logging.debug(f"Validation Step: {epoch}")
 
             validation_loss, validation_accuracy = classifier.validation_step(
                 valid_loader
@@ -156,8 +163,11 @@ def retrain_classifier(
             val_loss.append(validation_loss)
             val_acc.append(validation_accuracy)
 
+            logging.debug(f"Evaluating on just the misclassified points")
+            missed_loss, missed_acc = classifier.validation_step(missed_loader)
+
         if len(val_loss) > patience:
-            if np.mean(val_loss[-patience:]) < test_loss:
+            if np.mean(val_acc[-patience:]) > val_acc[-1]:
                 logging.debug("Early stopping criterion reached")
                 break
 
@@ -185,7 +195,7 @@ def retrain_regressor(
 
     if validation_step:
         test_loss = model.validation_step(val_loader)
-        logging.log(15, f"Initial loss: {test_loss.item():.4f}")
+        logging.log(15, f"Initial validation loss: {test_loss.item():.4f}")
 
     if not patience:
         patience = epochs
@@ -194,21 +204,23 @@ def retrain_regressor(
 
     # instantiate optimiser
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        opt, mode="min", factor=0.5, patience=0.5*patience
+    )
     train_loss = []
     val_loss = []
 
     for epoch in range(epochs):
+        logging.log(15, f"Epoch: {epoch}")
         loss = model.train_step(new_loader, opt)
         train_loss.append(loss.item())
 
-        logging.log(15, f"Train Step: {epoch}")
-        logging.log(15, f"Loss: {loss.item():.4f}")
+        logging.log(15, f"Training Loss: {loss.item():.4f}")
 
         if (validation_step and epoch % 10 == 0) or epoch == epochs - 1:
             test_loss = model.validation_step(val_loader).item()
             val_loss.append(test_loss)
 
-            logging.log(15, f"Validation Step: {epoch}")
             logging.log(15, f"Test loss: {test_loss:.4f}")
 
         if len(val_loss) > patience:
@@ -328,6 +340,21 @@ def regressor_uncertainty(
     else:
         return data_copy, out_std, idx_array
 
+def pandas_to_numpy_data(dataset, batch_size=None):
+
+    x_array = dataset.data[train_keys].values
+    y_array = dataset.data[dataset.target].values
+    z_array = dataset.data[dataset.label].values
+    
+    numpy_dataset = ITGDataset(x_array, y_array, z_array)
+
+    if batch_size is None:
+        batch_size = int(0.1 * len(y_array))
+
+    numpy_loader = DataLoader(
+        numpy_dataset, batch_size=batch_size, shuffle=True
+    )
+    return numpy_loader
 
 # Active Learning diagonistic functions
 def get_mse(y_hat, y):

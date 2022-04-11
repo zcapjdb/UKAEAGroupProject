@@ -1,4 +1,4 @@
-# Load the required data
+import coloredlogs, verboselogs, logging
 import os
 from scripts.pipeline_tools import (
     prepare_data,
@@ -6,6 +6,7 @@ from scripts.pipeline_tools import (
     select_unstable_data,
     retrain_regressor,
     retrain_classifier,
+    pandas_to_numpy_data,
     uncertainty_change,
     mse_change,
 )
@@ -15,8 +16,6 @@ from torch.utils.data import DataLoader
 from scripts.utils import train_keys
 import yaml
 import pickle
-
-import coloredlogs, verboselogs, logging
 
 
 level = "DEBUG"
@@ -74,7 +73,7 @@ d_mse = []
 d_train_uncert = []
 
 for i in range(cfg["iterations"]):
-    logging.info(f"Iteration: {i}\n")
+    logging.info(f"Iteration: {i+1}\n")
     valid_sample = valid_dataset.sample(10_000)
 
     # remove the sampled data points from the dataset
@@ -84,15 +83,19 @@ for i in range(cfg["iterations"]):
         valid_sample, batch_size=100, classifier=models["ITG_class"]
     )
 
+    epochs = cfg["initial_epoch"] * (i + 1)
+
     if cfg["retrain_classifier"]:
         # retrain the classifier on the misclassified points
         train_loss, train_acc, val_loss, val_acc = retrain_classifier(
             misclassified_sample,
+            train_sample,
             valid_dataset,
             models["ITG_class"],
             batch_size=100,
-            epochs=5,
-            verbose=True,
+            epochs=epochs,
+            lam=0.6,
+            patience=25
         )
     # TODO: diagnose how well the classifier retraining does
     # From first run through it does seem like training on the misclassified points hurts the validation dataset accuracy quite a bit
@@ -122,25 +125,20 @@ for i in range(cfg["iterations"]):
         uncertain_loader
     )
 
-    # Switching validation dataset to numpy arrays as it is much quicker - should modularise
-    x_array = valid_dataset.data[train_keys].values
-    y_array = valid_dataset.data["itg"].values
-    z_array = valid_dataset.data["efiitg_gb"].values
-    dataset_numpy = ITGDataset(x_array, y_array, z_array)
-    valid_loader = DataLoader(
-        dataset_numpy, batch_size=int(0.1 * len(y_array)), shuffle=True
-    )
+    # regressor_unceratinty adds points back into valid_dataset so new dataloader is needed
+    valid_loader_modified = pandas_to_numpy_data(valid_dataset)
+
 
     # Retrain Regressor (Further research required)
-    epochs = cfg["initial_epoch"] * (i + 1)
     train_loss, test_loss = retrain_regressor(
         uncertain_loader,
-        valid_loader,
+        valid_loader_modified,
         models["ITG_reg"],
         learning_rate=1e-3,
         epochs=epochs,
         validation_step=True,
         lam=lam,
+        patience=25
     )
 
     train_losses.append(train_loss)
@@ -206,6 +204,9 @@ output_dict = {
     "d_uncert": d_train_uncert,
 }
 
-output_path = os.path.join(save_paths["outputs"], f"pipeline_outputs_lam_{lam}.pkl")
+if not os.path.exists(save_paths["outputs"]):
+    os.makedirs(save_paths["outputs"])
+
+output_path = os.path.join(save_paths["outputs"], f"pipeline_outputs_lam_{lam}_2.pkl")
 with open(output_path, "wb") as f:
     pickle.dump(output_dict, f)
