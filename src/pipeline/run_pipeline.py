@@ -1,24 +1,9 @@
 import coloredlogs, verboselogs, logging
 import os
-from scripts.pipeline_tools import (
-    prepare_data,
-    regressor_uncertainty,
-    select_unstable_data,
-    retrain_regressor,
-    retrain_classifier,
-    pandas_to_numpy_data,
-    uncertainty_change,
-    mse_change,
-    plot_classifier_retraining,
-)
-from scripts.Models import (
-    ITGDatasetDF,
-    ITGDataset,
-    load_model,
-    train_model,
-    Classifier,
-    Regressor,
-)
+
+import scripts.pipeline_tools as pt
+import scripts.Models as models
+
 from torch.utils.data import DataLoader
 from scripts.utils import train_keys
 import yaml
@@ -46,7 +31,7 @@ PRETRAINED = cfg["pretrained"]
 PATHS = cfg["data"]
 SAVE_PATHS = cfg["save_paths"]
 
-train_dataset, valid_dataset = prepare_data(
+train_dataset, valid_dataset = pt.prepare_data(
     PATHS["train"], PATHS["validation"], target_column="efiitg_gb", target_var="itg"
 )
 # Sample subset of data to use in active learning (10K for now)
@@ -58,13 +43,15 @@ logging.info("Loaded the following models:\n")
 models = {}
 for model in PRETRAINED:
     if PRETRAINED[model]["trained"] == True:
-        trained_model = load_model(model, PRETRAINED[model]["save_path"])
+        trained_model = models.load_model(model, PRETRAINED[model]["save_path"])
         models[model] = trained_model
 
     else:
         logging.info(f"{model} not trained - training now")
-        models[model] = Classifier() if model == "Classifier" else Regressor()
-        models[model], _ = train_model(
+        models[model] = (
+            model.Classifier() if model == "Classifier" else model.Regressor()
+        )
+        models[model], _ = model.train_model(
             models[model],
             train_sample,
             valid_dataset,
@@ -99,7 +86,7 @@ for i in range(cfg["iterations"]):
     # remove the sampled data points from the dataset
     valid_dataset.remove(valid_sample.data.index)
 
-    valid_sample, misclassified_sample = select_unstable_data(
+    valid_sample, misclassified_sample = pt.select_unstable_data(
         valid_sample, batch_size=100, classifier=models["Classifier"]
     )
 
@@ -114,7 +101,7 @@ for i in range(cfg["iterations"]):
             val_acc,
             missed_loss,
             missed_acc,
-        ) = retrain_classifier(
+        ) = pt.retrain_classifier(
             misclassified_sample,
             train_sample,
             valid_dataset,
@@ -126,7 +113,7 @@ for i in range(cfg["iterations"]):
         )
 
         save_path = os.path.join(SAVE_PATHS["plots"], f"Iteration_{i+1}")
-        plot_classifier_retraining(
+        pt.plot_classifier_retraining(
             train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc, save_path
         )
 
@@ -139,7 +126,7 @@ for i in range(cfg["iterations"]):
     # TODO: diagnose how well the classifier retraining does
     # From first run through it does seem like training on the misclassified points hurts the validation dataset accuracy quite a bit
 
-    uncertain_dataset, uncert_before, data_idx = regressor_uncertainty(
+    uncertain_dataset, uncert_before, data_idx = pt.regressor_uncertainty(
         valid_sample,
         models["Regressor"],
         n_runs=cfg["MC_dropout_runs"],
@@ -147,7 +134,11 @@ for i in range(cfg["iterations"]):
         valid_dataset=valid_dataset,
     )
 
-    train_sample_origin, train_uncert_before, train_uncert_idx = regressor_uncertainty(
+    (
+        train_sample_origin,
+        train_uncert_before,
+        train_uncert_idx,
+    ) = pt.regressor_uncertainty(
         train_sample,
         models["Regressor"],
         n_runs=cfg["MC_dropout_runs"],
@@ -165,10 +156,10 @@ for i in range(cfg["iterations"]):
     )
 
     # regressor_unceratinty adds points back into valid_dataset so new dataloader is needed
-    valid_loader_modified = pandas_to_numpy_data(valid_dataset)
+    valid_loader_modified = pt.pandas_to_numpy_data(valid_dataset)
 
     # Retrain Regressor (Further research required)
-    train_loss, test_loss = retrain_regressor(
+    train_loss, test_loss = pt.retrain_regressor(
         uncertain_loader,
         valid_loader_modified,
         models["Regressor"],
@@ -186,14 +177,14 @@ for i in range(cfg["iterations"]):
         uncertain_loader, prediction_idx_order
     )
 
-    _, uncert_after, _ = regressor_uncertainty(
+    _, uncert_after, _ = pt.regressor_uncertainty(
         valid_sample,
         models["Regressor"],
         n_runs=cfg["MC_dropout_runs"],
         keep=cfg["keep_prob"],
         order_idx=data_idx,
     )
-    _, train_uncert_after, _ = regressor_uncertainty(
+    _, train_uncert_after, _ = pt.regressor_uncertainty(
         train_sample_origin,
         models["Regressor"],
         n_runs=cfg["MC_dropout_runs"],
@@ -202,14 +193,14 @@ for i in range(cfg["iterations"]):
     )
 
     logging.info("Change in uncertainty for most uncertain data points:")
-    _ = uncertainty_change(x=uncert_before, y=uncert_after)
+    _ = pt.uncertainty_change(x=uncert_before, y=uncert_after)
 
     logging.info("Change in uncertainty for training data:")
     d_train_uncert.append(
-        uncertainty_change(x=train_uncert_before, y=train_uncert_after)
+        pt.uncertainty_change(x=train_uncert_before, y=train_uncert_after)
     )
 
-    _ = mse_change(
+    _ = pt.mse_change(
         prediction_before,
         prediction_after,
         prediction_idx_order,
@@ -218,7 +209,7 @@ for i in range(cfg["iterations"]):
         [uncert_before, uncert_after],
     )
 
-    train_mse_before, train_mse_after, delta_mse = mse_change(
+    train_mse_before, train_mse_after, delta_mse = pt.mse_change(
         prediction_before,
         prediction_after,
         prediction_idx_order,
