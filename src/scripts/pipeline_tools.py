@@ -13,14 +13,25 @@ import matplotlib.pyplot as plt
 import copy
 import logging
 from scripts.utils import train_keys
-from scripts.Models import ITGDatasetDF, ITGDataset
+from scripts.Models import ITGDatasetDF, ITGDataset, Classifier, Regressor
+from typing import Union
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 # Data preparation functions
 def prepare_data(
-    train_path, valid_path, target_column, target_var, train_size=None, valid_size=None
-):
+    train_path: str,
+    valid_path: str,
+    target_column: str,
+    target_var: str,
+    train_size: int = None,
+    valid_size: int = None,
+) -> (ITGDatasetDF, ITGDatasetDF):
+    """
+    Loads the data from the given paths and prepares it for training.
+    train_path, valid_path point to pickle files containing the data in dataframes.
+    """
+
     train_data = pd.read_pickle(train_path)
     validation_data = pd.read_pickle(valid_path)
 
@@ -59,11 +70,18 @@ def prepare_data(
 
 
 # classifier tools
-def select_unstable_data(dataset, batch_size, classifier):
-    # create a data loader
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+def select_unstable_data(
+    dataset: ITGDatasetDF, batch_size: int, classifier: Classifier
+) -> (ITGDatasetDF, ITGDatasetDF):
+    """
+    Selects data classified as unstable by the classifier.
 
-    # get initial size of the dataset
+    returns:
+        dataset: the dataset with the unstable data removed.
+        misclassified_dataset: the dataset with the data misclassified by the classifier.
+    """
+
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     init_size = len(dataloader.dataset)
 
     stable_points = []
@@ -110,19 +128,25 @@ def select_unstable_data(dataset, batch_size, classifier):
 
 # Function to retrain the classifier on the misclassified points
 def retrain_classifier(
-    misclassified_dataset,
-    training_dataset,
-    valid_dataset,
-    classifier,
-    learning_rate=5e-4,
-    epochs=10,
-    batch_size=128,
-    validation_step=True,
-    lam=1,
-    loc=0.0,
-    scale=0.01,
-    patience=None,
-):
+    misclassified_dataset: ITGDatasetDF,
+    training_dataset: ITGDatasetDF,
+    valid_dataset: ITGDataset,
+    classifier: Classifier,
+    learning_rate: int = 5e-4,
+    epochs: int = 10,
+    batch_size: int = 128,
+    validation_step: bool = True,
+    lam: Union[float, int] = 1,
+    loc: float = 0.0,
+    scale: float = 0.01,
+    patience: Union[None, int] = None,
+) -> (list, list, list, list, list, list):
+    """
+    Retrain the classifier on the misclassified points.
+    Data for retraining is taken from the combined training and misclassified datasets.
+    Returns the losses and accuracies of the training and validation steps.
+    """
+
     logging.info("Retraining classifier...\n")
     data_size = len(misclassified_dataset) + len(training_dataset)
     logging.log(15, f"Training on {data_size} points")
@@ -149,7 +173,11 @@ def retrain_classifier(
     opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate)
     # create scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        opt, mode="min", factor=0.5, patience=0.5 * patience, min_lr=(1/16)*learning_rate
+        opt,
+        mode="min",
+        factor=0.5,
+        patience=0.5 * patience,
+        min_lr=(1 / 16) * learning_rate,
     )
     train_loss = []
     train_acc = []
@@ -192,17 +220,23 @@ def retrain_classifier(
 
 # Regressor tools
 def retrain_regressor(
-    new_loader,
-    val_loader,
-    model,
-    learning_rate=1e-4,
-    epochs=5,
-    validation_step=True,
-    lam=1,
-    loc=0.0,
-    scale=0.01,
-    patience=None,
-):
+    new_loader: DataLoader,
+    val_loader: DataLoader,
+    model: Regressor,
+    learning_rate: int = 1e-4,
+    epochs: int = 10,
+    validation_step: bool = True,
+    lam: Union[float, int] = 1,
+    loc: float = 0.0,
+    scale: float = 0.01,
+    patience: Union[None, int] = None,
+) -> (list, list):
+    """
+    Retrain the regressor on the most uncertain points.
+    Data for retraining is taken from the combined training and uncertain datasets.
+    Returns the losses of the training and validation steps.
+    """
+
     logging.info("Retraining regressor...\n")
     logging.log(15, f"Training on {len(new_loader.dataset)} points")
 
@@ -221,7 +255,11 @@ def retrain_regressor(
     # instantiate optimiser
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        opt, mode="min", factor=0.5, patience=0.5 * patience, min_lr=(1/16)*learning_rate
+        opt,
+        mode="min",
+        factor=0.5,
+        patience=0.5 * patience,
+        min_lr=(1 / 16) * learning_rate,
     )
     train_loss = []
     val_loss = []
@@ -233,7 +271,7 @@ def retrain_regressor(
 
         logging.log(15, f"Training Loss: {loss.item():.4f}")
 
-        if (validation_step and epoch % 10 == 0) or epoch == epochs - 1:
+        if (validation_step and epoch % 2 == 0) or epoch == epochs - 1:
             test_loss = model.validation_step(val_loader, scheduler).item()
             val_loss.append(test_loss)
 
@@ -248,18 +286,20 @@ def retrain_regressor(
 
 
 def regressor_uncertainty(
-    dataset,
-    regressor,
-    keep=0.25,
-    n_runs=10,
-    train_data=False,
-    plot=False,
-    order_idx=None,
-    valid_dataset=None,
-):
+    dataset: ITGDatasetDF,
+    regressor: Regressor,
+    keep: float = 0.25,
+    n_runs: int = 25,
+    train_data: bool = False,
+    plot: bool = False,
+    order_idx: Union[None, list, np.array] = None,
+    valid_dataset: Union[None, ITGDataset] = None,
+) -> (ITGDatasetDF, np.array, np.array):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
     Returns the most uncertain points.
+    If order_idx is provided, the points are ordered according to the order_idx to allow
+    comparison before and after retraining.
 
     """
     if train_data:
@@ -297,13 +337,17 @@ def regressor_uncertainty(
 
     logging.log(15, f"Number of points passed for MC dropout: {n_out_std}")
 
+    # Get the list of indices of the dataframe
     idx_list = []
     for step, (x, y, z, idx) in enumerate(dataloader):
         idx_list.append(idx.detach().numpy())
 
+    # flatten the list of indices
     flat_list = [item for sublist in idx_list for item in sublist]
     idx_array = np.asarray(flat_list, dtype=object).flatten()
 
+    # If not evaluating on the training data (or validation ?) sort the indices by uncertainty
+    # and return the top keep% of the points
     if not train_data:
         top_idx = np.argsort(out_std)[-int(n_out_std * keep) :]
         drop_idx = np.argsort(out_std)[: n_out_std - int(n_out_std * keep)]
@@ -311,9 +355,9 @@ def regressor_uncertainty(
         real_idx = idx_array[top_idx]
 
     if order_idx is None and train_data == False:
-        # Add 100 - x% back into the validation data set
         logging.log(15, f"no valid before : {len(valid_dataset)}")
 
+        # Take the points that are not in the most uncertain points and add back into the validation set
         temp_dataset = copy.deepcopy(dataset)
         temp_dataset.remove(indices=real_idx)
         valid_dataset.add(temp_dataset)
@@ -338,7 +382,6 @@ def regressor_uncertainty(
     if order_idx is not None:
         # matching the real indices to the array position
         reorder = np.array([np.where(idx_array == i) for i in order_idx]).flatten()
-
         real_idx = idx_array[reorder]
 
         # selecting the corresposing std ordered according to order_idx
@@ -357,7 +400,11 @@ def regressor_uncertainty(
         return data_copy, out_std, idx_array
 
 
-def pandas_to_numpy_data(dataset, batch_size=None):
+def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None) -> DataLoader:
+    """
+    Helper function to convert pandas dataframe to numpy array and create a dataloader.
+    Dataloaders created from numpy arrays are much faster than pandas dataframes.
+    """
 
     x_array = dataset.data[train_keys].values
     y_array = dataset.data[dataset.label].values
@@ -373,26 +420,30 @@ def pandas_to_numpy_data(dataset, batch_size=None):
 
 
 # Active Learning diagonistic functions
-def get_mse(y_hat, y):
+def get_mse(y_hat: np.array, y: np.array) -> float:
     mse = np.mean((y - y_hat) ** 2)
     return mse
 
 
 def mse_change(
-    prediction_before,
-    prediction_after,
-    prediction_order,
-    uncert_data_order,
-    uncertain_loader,
-    uncertainties=None,
-    plot=False,
-    data="novel",
-    save_plots=False,
-):
+    prediction_before: list,
+    prediction_after: list,
+    prediction_order: list,
+    uncert_data_order: list,
+    uncertain_loader: DataLoader,
+    uncertainties: Union[None, list] = None,
+    plot: bool = False,
+    data: str = "novel",
+    save_plots: bool = False,
+) -> (float, float, float):
+    """
+    Calculates the change in MSE between the before and after training.
+    """
+
     idxs = prediction_order.astype(int)
     ground_truth = uncertain_loader.dataset.data.loc[idxs]
-    # TODO: Change hard coded variable
-    ground_truth = ground_truth["efiitg_gb"]
+
+    ground_truth = ground_truth[uncertain_loader.dataset.target]
     ground_truth = ground_truth.to_numpy()
 
     idx = np.isin(prediction_order, uncert_data_order)
@@ -418,7 +469,14 @@ def mse_change(
     return mse_before, mse_after, (mse_after - mse_before)
 
 
-def uncertainty_change(x, y, plot=True):
+def uncertainty_change(
+    x: Union[list, np.array], y: Union[np.array, list], plot: bool = True
+) -> float:
+    """
+    Calculate the change in uncertainty after training for a given set of predictions
+    with option to plot the results.
+
+    """
     total = x.shape[0]
     increase = len(x[y > x]) * 100 / total
     decrease = len(x[y < x]) * 100 / total
@@ -440,28 +498,36 @@ def uncertainty_change(x, y, plot=True):
     return av_uncer_after - av_uncert_before
 
 
-# plotting functions
+def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None) -> None:
+    """
+    Plot the histogram of standard deviations of the the predictions,
+    plotting the most uncertain points in a separate plot.
+    """
 
-
-def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None):
     plt.figure()
     plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=50)
-    # plt.show()
+
     name_uncertain = "standard_deviation_histogram_most_uncertain"
     if tag is not None:
         name_uncertain = f"{name_uncertain}_{tag}"
     plt.savefig(f"{name_uncertain}.png")
+    plt.clf()
 
     plt.figure()
     plt.hist(out_std, bins=50)
-    # plt.show()
+
     name = "standard_deviation_histogram"
     if tag is not None:
         name = f"{name}_{tag}"
     plt.savefig(f"{name}.png")
+    plt.clf()
 
 
-def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray):
+def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray) -> None:
+    """
+    Plot the scatter plot of the initial and final standard deviations of the predictions.
+    """
+
     plt.figure()
     plt.scatter(initial_std, final_std, s=3, alpha=1)
     # y = x dotted line to show no change
@@ -477,13 +543,19 @@ def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray):
 
 
 def plot_mse_change(
-    ground_truth,
-    intial_prediction,
-    final_prediction,
-    uncertainties,
-    data="novel",
-    save_plots=False,
-):
+    ground_truth: np.array,
+    intial_prediction: np.array,
+    final_prediction: np.array,
+    uncertainties: list,
+    data: str = "novel",
+    save_plots: bool = False,
+) -> None:
+    """
+
+    Plot scatter plot of the regressor predictions vs the ground truth before and after training,
+    option to color the points by uncertainty.
+    """
+
     if uncertainties is not None:
         uncert_before, uncert_after = uncertainties
 
@@ -553,8 +625,18 @@ def plot_mse_change(
 
 
 def plot_classifier_retraining(
-    train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc, save_path=None
-):
+    train_loss: list,
+    train_acc: list,
+    val_loss: list,
+    val_acc: list,
+    missed_loss: list,
+    missed_acc: list,
+    save_path: Union[None, str] = None,
+) -> None:
+    """
+    Plot the training and validation loss and accuracy for the classifier retraining.
+    """
+
     plt.figure()
     plt.plot(train_loss, label="Training Loss")
     plt.plot(val_loss, label="Validation Loss")
