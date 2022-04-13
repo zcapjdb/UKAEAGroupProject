@@ -1,8 +1,8 @@
 import coloredlogs, verboselogs, logging
 import os
 
-import scripts.pipeline_tools as pt
-import scripts.Models as models
+import pipeline.pipeline_tools as pt
+import pipeline.Models as md
 
 from torch.utils.data import DataLoader
 from scripts.utils import train_keys
@@ -43,7 +43,7 @@ logging.info("Loaded the following models:\n")
 models = {}
 for model in PRETRAINED:
     if PRETRAINED[model]["trained"] == True:
-        trained_model = models.load_model(model, PRETRAINED[model]["save_path"])
+        trained_model = md.load_model(model, PRETRAINED[model]["save_path"])
         models[model] = trained_model
 
     else:
@@ -51,7 +51,7 @@ for model in PRETRAINED:
         models[model] = (
             model.Classifier() if model == "Classifier" else model.Regressor()
         )
-        models[model], _ = model.train_model(
+        models[model], _ = md.train_model(
             models[model],
             train_sample,
             valid_dataset,

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
-import scripts.pipeline_tools as tools
+import pipeline.pipeline_tools as pt
 
 import numpy as np
 from sklearn.preprocessing import StandardScaler
@@ -75,7 +75,7 @@ class Classifier(nn.Module):
         logging.debug(f"Train accuracy: {correct:>7f}, loss: {average_loss:>7f}")
         return average_loss, correct
 
-    def validation_step(self, dataloader):
+    def validation_step(self, dataloader, scheduler = None):
         size = len(dataloader.dataset)
         # Initalise loss function
         BCE = nn.BCELoss()
@@ -378,7 +378,7 @@ def train_model(
 
     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
 
-    val_loader = tools.pandas_to_numpy_data(val_dataset, val_batch_size)
+    val_loader = pt.pandas_to_numpy_data(val_dataset, val_batch_size)
     # Initialise the optimiser
     if weight_decay:
         opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)

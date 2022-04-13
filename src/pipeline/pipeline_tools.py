@@ -1,7 +1,4 @@
-from itertools import count
-from turtle import color
 import torch
-import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from tqdm.auto import tqdm
@@ -13,7 +10,7 @@ import matplotlib.pyplot as plt
 import copy
 import logging
 from scripts.utils import train_keys
-from scripts.Models import ITGDatasetDF, ITGDataset, Classifier, Regressor
+from pipeline.Models import ITGDatasetDF, ITGDataset, Classifier, Regressor
 from typing import Union
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
@@ -199,7 +196,7 @@ def retrain_classifier(
             logging.debug(f"Validation Step: {epoch}")
 
             validation_loss, validation_accuracy = classifier.validation_step(
-                valid_loader
+                valid_loader, scheduler
             )
             val_loss.append(validation_loss)
             val_acc.append(validation_accuracy)
@@ -271,7 +268,7 @@ def retrain_regressor(
 
         logging.log(15, f"Training Loss: {loss.item():.4f}")
 
-        if (validation_step and epoch % 2 == 0) or epoch == epochs - 1:
+        if validation_step:
             test_loss = model.validation_step(val_loader, scheduler).item()
             val_loss.append(test_loss)
 
