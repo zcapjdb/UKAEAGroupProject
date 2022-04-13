@@ -416,6 +416,22 @@ def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None) -> DataL
     return numpy_loader
 
 
+output_dict = {
+    "train_losses": [],
+    "test_losses": [],
+    "n_train_points": [],
+    "mse_before": [],
+    "mse_after": [],
+    "d_mse": [],
+    "d_uncert": [],
+    "class_train_loss": [],
+    "class_val_loss": [],
+    "class_missed_loss": [],
+    "class_train_acc": [],
+    "class_val_acc": [],
+    "class_missed_acc": [],
+}
+
 # Active Learning diagonistic functions
 def get_mse(y_hat: np.array, y: np.array) -> float:
     mse = np.mean((y - y_hat) ** 2)

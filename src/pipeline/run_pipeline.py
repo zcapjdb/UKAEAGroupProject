@@ -64,20 +64,8 @@ for model in PRETRAINED:
 lam = cfg["lambda"]
 logging.info(f"Training for lambda: {lam}")
 
-train_losses = []
-test_losses = []
-n_train_points = []
-mse_before = []
-mse_after = []
-d_mse = []
-d_train_uncert = []
-
-class_train_loss = []
-class_val_loss = []
-class_missed_loss = []
-class_train_acc = []
-class_val_acc = []
-class_missed_acc = []
+# Dictionary to store results of the classifier and regressor for later use
+output_dict = pt.output_dict
 
 for i in range(cfg["iterations"]):
     logging.info(f"Iteration: {i+1}\n")
@@ -116,15 +104,14 @@ for i in range(cfg["iterations"]):
         pt.plot_classifier_retraining(
             train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc, save_path
         )
+        output_dict["class_train_loss"].append(train_loss)
+        output_dict["class_val_loss"].append(val_loss)
+        output_dict["class_missed_loss"].append(missed_loss)
+        output_dict["class_train_acc"].append(train_acc)
+        output_dict["class_val_acc"].append(val_acc)
+        output_dict["class_missed_acc"].append(missed_acc)
 
-        class_train_loss.append(train_loss)
-        class_val_loss.append(val_loss)
-        class_missed_loss.append(missed_loss)
-        class_train_acc.append(train_acc)
-        class_val_acc.append(val_acc)
-        class_missed_acc.append(missed_acc)
     # TODO: diagnose how well the classifier retraining does
-    # From first run through it does seem like training on the misclassified points hurts the validation dataset accuracy quite a bit
 
     uncertain_dataset, uncert_before, data_idx = pt.regressor_uncertainty(
         valid_sample,
@@ -170,8 +157,8 @@ for i in range(cfg["iterations"]):
         patience=cfg["patience"],
     )
 
-    train_losses.append(train_loss)
-    test_losses.append(test_loss)
+    output_dict["train_losses"].append(train_loss)
+    output_dict["test_losses"].append(test_loss)
 
     prediction_after, _ = models["Regressor"].predict(
         uncertain_loader, prediction_idx_order
@@ -196,7 +183,7 @@ for i in range(cfg["iterations"]):
     _ = pt.uncertainty_change(x=uncert_before, y=uncert_after)
 
     logging.info("Change in uncertainty for training data:")
-    d_train_uncert.append(
+    output_dict["d_uncert"].append(
         pt.uncertainty_change(x=train_uncert_before, y=train_uncert_after)
     )
 
@@ -218,27 +205,11 @@ for i in range(cfg["iterations"]):
         uncertainties=[train_uncert_before, train_uncert_after],
         data="train",
     )
-    mse_before.append(train_mse_before)
-    mse_after.append(train_mse_after)
-    d_mse.append(delta_mse)
     n_train = len(train_sample_origin)
-    n_train_points.append(n_train)
-
-output_dict = {
-    "train_losses": train_losses,
-    "test_losses": test_losses,
-    "n_train_points": n_train_points,
-    "mse_before": mse_before,
-    "mse_after": mse_after,
-    "d_mse": d_mse,
-    "d_uncert": d_train_uncert,
-    "class_train_loss": class_train_loss,
-    "class_val_loss": class_val_loss,
-    "class_missed_loss": class_missed_loss,
-    "class_train_acc": class_train_acc,
-    "class_val_acc": class_val_acc,
-    "class_missed_acc": class_missed_acc,
-}
+    output_dict["mse_before"].append(train_mse_before)
+    output_dict["mse_after"].append(train_mse_after)
+    output_dict["d_mse"].append(delta_mse)
+    output_dict["n_train_points"].append(n_train)
 
 if not os.path.exists(SAVE_PATHS["outputs"]):
     os.makedirs(SAVE_PATHS["outputs"])

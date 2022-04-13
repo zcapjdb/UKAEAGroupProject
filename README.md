@@ -17,9 +17,9 @@ To install the package run: `pip install .` in the root directory (installation 
 The pipeline for the retraining of the classifier and regressors is included in the [pipeline](src/pipeline/) directory.
 
 The pipeline consits of the following files:
-- Models.py: Contains the classifiers, Regressors and dataset generators.
-- pipeline_tools.py: Contains functions for each step of the pipeline.
-- run_pipeline.py: Contains the main function for running the pipeline.
+- [Models.py](src/pipeline/Models.py): Contains the classifiers, Regressors and dataset generators.
+- [pipeline_tools.py](src/pipeline/pipeline_tools.py): Contains functions for each step of the pipeline.
+- [run_pipeline.py](src/pipeline/run_pipeline.py): Contains the main function for running the pipeline.
 
 
 ![](pipeline.png)
