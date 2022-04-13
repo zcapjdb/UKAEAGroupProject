@@ -5,7 +5,6 @@ import pandas as pd
 import scripts.pipeline_tools as tools
 
 import numpy as np
-from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
 from scripts.utils import train_keys
 from tqdm.auto import tqdm
@@ -96,6 +95,10 @@ class Classifier(nn.Module):
         correct /= size
         average_loss = np.mean(test_loss)
         logging.debug(f"Test accuracy: {correct:>7f}, loss: {average_loss:>7f}")
+
+        if scheduler is not None:
+            scheduler.step(average_loss)
+
         return average_loss, correct
 
 
@@ -166,7 +169,7 @@ class Regressor(nn.Module):
 
         return np.sum(losses) / size
 
-    def validation_step(self, dataloader):
+    def validation_step(self, dataloader, scheduler=None):
         size = len(dataloader.dataset)
 
         test_loss = []
@@ -177,7 +180,12 @@ class Regressor(nn.Module):
                     self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
                 )
 
-        return np.sum(test_loss) / size
+        average_loss = np.sum(test_loss) / size
+
+        if scheduler is not None:
+            scheduler.step(average_loss)
+
+        return average_loss
 
     def predict(self, dataloader, order_outputs=None):
         pred = []

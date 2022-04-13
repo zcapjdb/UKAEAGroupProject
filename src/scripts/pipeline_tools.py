@@ -149,7 +149,7 @@ def retrain_classifier(
     opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate)
     # create scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        opt, mode="min", factor=0.5, patience=0.5 * patience
+        opt, mode="min", factor=0.5, patience=0.5 * patience, min_lr=(1/16)*learning_rate
     )
     train_loss = []
     train_acc = []
@@ -166,7 +166,7 @@ def retrain_classifier(
         train_loss.append(loss.item())
         train_acc.append(acc)
 
-        if (validation_step and epoch % 5 == 0) or epoch == epochs - 1:
+        if validation_step:
 
             logging.debug(f"Validation Step: {epoch}")
 
@@ -180,6 +180,7 @@ def retrain_classifier(
             miss_loss, miss_acc = classifier.validation_step(missed_loader)
             missed_loss.append(miss_loss)
             missed_acc.append(miss_acc)
+            print("\n")
 
         if len(val_loss) > patience:
             if np.mean(val_acc[-patience:]) > val_acc[-1]:
@@ -220,7 +221,7 @@ def retrain_regressor(
     # instantiate optimiser
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        opt, mode="min", factor=0.5, patience=0.5 * patience
+        opt, mode="min", factor=0.5, patience=0.5 * patience, min_lr=(1/16)*learning_rate
     )
     train_loss = []
     val_loss = []
@@ -233,7 +234,7 @@ def retrain_regressor(
         logging.log(15, f"Training Loss: {loss.item():.4f}")
 
         if (validation_step and epoch % 10 == 0) or epoch == epochs - 1:
-            test_loss = model.validation_step(val_loader).item()
+            test_loss = model.validation_step(val_loader, scheduler).item()
             val_loss.append(test_loss)
 
             logging.log(15, f"Test loss: {test_loss:.4f}")
