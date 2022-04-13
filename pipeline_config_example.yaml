@@ -1,11 +1,29 @@
+
+# Set which leading flux to use
+flux: "efiitg_gb"
+
 # Use pre-trained model or train from scratch
 pretrained:
-    Classifier:
-        save_path: /path/to/ITG_class_model.pt
-        trained: True
-    Regressor:
-        save_path: /path/to/ITG_reg_model.pt
-        trained: True
+  Classifier:
+      efiitg_gb:
+          save_path: /path/to/Classifier_model.pt
+          trained: True
+      efetem_gb:
+          save_path: /path/to/Classifier_model.pt
+          trained: True
+      efeetg_gb:
+          save_path: /path/to/Classifier_model.pt
+          trained: True
+  Regressor:
+      efiitg_gb:
+          save_path: /path/to/Regressor_model.pt
+          trained: True
+      efetem_gb:
+          save_path: /path/to/Regressor_model.pt
+          trained: True
+      efeetg_gb:
+          save_path: /path/to/Regressor_model.pt
+          trained: True
 
 # Path to data used for training and validation
 data:
@@ -16,9 +34,6 @@ data:
 save_paths:
   plots: /path/to/save/plots
   outputs: /path/to/save/outputs
-
-save_paths:
-    outputs: /path/to/outputs/
 
 retrain_classifier: False
 retrain_regressor: True

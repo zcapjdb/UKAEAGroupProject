@@ -286,7 +286,7 @@ class ITGDatasetDF(Dataset):
         self,
         df: pd.DataFrame,
         target_column: str,
-        target_var: str,
+        target_var: str = "stable_label",
         keep_index: bool = False,
     ):
         self.data = df

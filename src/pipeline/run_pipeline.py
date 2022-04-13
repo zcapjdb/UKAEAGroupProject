@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 coloredlogs.install(level=cfg["logging_level"])
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
-
+FLUX = cfg["flux"]
 PRETRAINED = cfg["pretrained"]
 PATHS = cfg["data"]
 SAVE_PATHS = cfg["save_paths"]
 
 train_dataset, valid_dataset = pt.prepare_data(
-    PATHS["train"], PATHS["validation"], target_column="efiitg_gb", target_var="itg"
+    PATHS["train"], PATHS["validation"], target_column=FLUX
 )
 # Sample subset of data to use in active learning (10K for now)
 # TODO: Needs to be the true training samples used!!!
@@ -43,7 +43,7 @@ logging.info("Loaded the following models:\n")
 models = {}
 for model in PRETRAINED:
     if PRETRAINED[model]["trained"] == True:
-        trained_model = md.load_model(model, PRETRAINED[model]["save_path"])
+        trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"])
         models[model] = trained_model
 
     else:
@@ -55,7 +55,7 @@ for model in PRETRAINED:
             models[model],
             train_sample,
             valid_dataset,
-            save_path=PRETRAINED[model]["save_path"],
+            save_path=PRETRAINED[model][FLUX]["save_path"],
             epochs=cfg["train_epochs"],
             patience=cfg["train_patience"],
         )

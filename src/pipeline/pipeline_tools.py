@@ -20,7 +20,6 @@ def prepare_data(
     train_path: str,
     valid_path: str,
     target_column: str,
-    target_var: str,
     train_size: int = None,
     valid_size: int = None,
 ) -> (ITGDatasetDF, ITGDatasetDF):
@@ -38,6 +37,9 @@ def prepare_data(
     if valid_size is not None:
         validation_data = validation_data.sample(valid_size)
 
+    if target_column not in ["efeetg_gb", "efetem_gb", "efiitg_gb"]:
+        raise ValueError("Currently only leading fluxes are supported")
+
     # Remove NaN's and add appropripate class labels
     keep_keys = train_keys + [target_column]
 
@@ -47,17 +49,17 @@ def prepare_data(
     train_data = train_data.dropna()
     validation_data = validation_data.dropna()
 
-    train_data[target_var] = np.where(train_data[target_column] != 0, 1, 0)
-    validation_data[target_var] = np.where(validation_data[target_column] != 0, 1, 0)
+    train_data["stable_label"] = np.where(train_data[target_column] != 0, 1, 0)
+    validation_data["stable_label"] = np.where(validation_data[target_column] != 0, 1, 0)
 
     scaler = StandardScaler()
-    scaler.fit_transform(train_data.drop([target_var], axis=1))
+    scaler.fit_transform(train_data.drop(["stable_label"], axis=1))
 
     train_dataset = ITGDatasetDF(
-        train_data, target_column="efiitg_gb", target_var="itg"
+        train_data, target_column="efiitg_gb"
     )
     valid_dataset = ITGDatasetDF(
-        validation_data, target_column="efiitg_gb", target_var="itg"
+        validation_data, target_column="efiitg_gb"
     )
 
     train_dataset.scale(scaler)
