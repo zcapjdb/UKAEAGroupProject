@@ -3,6 +3,7 @@ Repository for the UCL CDT in DIS group project with UKAEA.
 
 <!-- omit in toc -->
 - [Installation:](#installation) 
+- [Pipeline:](#pipeline)
 - [Data Preparation:](#data-preparation)
 - [Missing Outputs:](#missing-outputs)
 - [QLKNN Reproduction:](#qlknn-reproduction)
@@ -11,6 +12,17 @@ Repository for the UCL CDT in DIS group project with UKAEA.
 
 ## Installation:
 To install the package run: `pip install .` in the root directory (installation via a setup.py file is deprecated). If you wish to make changes to the package you can install using `pip install -e .` which will install the package in editable mode.
+
+## Pipeline:
+The pipeline for the retraining of the classifier and regressors is included in the [pipeline](src/pipeline/) directory.
+
+The pipeline consits of the following files:
+- Models.py: Contains the classifiers, Regressors and dataset generators.
+- pipeline_tools.py: Contains functions for each step of the pipeline.
+- run_pipeline.py: Contains the main function for running the pipeline.
+
+
+![](pipeline.png)
 
 ## Data Preparation:
 The models used in the project take the .h5 file provided and convert it to pickled dataframes. The data is also split into a training, validation and test set at this point. This is done in [QLKNNDataPreparation.ipynb](src/notebooks/QLKNNDataPreparation.ipynb).
@@ -39,4 +51,4 @@ It is therefore of interest to try and understand why this is the case. To do so
 - Variational Autoencoders are looked at in [VAE.ipynb](src/notebooks/VAE.ipynb)
 
 ## Gaussian Process:
-- One dimensional gaussian processes are trained and plotted in [GaussianProcess.ipynb](src/notebooks/GaussianProcess.ipynb) 
+- One dimensional gaussian processes are trained and plotted in [GaussianProcess.ipynb](src/notebooks/GaussianProcess.ipynb)
