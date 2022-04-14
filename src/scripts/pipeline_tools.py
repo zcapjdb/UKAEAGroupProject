@@ -567,7 +567,6 @@ def plot_mse_change(
     plt.legend()
 
     if save_plots:
-<<<<<<< HEAD
         filename = f"{save_prefix}_mse_after_it_{iteration}.png"
         save_dest = os.path.join(save_path,f"{lam}")
         if os.path.exists(save_dest):
@@ -577,7 +576,6 @@ def plot_mse_change(
             save_dest = os.path.join(save_dest,filename)
 
         plt.savefig(save_dest, dpi=300)
-=======
         plt.savefig(f"{save_prefix}_mse_after.png", dpi=300)
 
 
@@ -607,4 +605,3 @@ def plot_classifier_retraining(
     if save_path is not None:
         plt.savefig(f"{save_path}_classifier_accuracy_.png", dpi=300)
     plt.clf()
->>>>>>> 8f78c9f77359775e5c6efb1f16ad2dde970ed37f
