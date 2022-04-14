@@ -469,8 +469,8 @@ def mse_change(
 
     mse_before = get_mse(pred_before, ground_truth_subset)
     mse_after = get_mse(pred_after, ground_truth_subset)
-
-    logging.info(f"Change in MSE for {data} dataset: {mse_after-mse_before:.4f}\n")
+    perc_change = (mse_after - mse_before)*100/mse_before
+    logging.info(f"% change in MSE for {data} dataset: {perc_change:.4f}%\n")
 
     if plot:
         plot_mse_change(
@@ -481,7 +481,8 @@ def mse_change(
             data=data,
             save_plots=save_plots,
         )
-    return mse_before, mse_after, (mse_after - mse_before)
+    
+    return mse_before, mse_after, perc_change
 
 
 def uncertainty_change(
@@ -503,6 +504,8 @@ def uncertainty_change(
     av_uncert_before = np.mean(x)
     av_uncer_after = np.mean(y)
 
+    perc_change = (av_uncer_after - av_uncert_before) * 100/ av_uncert_before
+
     logging.info(
         f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_change:.3f} "
     )
@@ -510,7 +513,9 @@ def uncertainty_change(
     logging.info(
         f"Initial Average Uncertainty: {av_uncert_before:.4f}, Final Average Uncertainty: {av_uncer_after:.4f}\n"
     )
-    return av_uncer_after - av_uncert_before
+
+    logging.info(f"% change: {perc_change:.5f}%")
+    return perc_change
 
 
 def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None) -> None:

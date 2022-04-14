@@ -78,7 +78,7 @@ for i in range(cfg["iterations"]):
         valid_sample, batch_size=100, classifier=models["Classifier"]
     )
 
-    epochs = cfg["initial_epoch"] * (i + 1)
+    epochs = cfg["initial_epochs"] * (i + 1)
 
     if cfg["retrain_classifier"]:
         # retrain the classifier on the misclassified points
