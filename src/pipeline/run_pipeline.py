@@ -42,7 +42,7 @@ train_sample = train_dataset.sample(10_000)
 logging.info("Loaded the following models:\n")
 models = {}
 for model in PRETRAINED:
-    if PRETRAINED[model]["trained"] == True:
+    if PRETRAINED[model][FLUX]["trained"] == True:
         trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"])
         models[model] = trained_model
 
@@ -78,7 +78,7 @@ for i in range(cfg["iterations"]):
         valid_sample, batch_size=100, classifier=models["Classifier"]
     )
 
-    epochs = cfg["initial_epoch"] * (i + 1)
+    epochs = cfg["initial_epochs"] * (i + 1)
 
     if cfg["retrain_classifier"]:
         # retrain the classifier on the misclassified points
