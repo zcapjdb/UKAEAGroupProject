@@ -35,6 +35,7 @@ SAVE_PATHS = cfg["save_paths"]
 train_dataset, valid_dataset = pt.prepare_data(
     PATHS["train"], PATHS["validation"], target_column=FLUX
 )
+<<<<<<< HEAD
 # Sample subset of data to use in active learning (10K for now)
 # TODO: Needs to be the true training samples used!!!
 train_sample = copy.deepcopy(train_dataset)
@@ -44,11 +45,19 @@ plot_sample = valid_dataset.sample(10_000)
 valid_dataset.remove(plot_sample.data.index)
 
 valid_plot_loader = pt.pandas_to_numpy_data(plot_sample)
+=======
+
+>>>>>>> aef8b09c5a722d8cd8f78523aa31b31f2f80983e
 
 # Load pretrained models
 logging.info("Loaded the following models:\n")
 models = {}
 for model in PRETRAINED:
+    if PRETRAINED[model][FLUX]["trained"] == False:
+        train_sample = train_dataset.sample(20_000)
+    else:
+        train_sample = train_dataset
+
     if PRETRAINED[model][FLUX]["trained"] == True:
         trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"])
         models[model] = trained_model
@@ -66,6 +75,9 @@ for model in PRETRAINED:
             epochs=cfg["train_epochs"],
             patience=cfg["train_patience"],
         )
+
+if len(train_sample) > 100_000:
+    logger.warning("Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data")
 
 
 lam = cfg["lambda"]
