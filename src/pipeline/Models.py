@@ -9,6 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from scripts.utils import train_keys
 from tqdm.auto import tqdm
 import logging
+import time 
 
 # Class definitions
 class Classifier(nn.Module):
@@ -188,6 +189,8 @@ class Regressor(nn.Module):
         return average_loss
 
     def predict(self, dataloader, order_outputs=None):
+        # Debug
+        predict_start = time.time()
         pred = []
         index_ordering = []
         for (x, y, z, idx) in dataloader:
@@ -196,10 +199,21 @@ class Regressor(nn.Module):
             index_ordering.append(idx.detach().numpy())
 
         idx_array = np.asarray(index_ordering, dtype=object).flatten()
-        idx_array = idx_array.astype(int)
-        pred = np.asarray(pred).flatten()
+        
+        pred = np.asarray(pred, dtype=object).flatten()
+
+        if idx_array.shape[0] < 100:
+            idx_array = np.concatenate(idx_array).ravel().astype(int)
+            pred = np.concatenate(pred).ravel().astype(int)
+        
+        # Debug 
+        predict_end = time.time()
+
+        logging.debug(f"Time taken to predict: {predict_end - predict_start}")
 
         if order_outputs is not None:
+            logging.debug("Ordering predictions")
+            order_start = time.time()
             assert len(np.unique(order_outputs)) == len(order_outputs), logging.error(
                 "The order_outputs array must be unique - duplicate indices found"
             )
@@ -218,6 +232,10 @@ class Regressor(nn.Module):
             assert real_idx.tolist() == order_outputs.tolist(), logging.error(
                 "Ordering error"
             )
+
+            order_end = time.time()
+
+            logging.debug(f"Time taken to order: {order_end - order_start}")
 
         return pred, idx_array
 

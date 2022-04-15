@@ -12,6 +12,7 @@ import logging
 from scripts.utils import train_keys
 from pipeline.Models import ITGDatasetDF, ITGDataset, Classifier, Regressor
 from typing import Union
+import os
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
@@ -50,17 +51,15 @@ def prepare_data(
     validation_data = validation_data.dropna()
 
     train_data["stable_label"] = np.where(train_data[target_column] != 0, 1, 0)
-    validation_data["stable_label"] = np.where(validation_data[target_column] != 0, 1, 0)
+    validation_data["stable_label"] = np.where(
+        validation_data[target_column] != 0, 1, 0
+    )
 
     scaler = StandardScaler()
     scaler.fit_transform(train_data.drop(["stable_label"], axis=1))
 
-    train_dataset = ITGDatasetDF(
-        train_data, target_column="efiitg_gb"
-    )
-    valid_dataset = ITGDatasetDF(
-        validation_data, target_column="efiitg_gb"
-    )
+    train_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb")
+    valid_dataset = ITGDatasetDF(validation_data, target_column="efiitg_gb")
 
     train_dataset.scale(scaler)
     valid_dataset.scale(scaler)
@@ -426,6 +425,9 @@ output_dict = {
     "mse_after": [],
     "d_mse": [],
     "d_uncert": [],
+    "d_novel_uncert": [],
+    "valid_pred_before": [],
+    "valid_pred_after": [],
     "class_train_loss": [],
     "class_val_loss": [],
     "class_missed_loss": [],
@@ -447,9 +449,12 @@ def mse_change(
     uncert_data_order: list,
     uncertain_loader: DataLoader,
     uncertainties: Union[None, list] = None,
-    plot: bool = False,
+    plot: bool = True,
     data: str = "novel",
-    save_plots: bool = False,
+    save_plots: bool = True,
+    save_path:str = None, 
+    iteration: int =None,
+    lam = 1.0
 ) -> (float, float, float):
     """
     Calculates the change in MSE between the before and after training.
@@ -469,7 +474,7 @@ def mse_change(
 
     mse_before = get_mse(pred_before, ground_truth_subset)
     mse_after = get_mse(pred_after, ground_truth_subset)
-    perc_change = (mse_after - mse_before)*100/mse_before
+    perc_change = (mse_after - mse_before) * 100 / mse_before
     logging.info(f"% change in MSE for {data} dataset: {perc_change:.4f}%\n")
 
     if plot:
@@ -480,8 +485,12 @@ def mse_change(
             uncertainties,
             data=data,
             save_plots=save_plots,
+            save_path=save_path, 
+            iteration=iteration, 
+            lam=lam,
+            target=uncertain_loader.dataset.target
         )
-    
+
     return mse_before, mse_after, perc_change
 
 
@@ -504,7 +513,7 @@ def uncertainty_change(
     av_uncert_before = np.mean(x)
     av_uncer_after = np.mean(y)
 
-    perc_change = (av_uncer_after - av_uncert_before) * 100/ av_uncert_before
+    perc_change = (av_uncer_after - av_uncert_before) * 100 / av_uncert_before
 
     logging.info(
         f" Decreased {decrease:.3f}% Increased: {increase:.3f} % No Change: {no_change:.3f} "
@@ -567,8 +576,12 @@ def plot_mse_change(
     intial_prediction: np.array,
     final_prediction: np.array,
     uncertainties: list,
+    target = "efiitg_gb",
     data: str = "novel",
     save_plots: bool = False,
+    save_path=None,
+    iteration=None,
+    lam=1.0
 ) -> None:
     """
 
@@ -618,7 +631,18 @@ def plot_mse_change(
     plt.title(title)
     plt.legend()
     if save_plots:
-        plt.savefig(f"{save_prefix}_mse_before.png", dpi=300)
+        filename = f"{save_prefix}_mse_before_it_{iteration}.png"
+        save_dest = os.path.join(save_path,target)
+
+        if not os.path.exists(save_dest): os.mkdir(save_dest)
+
+        save_dest = os.path.join(save_dest,f"{lam}")
+
+        if not os.path.exists(save_dest): os.mkdir(save_dest)
+        
+        save_dest = os.path.join(save_dest,filename)
+        
+        plt.savefig(save_dest, dpi=300)
 
     plt.figure()
     if uncertainties is not None:
@@ -641,7 +665,18 @@ def plot_mse_change(
     plt.legend()
 
     if save_plots:
-        plt.savefig(f"{save_prefix}_mse_after.png", dpi=300)
+        filename = f"{save_prefix}_mse_after_it_{iteration}.png"
+        save_dest = os.path.join(save_path,target)
+
+        if not os.path.exists(save_dest): os.mkdir(save_dest)
+
+        save_dest = os.path.join(save_dest,f"{lam}")
+
+        if not os.path.exists(save_dest): os.mkdir(save_dest)
+        
+        save_dest = os.path.join(save_dest,filename)
+        
+        plt.savefig(save_dest, dpi=300)
 
 
 def plot_classifier_retraining(

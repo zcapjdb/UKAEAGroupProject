@@ -1,5 +1,6 @@
 import coloredlogs, verboselogs, logging
 import os
+import copy
 
 import pipeline.pipeline_tools as pt
 import pipeline.Models as md
@@ -36,7 +37,13 @@ train_dataset, valid_dataset = pt.prepare_data(
 )
 # Sample subset of data to use in active learning (10K for now)
 # TODO: Needs to be the true training samples used!!!
-train_sample = train_dataset.sample(10_000)
+train_sample = copy.deepcopy(train_dataset)
+
+plot_sample = valid_dataset.sample(10_000)
+
+valid_dataset.remove(plot_sample.data.index)
+
+valid_plot_loader = pt.pandas_to_numpy_data(plot_sample)
 
 # Load pretrained models
 logging.info("Loaded the following models:\n")
@@ -143,12 +150,14 @@ for i in range(cfg["iterations"]):
     )
 
     # regressor_unceratinty adds points back into valid_dataset so new dataloader is needed
-    valid_loader_modified = pt.pandas_to_numpy_data(valid_dataset)
+    valid_loader = pt.pandas_to_numpy_data(valid_dataset)
+
+    valid_pred_before, valid_pred_order = models["Regressor"].predict(valid_plot_loader)
 
     # Retrain Regressor (Further research required)
     train_loss, test_loss = pt.retrain_regressor(
         uncertain_loader,
-        valid_loader_modified,
+        valid_loader,
         models["Regressor"],
         learning_rate=cfg["learning_rate"],
         epochs=epochs,
@@ -163,6 +172,8 @@ for i in range(cfg["iterations"]):
     prediction_after, _ = models["Regressor"].predict(
         uncertain_loader, prediction_idx_order
     )
+    logging.debug("Running prediction on validation data set")
+    valid_pred_after,_ = models["Regressor"].predict(valid_plot_loader, valid_pred_order)
 
     _, uncert_after, _ = pt.regressor_uncertainty(
         valid_sample,
@@ -180,7 +191,9 @@ for i in range(cfg["iterations"]):
     )
 
     logging.info("Change in uncertainty for most uncertain data points:")
-    _ = pt.uncertainty_change(x=uncert_before, y=uncert_after)
+    output_dict["d_novel_uncert"].append(
+        pt.uncertainty_change(x=uncert_before, y=uncert_after)
+    )
 
     logging.info("Change in uncertainty for training data:")
     output_dict["d_uncert"].append(
@@ -194,6 +207,9 @@ for i in range(cfg["iterations"]):
         data_idx,
         uncertain_loader,
         [uncert_before, uncert_after],
+        save_path = SAVE_PATHS["plots"], 
+        iteration=i,
+        lam = lam
     )
 
     train_mse_before, train_mse_after, delta_mse = pt.mse_change(
@@ -204,8 +220,13 @@ for i in range(cfg["iterations"]):
         uncertain_loader,
         uncertainties=[train_uncert_before, train_uncert_after],
         data="train",
+        save_path = SAVE_PATHS["plots"], 
+        iteration=i,
+        lam = lam
     )
     n_train = len(train_sample_origin)
+    output_dict["valid_pred_before"].append(valid_pred_before)
+    output_dict["valid_pred_after"].append(valid_pred_after)
     output_dict["mse_before"].append(train_mse_before)
     output_dict["mse_after"].append(train_mse_after)
     output_dict["d_mse"].append(delta_mse)
@@ -214,6 +235,9 @@ for i in range(cfg["iterations"]):
 if not os.path.exists(SAVE_PATHS["outputs"]):
     os.makedirs(SAVE_PATHS["outputs"])
 
-output_path = os.path.join(SAVE_PATHS["outputs"], f"pipeline_outputs_lam_{lam}.pkl")
+save_dest = os.path.join(SAVE_PATHS["outputs"], FLUX)
+if not os.path.exists(save_dest): os.mkdir(save_dest)
+
+output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}.pkl")
 with open(output_path, "wb") as f:
     pickle.dump(output_dict, f)
