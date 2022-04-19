@@ -58,8 +58,8 @@ def prepare_data(
     scaler = StandardScaler()
     scaler.fit_transform(train_data.drop(["stable_label"], axis=1))
 
-    train_dataset = ITGDatasetDF(train_data, target_column="efiitg_gb")
-    valid_dataset = ITGDatasetDF(validation_data, target_column="efiitg_gb")
+    train_dataset = ITGDatasetDF(train_data, target_column=target_column)
+    valid_dataset = ITGDatasetDF(validation_data, target_column=target_column)
 
     train_dataset.scale(scaler)
     valid_dataset.scale(scaler)
