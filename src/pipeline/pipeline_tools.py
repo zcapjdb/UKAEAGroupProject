@@ -426,6 +426,7 @@ output_dict = {
     "d_mse": [],
     "d_uncert": [],
     "d_novel_uncert": [],
+    "valid_ground_truth": [],
     "valid_pred_before": [],
     "valid_pred_after": [],
     "class_train_loss": [],
@@ -435,6 +436,27 @@ output_dict = {
     "class_val_acc": [],
     "class_missed_acc": [],
 }
+
+def reorder(dataset,column,index_ordering):
+    array = dataset.data[column].to_numpy()
+    
+    data_index = np.array(dataset.data.index)
+
+    assert len(data_index) == len(index_ordering)
+    assert set(data_index) == set(index_ordering)
+
+    try:
+        reorder = []
+        for i in index_ordering:
+            reorder.append(np.where(data_index == i)[0][0])
+        # reorder = [np.where(data_index == i)[0][0] for i in index_ordering]
+    except IndexError as e:
+        print("Oh no!")
+        print(i, index_ordering[i])
+        print(np.where(data_index == i))
+        print(e)
+
+    return array[reorder]
 
 # Active Learning diagonistic functions
 def get_mse(y_hat: np.array, y: np.array) -> float:

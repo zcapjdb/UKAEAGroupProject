@@ -10,6 +10,7 @@ from scripts.utils import train_keys
 import yaml
 import pickle
 import argparse
+import pandas as pd
 
 
 # add argument to pass config file
@@ -43,7 +44,10 @@ plot_sample = valid_dataset.sample(10_000)
 
 valid_dataset.remove(plot_sample.data.index)
 
+# problem location 1 
 valid_plot_loader = pt.pandas_to_numpy_data(plot_sample)
+
+
 
 # Load pretrained models
 logging.info("Loaded the following models:\n")
@@ -160,7 +164,16 @@ for i in range(cfg["iterations"]):
     # regressor_unceratinty adds points back into valid_dataset so new dataloader is needed
     valid_loader = pt.pandas_to_numpy_data(valid_dataset)
 
+    # problem location 2
     valid_pred_before, valid_pred_order = models["Regressor"].predict(valid_plot_loader)
+
+    output_dict["valid_ground_truth"].append(
+        pt.reorder(
+            plot_sample,
+            FLUX,
+            valid_pred_order
+        )
+        )
 
     # Retrain Regressor (Further research required)
     train_loss, test_loss = pt.retrain_regressor(
@@ -247,5 +260,8 @@ save_dest = os.path.join(SAVE_PATHS["outputs"], FLUX)
 if not os.path.exists(save_dest): os.mkdir(save_dest)
 
 output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}.pkl")
-with open(output_path, "wb") as f:
+# with open(output_path, "wb") as f:
+#     pickle.dump(output_dict, f)
+
+with open(f"pipeline_outputs_lam_{lam}.pkl", "wb") as f:
     pickle.dump(output_dict, f)
