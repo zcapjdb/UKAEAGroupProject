@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from scripts.utils import train_keys
 from tqdm.auto import tqdm
 import logging
-import time 
+import time
 
 # Class definitions
 class Classifier(nn.Module):
@@ -76,7 +76,7 @@ class Classifier(nn.Module):
         logging.debug(f"Train accuracy: {correct:>7f}, loss: {average_loss:>7f}")
         return average_loss, correct
 
-    def validation_step(self, dataloader, scheduler = None):
+    def validation_step(self, dataloader, scheduler=None):
         size = len(dataloader.dataset)
         # Initalise loss function
         BCE = nn.BCELoss()
@@ -199,14 +199,14 @@ class Regressor(nn.Module):
             index_ordering.append(idx.detach().numpy())
 
         idx_array = np.asarray(index_ordering, dtype=object).flatten()
-        
+
         pred = np.asarray(pred, dtype=object).flatten()
 
         if idx_array.shape[0] < 100:
             idx_array = np.concatenate(idx_array).ravel().astype(int)
             pred = np.concatenate(pred).ravel().astype(int)
-        
-        # Debug 
+
+        # Debug
         predict_end = time.time()
 
         logging.debug(f"Time taken to predict: {predict_end - predict_start}")
@@ -241,13 +241,16 @@ class Regressor(nn.Module):
 
 
 class ITGDataset(Dataset):
-    def __init__(self, X, y, z=None):
+    def __init__(self, X, y, z=None, idx=None, target = "efiitg_gb"):
         self.X = X
         self.y = y
         self.z = z
+        self.target = target 
 
-        # add indices to all the data points
-        self.indices = np.arange(len(self.X))
+        if idx is not None:
+            self.indices = idx    
+        else:
+            self.indices = np.arange(len(X))
 
     # number of rows in the dataset
     def __len__(self):
@@ -306,6 +309,7 @@ class ITGDatasetDF(Dataset):
         target_column: str,
         target_var: str = "stable_label",
         keep_index: bool = False,
+        index_col: np.ndarray = None,
     ):
         self.data = df
         self.target = target_column
@@ -316,6 +320,9 @@ class ITGDatasetDF(Dataset):
 
         if not keep_index:
             self.data["index"] = self.data.index
+
+        if index_col is not None:
+            self.data["index"] = index_col
 
     def scale(self, scaler):
         # Scale features in the scaler object and leave the rest as is
