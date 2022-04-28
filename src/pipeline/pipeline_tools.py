@@ -289,7 +289,7 @@ def regressor_uncertainty(
     keep: float = 0.25,
     n_runs: int = 25,
     train_data: bool = False,
-    plot: bool = False,
+    plot_path: str = None,
     order_idx: Union[None, list, np.array] = None,
     valid_dataset: Union[None, ITGDataset] = None,
 ) -> (ITGDatasetDF, np.array, np.array):
@@ -367,13 +367,13 @@ def regressor_uncertainty(
         # Remove them from the sample
         data_copy.remove(drop_idx)
 
-    if plot:
+    if plot_path is not None:
         if order_idx is not None:
             tag = "Final"
         else:
             tag = "Initial"
 
-        plot_uncertainties(out_std, keep, tag)
+        plot_uncertainties(out_std, keep, tag, plot_path)
 
     top_indices = np.argsort(out_std)[-int(len(out_std) * keep) :]
 
@@ -400,21 +400,35 @@ def regressor_uncertainty(
 
 def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None) -> DataLoader:
     """
-    Helper function to convert pandas dataframe to numpy array and create a dataloader.
+    Helper function to convert pandas dataframe based dataset to numpy array based and create a dataloader.
     Dataloaders created from numpy arrays are much faster than pandas dataframes.
     """
 
     x_array = dataset.data[train_keys].values
     y_array = dataset.data[dataset.label].values
     z_array = dataset.data[dataset.target].values
+    index_array = dataset.data["index"].values
+    target = dataset.target
 
-    numpy_dataset = ITGDataset(x_array, y_array, z_array)
+    numpy_dataset = ITGDataset(x_array, y_array, z_array, index_array, target)
 
     if batch_size is None:
         batch_size = int(0.1 * len(y_array))
 
     numpy_loader = DataLoader(numpy_dataset, batch_size=batch_size, shuffle=True)
     return numpy_loader
+
+def numpy_dataloader_to_pandas(dataloader: DataLoader) -> DataLoader:
+    df = pd.DataFrame(data=dataloader.dataset.X, columns=train_keys)
+    df["stable_label"] = dataloader.dataset.y
+    target_var = dataloader.dataset.target
+    df[target_var] = dataloader.dataset.z
+
+    dataset = ITGDatasetDF(df, target_var, "stable_label", index_col=dataloader.dataset.indices)
+    dataset.data["index"] = dataloader.dataset.indices
+    dataset.data.set_index("index", inplace=True, drop = False)
+
+    return DataLoader(dataset, batch_size=1000, shuffle=True)
 
 
 output_dict = {
@@ -426,6 +440,7 @@ output_dict = {
     "d_mse": [],
     "d_uncert": [],
     "d_novel_uncert": [],
+    "d_valid_uncert": [],
     "valid_ground_truth": [],
     "valid_pred_before": [],
     "valid_pred_after": [],
@@ -437,10 +452,11 @@ output_dict = {
     "class_missed_acc": [],
 }
 
-def reorder(dataset,column,index_ordering):
+
+def reorder(dataset, column, index_ordering):
     array = dataset.data[column].to_numpy()
-    
-    data_index = np.array(dataset.data.index)
+
+    data_index = dataset.data["index"].to_numpy()
 
     assert len(data_index) == len(index_ordering)
     assert set(data_index) == set(index_ordering)
@@ -458,6 +474,7 @@ def reorder(dataset,column,index_ordering):
 
     return array[reorder]
 
+
 # Active Learning diagonistic functions
 def get_mse(y_hat: np.array, y: np.array) -> float:
     mse = np.mean((y - y_hat) ** 2)
@@ -474,26 +491,27 @@ def mse_change(
     plot: bool = True,
     data: str = "novel",
     save_plots: bool = True,
-    save_path:str = None, 
-    iteration: int =None,
-    lam = 1.0
+    save_path: str = None,
+    iteration: int = None,
+    lam: Union[float, int] = 1,
 ) -> (float, float, float):
     """
     Calculates the change in MSE between the before and after training.
     """
 
     idxs = prediction_order.astype(int)
-    ground_truth = uncertain_loader.dataset.data.loc[idxs]
 
+    ground_truth = uncertain_loader.dataset.data.loc[idxs]
     ground_truth = ground_truth[uncertain_loader.dataset.target]
     ground_truth = ground_truth.to_numpy()
+    target = uncertain_loader.dataset.target
 
     idx = np.isin(prediction_order, uncert_data_order)
 
     pred_before = prediction_before[idx]
     pred_after = prediction_after[idx]
     ground_truth_subset = ground_truth[idx]
-
+    
     mse_before = get_mse(pred_before, ground_truth_subset)
     mse_after = get_mse(pred_after, ground_truth_subset)
     perc_change = (mse_after - mse_before) * 100 / mse_before
@@ -507,17 +525,21 @@ def mse_change(
             uncertainties,
             data=data,
             save_plots=save_plots,
-            save_path=save_path, 
-            iteration=iteration, 
+            save_path=save_path,
+            iteration=iteration,
             lam=lam,
-            target=uncertain_loader.dataset.target
+            target=target,
         )
 
     return mse_before, mse_after, perc_change
 
 
 def uncertainty_change(
-    x: Union[list, np.array], y: Union[np.array, list], plot: bool = True
+    x: Union[list, np.array],
+    y: Union[np.array, list],
+    path: str = None,
+    iteration: int = None,
+    tag: str = None,
 ) -> float:
     """
     Calculate the change in uncertainty after training for a given set of predictions
@@ -529,8 +551,8 @@ def uncertainty_change(
     decrease = len(x[y < x]) * 100 / total
     no_change = 100 - increase - decrease
 
-    if plot:
-        plot_scatter(x, y)
+    if path is not None:
+        plot_scatter(x, y, path, iteration, tag)
 
     av_uncert_before = np.mean(x)
     av_uncer_after = np.mean(y)
@@ -549,7 +571,9 @@ def uncertainty_change(
     return perc_change
 
 
-def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None) -> None:
+def plot_uncertainties(
+    out_std: np.ndarray, keep: float, tag: str = None, plot_path: str = None
+) -> None:
     """
     Plot the histogram of standard deviations of the the predictions,
     plotting the most uncertain points in a separate plot.
@@ -560,8 +584,12 @@ def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None) -> None:
 
     name_uncertain = "standard_deviation_histogram_most_uncertain"
     if tag is not None:
-        name_uncertain = f"{name_uncertain}_{tag}"
-    plt.savefig(f"{name_uncertain}.png")
+        name_uncertain = f"{name_uncertain}_{tag}.png"
+
+    if not os.path.exists(plot_path):
+        os.makedirs(plot_path)
+    save_path = os.path.join(plot_path, name_uncertain)
+    plt.savefig(save_path)
     plt.clf()
 
     plt.figure()
@@ -569,12 +597,16 @@ def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None) -> None:
 
     name = "standard_deviation_histogram"
     if tag is not None:
-        name = f"{name}_{tag}"
-    plt.savefig(f"{name}.png")
+        name = f"{name}_{tag}.png"
+
+    save_path = os.path.join(plot_path, name)
+    plt.savefig(save_path)
     plt.clf()
 
 
-def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray) -> None:
+def plot_scatter(
+    initial_std: np.ndarray, final_std: np.ndarray, path: str, iteration: int, tag: str
+) -> None:
     """
     Plot the scatter plot of the initial and final standard deviations of the predictions.
     """
@@ -588,9 +620,15 @@ def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray) -> None:
         "k--",
         lw=2,
     )
+
+    if not os.path.exists(path):
+        os.makedirs(path)
+    save_dest = os.path.join(path, f"scatter_plot_{tag}_iteration_{iteration}.png")
+
     plt.xlabel("Initial Standard Deviation")
     plt.ylabel("Final Standard Deviation")
-    plt.savefig("scatter_plot.png")
+    plt.savefig(save_dest)
+    plt.clf()
 
 
 def plot_mse_change(
@@ -598,12 +636,12 @@ def plot_mse_change(
     intial_prediction: np.array,
     final_prediction: np.array,
     uncertainties: list,
-    target = "efiitg_gb",
+    target="efiitg_gb",
     data: str = "novel",
     save_plots: bool = False,
     save_path=None,
     iteration=None,
-    lam=1.0
+    lam: Union[float, int] = 1,
 ) -> None:
     """
 
@@ -627,6 +665,9 @@ def plot_mse_change(
     elif data == "train":
         title = "Training Data"
         save_prefix = "train"
+    elif data == "valid":
+        title = "Validation Data"
+        save_prefix = "valid"
 
     else:
         title = data
@@ -654,16 +695,18 @@ def plot_mse_change(
     plt.legend()
     if save_plots:
         filename = f"{save_prefix}_mse_before_it_{iteration}.png"
-        save_dest = os.path.join(save_path,target)
+        save_dest = os.path.join(save_path, target)
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
+        if not os.path.exists(save_dest):
+            os.makedirs(save_dest)
 
-        save_dest = os.path.join(save_dest,f"{lam}")
+        save_dest = os.path.join(save_dest, f"{lam}")
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
-        
-        save_dest = os.path.join(save_dest,filename)
-        
+        if not os.path.exists(save_dest):
+            os.makedirs(save_dest)
+
+        save_dest = os.path.join(save_dest, filename)
+
         plt.savefig(save_dest, dpi=300)
 
     plt.figure()
@@ -688,16 +731,18 @@ def plot_mse_change(
 
     if save_plots:
         filename = f"{save_prefix}_mse_after_it_{iteration}.png"
-        save_dest = os.path.join(save_path,target)
+        save_dest = os.path.join(save_path, target)
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
+        if not os.path.exists(save_dest):
+            os.makedirs(save_dest)
 
-        save_dest = os.path.join(save_dest,f"{lam}")
+        save_dest = os.path.join(save_dest, f"{lam}")
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
-        
-        save_dest = os.path.join(save_dest,filename)
-        
+        if not os.path.exists(save_dest):
+            os.makedirs(save_dest)
+
+        save_dest = os.path.join(save_dest, filename)
+
         plt.savefig(save_dest, dpi=300)
 
 
@@ -723,7 +768,10 @@ def plot_classifier_retraining(
     plt.legend()
 
     if save_path is not None:
-        plt.savefig(f"{save_path}_classifier_loss_.png", dpi=300)
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        path = os.path.join(save_path, "classifier_loss.png")
+        plt.savefig(path, dpi=300)
     plt.clf()
 
     plt.figure()
@@ -735,5 +783,8 @@ def plot_classifier_retraining(
     plt.legend()
 
     if save_path is not None:
-        plt.savefig(f"{save_path}_classifier_accuracy_.png", dpi=300)
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        path = os.path.join(save_path, "classifier_accuracy.png")
+        plt.savefig(path, dpi=300)
     plt.clf()

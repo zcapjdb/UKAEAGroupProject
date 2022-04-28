@@ -40,13 +40,12 @@ train_dataset, valid_dataset = pt.prepare_data(
 # TODO: Needs to be the true training samples used!!!
 train_sample = copy.deepcopy(train_dataset)
 
-plot_sample = valid_dataset.sample(10_000)
+plot_sample = valid_dataset.sample(1000)
 
 valid_dataset.remove(plot_sample.data.index)
 
-# problem location 1 
+# problem location 1
 valid_plot_loader = pt.pandas_to_numpy_data(plot_sample)
-
 
 
 # Load pretrained models
@@ -77,7 +76,9 @@ for model in PRETRAINED:
         )
 
 if len(train_sample) > 100_000:
-    logger.warning("Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data")
+    logger.warning(
+        "Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data"
+    )
 
 
 lam = cfg["lambda"]
@@ -168,12 +169,15 @@ for i in range(cfg["iterations"]):
     valid_pred_before, valid_pred_order = models["Regressor"].predict(valid_plot_loader)
 
     output_dict["valid_ground_truth"].append(
-        pt.reorder(
-            plot_sample,
-            FLUX,
-            valid_pred_order
-        )
-        )
+        pt.reorder(plot_sample, FLUX, valid_pred_order)
+    )
+
+    plot_origin, valid_uncertainty_before, valid_uncert_order = pt.regressor_uncertainty(
+        plot_sample,
+        models["Regressor"],
+        n_runs=cfg["MC_dropout_runs"],
+        train_data=True,
+    )
 
     # Retrain Regressor (Further research required)
     train_loss, test_loss = pt.retrain_regressor(
@@ -194,7 +198,9 @@ for i in range(cfg["iterations"]):
         uncertain_loader, prediction_idx_order
     )
     logging.debug("Running prediction on validation data set")
-    valid_pred_after,_ = models["Regressor"].predict(valid_plot_loader, valid_pred_order)
+    valid_pred_after, _ = models["Regressor"].predict(
+        valid_plot_loader, valid_pred_order
+    )
 
     _, uncert_after, _ = pt.regressor_uncertainty(
         valid_sample,
@@ -211,14 +217,41 @@ for i in range(cfg["iterations"]):
         train_data=True,
     )
 
+    _, valid_uncertainty_after, _ = pt.regressor_uncertainty(
+        plot_origin,
+        models["Regressor"],
+        n_runs=cfg["MC_dropout_runs"],
+        train_data=True,
+        order_idx=valid_uncert_order
+    )
+
     logging.info("Change in uncertainty for most uncertain data points:")
     output_dict["d_novel_uncert"].append(
-        pt.uncertainty_change(x=uncert_before, y=uncert_after)
+        pt.uncertainty_change(
+            x=uncert_before, y=uncert_after, path=SAVE_PATHS["plots"], iteration=i, tag = "novel"
+        )
     )
 
     logging.info("Change in uncertainty for training data:")
     output_dict["d_uncert"].append(
-        pt.uncertainty_change(x=train_uncert_before, y=train_uncert_after)
+        pt.uncertainty_change(
+            x=train_uncert_before,
+            y=train_uncert_after,
+            path=SAVE_PATHS["plots"],
+            iteration=i,
+            tag = "training",
+        )
+    )
+
+    logging.info("Change in uncertainty for validation data:")
+    output_dict["d_valid_uncert"].append(
+        pt.uncertainty_change(
+            x=valid_uncertainty_before,
+            y=valid_uncertainty_after,
+            path=SAVE_PATHS["plots"],
+            iteration=i,
+            tag="validation",
+        )
     )
 
     _ = pt.mse_change(
@@ -228,9 +261,9 @@ for i in range(cfg["iterations"]):
         data_idx,
         uncertain_loader,
         [uncert_before, uncert_after],
-        save_path = SAVE_PATHS["plots"], 
+        save_path=SAVE_PATHS["plots"],
         iteration=i,
-        lam = lam
+        lam=lam,
     )
 
     train_mse_before, train_mse_after, delta_mse = pt.mse_change(
@@ -241,10 +274,26 @@ for i in range(cfg["iterations"]):
         uncertain_loader,
         uncertainties=[train_uncert_before, train_uncert_after],
         data="train",
-        save_path = SAVE_PATHS["plots"], 
+        save_path=SAVE_PATHS["plots"],
         iteration=i,
-        lam = lam
+        lam=lam,
     )
+
+    valid_plot_loader_pd = pt.numpy_dataloader_to_pandas(valid_plot_loader)
+    valid_mse_before, valid_mse_after, valid_delta_mse = pt.mse_change(
+        valid_pred_before,
+        valid_pred_after,
+        valid_pred_order,
+        valid_uncert_order,
+        valid_plot_loader_pd,
+        uncertainties=[valid_uncertainty_before, valid_uncertainty_after],
+        data="valid",
+        save_path=SAVE_PATHS["plots"],
+        iteration=i,
+        lam=lam,
+    )
+
+
     n_train = len(train_sample_origin)
     output_dict["valid_pred_before"].append(valid_pred_before)
     output_dict["valid_pred_after"].append(valid_pred_after)
@@ -257,11 +306,10 @@ if not os.path.exists(SAVE_PATHS["outputs"]):
     os.makedirs(SAVE_PATHS["outputs"])
 
 save_dest = os.path.join(SAVE_PATHS["outputs"], FLUX)
-if not os.path.exists(save_dest): os.mkdir(save_dest)
+if not os.path.exists(save_dest):
+    os.mkdir(save_dest)
 
 output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}.pkl")
-# with open(output_path, "wb") as f:
-#     pickle.dump(output_dict, f)
-
-with open(f"pipeline_outputs_lam_{lam}.pkl", "wb") as f:
+with open(output_path, "wb") as f:
     pickle.dump(output_dict, f)
+
