@@ -84,10 +84,18 @@ if len(train_sample) > 100_000:
 lam = cfg["lambda"]
 logging.info(f"Training for lambda: {lam}")
 
-# Dictionary to store results of the classifier and regressor for later use
-output_dict = pt.output_dict
+if not os.path.exists(SAVE_PATHS["outputs"]):
+    os.makedirs(SAVE_PATHS["outputs"])
+
+save_dest = os.path.join(SAVE_PATHS["outputs"], FLUX)
+if not os.path.exists(save_dest):
+    os.makedirs(save_dest)
 
 for i in range(cfg["iterations"]):
+    # Dictionary to store results of the classifier and regressor for later use
+    output_dict = pt.output_dict
+
+
     logging.info(f"Iteration: {i+1}\n")
     valid_sample = valid_dataset.sample(10_000)
 
@@ -302,14 +310,14 @@ for i in range(cfg["iterations"]):
     output_dict["d_mse"].append(delta_mse)
     output_dict["n_train_points"].append(n_train)
 
-if not os.path.exists(SAVE_PATHS["outputs"]):
-    os.makedirs(SAVE_PATHS["outputs"])
 
-save_dest = os.path.join(SAVE_PATHS["outputs"], FLUX)
-if not os.path.exists(save_dest):
-    os.mkdir(save_dest)
+    # Save information about pipeline after every iteration
+    output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl")
+    with open(output_path, "wb") as f:
+        pickle.dump(output_dict, f)
 
-output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}.pkl")
-with open(output_path, "wb") as f:
-    pickle.dump(output_dict, f)
+    regressor_path = os.path.join(save_dest, f"regressor_lam_{lam}_iteration_{i}.pkl")
+    torch.save(models["Regressor"].state_dict(), regressor_path)
 
+    classifier_path = os.path.join(save_dest, f"classifier_lam_{lam}_iteration_{i}.pkl")
+    torch.save(models["Classifier"].state_dict(), classifier_path)
