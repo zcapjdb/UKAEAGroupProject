@@ -11,24 +11,27 @@ from tqdm.auto import tqdm
 import logging
 import time 
 
+cuda0 = torch.device('cuda:0')
+
 # Class definitions
 class Classifier(nn.Module):
-    def __init__(self):
+    def __init__(self,device):
         super().__init__()
         self.type = "classifier"
+        self.device = device
         self.model = self.model = nn.Sequential(
-            nn.Linear(15, 128),
+            nn.Linear(15, 512),
             nn.Dropout(p=0.1),
             nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(512, 256),
             nn.Dropout(p=0.1),
             nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(256,128),
             nn.Dropout(p=0.1),
             nn.ReLU(),
             nn.Linear(128, 1),
             nn.Sigmoid(),
-        )
+        ).to(self.device)
 
     def shrink_perturb(self, lam, loc, scale):
         if lam != 1:
@@ -57,6 +60,8 @@ class Classifier(nn.Module):
         correct = 0
         for batch, (X, y, z, idx) in enumerate(dataloader):
 
+            X = X.to(self.device)
+            y = y.to(self.device)
             y_hat = self.forward(X.float())
             loss = BCE(y_hat, y.unsqueeze(-1).float())
 
@@ -68,8 +73,8 @@ class Classifier(nn.Module):
             losses.append(loss.item())
 
             # calculate train accuracy
-            pred_class = torch.round(y_hat.squeeze())
-            correct += torch.sum(pred_class == y.float()).item()
+            pred_class = torch.round(y_hat.squeeze()) #torch.round(y_hat.squeeze())
+            correct += torch.sum(pred_class == y.float()).item() #torch.sum(pred_class == y.float()).item()
 
         correct /= size
         average_loss = np.mean(losses)
@@ -86,12 +91,14 @@ class Classifier(nn.Module):
 
         with torch.no_grad():
             for X, y, z, _ in dataloader:
+                X = X.to(self.device)
+                y = y.to(self.device)                
                 y_hat = self.forward(X.float())
                 test_loss.append(BCE(y_hat, y.unsqueeze(-1).float()).item())
 
                 # calculate test accuracy
-                pred_class = torch.round(y_hat.squeeze())
-                correct += torch.sum(pred_class == y.float()).item()
+                pred_class = torch.round(y_hat.squeeze()) #torch.round(y_hat.squeeze())
+                correct += torch.sum(pred_class == y.float()).item() #torch.sum(pred_class == y.float()).item()
 
         correct /= size
         average_loss = np.mean(test_loss)
@@ -104,21 +111,22 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self):
+    def __init__(self,device):
         super().__init__()
         self.type = "regressor"
+        self.device = device
         self.model = nn.Sequential(
-            nn.Linear(15, 128),
+            nn.Linear(15, 512),
             nn.Dropout(p=0.1),
             nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(512, 256),
             nn.Dropout(p=0.1),
             nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(256, 128),
             nn.Dropout(p=0.1),
             nn.ReLU(),
             nn.Linear(128, 1),
-        )
+        ).to(self.device)
 
     def forward(self, x):
         y_hat = self.model(x.float())
@@ -145,8 +153,8 @@ class Regressor(nn.Module):
                     param_update = (param * lam) + noise
                     param.copy_(param_update)
 
-    def loss_function(self, y, y_hat):
-        MSE_loss = nn.MSELoss(reduction="sum")
+    def loss_function(self, y, y_hat):    # LZ : ToDo if given mode is predicted not to develop, set the outputs related to that mode to zero, and should not contribute to the loss
+        MSE_loss = nn.MSELoss(reduction="sum") # LZ: ToDo this might be an input in the case the output is multitask
         return MSE_loss(y_hat, y.float())
 
     def train_step(self, dataloader, optimizer):
@@ -157,6 +165,8 @@ class Regressor(nn.Module):
         losses = []
         for batch, (X, y, z, idx) in enumerate(dataloader):
             batch_size = len(X)
+            X = X.to(self.device)
+            z = z.to(self.device)
             z_hat = self.forward(X.float())
             loss = self.loss_function(z.unsqueeze(-1).float(), z_hat)
 
@@ -168,7 +178,9 @@ class Regressor(nn.Module):
             loss = loss.item()
             losses.append(loss)
 
-        return np.sum(losses) / size
+        average_loss = np.sum(losses) / size
+        logging.debug(f"Train MSE: {average_loss:>7f}")
+        return average_loss
 
     def validation_step(self, dataloader, scheduler=None):
         size = len(dataloader.dataset)
@@ -176,6 +188,8 @@ class Regressor(nn.Module):
         test_loss = []
         with torch.no_grad():
             for X, y, z, _ in dataloader:
+                X = X.to(self.device)
+                z = z.to(self.device)                
                 z_hat = self.forward(X.float())
                 test_loss.append(
                     self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
@@ -185,18 +199,23 @@ class Regressor(nn.Module):
 
         if scheduler is not None:
             scheduler.step(average_loss)
-
+        logging.debug(f"Test MSE: {average_loss:>7f}")
         return average_loss
 
     def predict(self, dataloader, order_outputs=None):
         # Debug
+
+        if not isinstance(dataloader, DataLoader):
+            dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
+
         predict_start = time.time()
         pred = []
         index_ordering = []
         for (x, y, z, idx) in dataloader:
+            x = x.to(self.device)
             y_hat = self.forward(x.float())
-            pred.append(y_hat.squeeze().detach().numpy())
-            index_ordering.append(idx.detach().numpy())
+            pred.append(y_hat.squeeze().detach().cpu().numpy())
+            index_ordering.append(idx.detach().cpu().numpy())
 
         idx_array = np.asarray(index_ordering, dtype=object).flatten()
         
@@ -211,7 +230,7 @@ class Regressor(nn.Module):
 
         logging.debug(f"Time taken to predict: {predict_end - predict_start}")
 
-        if order_outputs is not None:
+        if order_outputs is not None: # LZ: what is this for?
             logging.debug("Ordering predictions")
             order_start = time.time()
             assert len(np.unique(order_outputs)) == len(order_outputs), logging.error(
@@ -321,8 +340,7 @@ class ITGDatasetDF(Dataset):
         # Scale features in the scaler object and leave the rest as is
         scaled = scaler.transform(self.data.drop([self.label, "index"], axis=1))
 
-        cols = scaler.feature_names_in_
-
+        cols = [c for c in self.data if c!=self.label and c!="index"]
         temp_df = pd.DataFrame(scaled, index=self.data.index, columns=cols)
 
         assert set(list(temp_df.index)) == set(list(self.data.index))
@@ -435,10 +453,9 @@ def train_model(
             losses.append(loss)
 
             val_loss = model.validation_step(val_loader)
-            validation_losses.append(validation_losses)
+            validation_losses.append(val_loss)
 
-            stopping_metric = np.asarray(val_loss)
-
+            stopping_metric = np.asarray(validation_losses)
         # if validation metric is not better than the average of the last n losses then stop
         if len(stopping_metric) > patience:
             if np.mean(stopping_metric[-patience:]) < stopping_metric[-1]:
