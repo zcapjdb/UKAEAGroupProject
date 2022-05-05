@@ -202,61 +202,27 @@ class Regressor(nn.Module):
         logging.debug(f"Test MSE: {average_loss:>7f}")
         return average_loss
 
-    def predict(self, dataloader, order_outputs=None):
+    def predict(self, dataloader):
         # Debug
 
         if not isinstance(dataloader, DataLoader):
             dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
 
-        predict_start = time.time()
+        size = len(dataloader.dataset)
         pred = []
-        index_ordering = []
+        losses = []
         for (x, y, z, idx) in dataloader:
             x = x.to(self.device)
+            y = y.to(self.device)
             y_hat = self.forward(x.float())
             pred.append(y_hat.squeeze().detach().cpu().numpy())
-            index_ordering.append(idx.detach().cpu().numpy())
-
-        idx_array = np.asarray(index_ordering, dtype=object).flatten()
+            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
+            losses.append(loss)
+        average_loss = np.sum(losses) / size
         
         pred = np.asarray(pred, dtype=object).flatten()
 
-        if idx_array.shape[0] < 100:
-            idx_array = np.concatenate(idx_array).ravel().astype(int)
-            pred = np.concatenate(pred).ravel().astype(int)
-        
-        # Debug 
-        predict_end = time.time()
-
-        logging.debug(f"Time taken to predict: {predict_end - predict_start}")
-
-        if order_outputs is not None: # LZ: what is this for?
-            logging.debug("Ordering predictions")
-            order_start = time.time()
-            assert len(np.unique(order_outputs)) == len(order_outputs), logging.error(
-                "The order_outputs array must be unique - duplicate indices found"
-            )
-
-            assert len(order_outputs) == len(idx_array), logging.error(
-                "Index ordering passed is a different length to the number of predictions!"
-            )
-            reorder = np.array(
-                [np.where(idx_array == i) for i in order_outputs]
-            ).flatten()
-            # reorder = np.concatenate(reorder).flatten()
-
-            pred = pred[reorder]
-            real_idx = idx_array[reorder]
-            # Make sure the reording has worked
-            assert real_idx.tolist() == order_outputs.tolist(), logging.error(
-                "Ordering error"
-            )
-
-            order_end = time.time()
-
-            logging.debug(f"Time taken to order: {order_end - order_start}")
-
-        return pred, idx_array
+        return pred, average_loss
 
 
 class ITGDataset(Dataset):
@@ -486,7 +452,7 @@ def train_model(
         return model, [losses, train_accuracy, validation_losses, val_accuracy]
 
     elif model.type == "regressor":
-        return model, [losses, validation_losses]
+        return model, losses, validation_losses
 
 
 def load_model(model, save_path):

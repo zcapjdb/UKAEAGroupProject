@@ -36,23 +36,33 @@ FLUX = cfg["flux"]
 PRETRAINED = cfg["pretrained"]
 PATHS = cfg["data"]
 SAVE_PATHS = cfg["save_paths"]
-lam = cfg["lambda"]
+lam = cfg["hyperparams"]["lambda"]
+train_size = cfg["hyperparams"]["train_size"]
+valid_size = cfg["hyperparams"]["valid_size"]
+test_size = cfg["hyperparams"]["test_size"]
+batch_size = cfg["hyperparams"]["batch_size"]
+candidate_size = cfg["hyperparams"]["candidate_size"]
 # Dictionary to store results of the classifier and regressor for later use
 output_dict = pt.output_dict
+
+# To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test loss
+
 
 # --------------------------------------------- Load data ----------------------------------------------------------
 train_dataset, eval_dataset, test_dataset = pt.prepare_data(
     PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=0.1
 )
 # --- holdout set is from the test set
-plot_sample = test_dataset.sample(10_000)  # Holdout dataset
+plot_sample = test_dataset.sample(test_size)  # Holdout dataset
 holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
+holdout_loader = DataLoader(holdout_dataset, batch_size=batch_size,shuffle=False)  # ToDo =====>> use helper function
 # --- validation set is fixed and from the evaluation
-valid_dataset = eval_dataset.sample(10_000) # validation set
-valid_loader = DataLoader(valid_dataset, batch_size=100,shuffle=False)  # ToDo =====>> use helper function
+valid_dataset = eval_dataset.sample(valid_size) # validation set
+valid_loader = DataLoader(valid_dataset, batch_size=batch_size,shuffle=False)  # ToDo =====>> use helper function
 # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
 eval_dataset.remove(valid_dataset.data.index) # 
 unlabelled_pool = eval_dataset
+
 
 # Load pretrained models
 logging.info("Loaded the following models:\n")
@@ -66,7 +76,7 @@ for model in PRETRAINED:
 #    else:
 #        train_sample = train_dataset     # THIS GIVES MEM ERROR!! CAN'T APPEND LISTS FOR THE SIZE OF THE ENTIRE TRAINING DATA!! see line 334 in pipeline_tools
 
-    train_sample = train_dataset.sample(20_000) # ToDo ========>>>>>> 20_000 should be in the config. Holdout valid and ans candidate_batch should scale accordingly?
+    train_sample = train_dataset.sample(train_size) 
     if PRETRAINED[model][FLUX]["trained"] == True:
         trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"])
         models[model] = trained_model.to(device)
@@ -77,7 +87,7 @@ for model in PRETRAINED:
             Classifier(device) if model == "Classifier" else Regressor(device)
         )
         
-        models[model], _ = md.train_model(
+        models[model], train_loss, valid_loss = md.train_model(
             models[model],
             train_sample,
             valid_dataset, 
@@ -85,6 +95,11 @@ for model in PRETRAINED:
             epochs=cfg["train_epochs"],
             patience=cfg["train_patience"],
         )
+
+    # ---- Losses before the pipeline starts
+    _, holdout_loss = model["Regressor"].predict(holdout_loader)
+    output_dict["test_losses"].append(holdout_loss)
+    output_dict["train_losses"].append(train_loss)
 
 if len(train_sample) > 100_000:
     logger.warning("Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data")
@@ -98,15 +113,15 @@ for i in range(cfg["iterations"]):
     logging.info(f"Iteration: {i+1}\n")
 
     # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
-    candidates = unlabelled_pool.sample(10_000)  # ToDo ======>>>> 10_000 should be in the config. Holdout valid and train should scale accordingly?
+    candidates = unlabelled_pool.sample(candidate_size)  
     # --- remove the sampled data points from the dataset
     unlabelled_pool.remove(candidates.data.index)
 
     # --- See Issue #37 --- candidates are only those that the classifier selects as unstable.
     candidates = pt.select_unstable_data(
-        candidates, batch_size=100, classifier=models["Classifier"], device=device
+        candidates, batch_size=batch_size, classifier=models["Classifier"], device=device
     )   # It's not the classifier's job to say whether a point is stable or not. This happens at the end of the pipeline when we get the true labels by running Qualikiz.
-        # ToDo =========>>>> batch size in the config
+       
 
     epochs = cfg["initial_epochs"] * (i + 1)
 
@@ -125,7 +140,7 @@ for i in range(cfg["iterations"]):
             train_sample,
             holdout_set,
             models["Classifier"],
-            batch_size=100,
+            batch_size=batch_size,
             epochs=epochs,
             lam=lam,
             patience=cfg["patience"],
@@ -168,25 +183,25 @@ for i in range(cfg["iterations"]):
         train_data=True,
     )
 
-    prediction_train_origin = models["Regressor"].predict(train_sample_origin)
+    prediction_train_origin, loss_train_origin = models["Regressor"].predict(train_sample_origin)
 
 
     # --- train data enriched by new unstable candidate points
     train_sample.add(candidates) 
     enriched_train_loader = DataLoader(
-        train_sample, batch_size=100, shuffle=True    # ToDo =======>>>>> batch size in config
+        train_sample, batch_size=batch_size, shuffle=True    
     ) 
 
     # ---  get predictions for enriched train sample before retraining (perhaps not useful?)
-    prediction_before, prediction_idx_order = models["Regressor"].predict(enriched_train_loader)
+    prediction_before, _ = models["Regressor"].predict(enriched_train_loader)
     
     # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
-    # ToDo ===>>> make holdout set a dataloader using pandas_to_numpy helper in pipeline_tools
-    holdout_pred_before, valid_pred_order = models["Regressor"].predict(holdout_set) 
+    holdout_pred_before, _ = models["Regressor"].predict(holdout_set) 
 
     # =================== >>>>>>>>>> Here goes the Qualikiz acquisition <<<<<<<<<<<<< ==================
 
     # ---------------------------------------------- Retrain Regressor with added data (ToDo: Further research required)---------------------------------
+    # ToDo ===========>>>> Now we do have the labels because Qualikiz gave them to us!  Need to discard misclassified data from enriched_train_loader, and retrain the classifier if buffer_size is big enough
     train_loss, test_loss = pt.retrain_regressor(
         enriched_train_loader,
         valid_loader,  # ToDo ====>>> modify for consistency with md.train_model(): either datasets or dataloaders!
@@ -198,15 +213,14 @@ for i in range(cfg["iterations"]):
         patience=cfg["patience"],
     )
 
-    output_dict["train_losses"].append(train_loss)
-    output_dict["test_losses"].append(test_loss)
+    # ToDo =================>>>>>>> Classifier retraining goes here, if buffer_size greater than <user defined> 
 
      # --- predictions for the enriched train sample after (is that really needed?)
     enriched_train_prediction_after, _ = models["Regressor"].predict(enriched_train_loader
     )
      # --- validation on holdout set after regressor is retrained
     logging.info("Running prediction on validation data set")
-    holdout_pred_after,_ = models["Regressor"].predict(holdout_set)
+    holdout_pred_after,holdout_loss = models["Regressor"].predict(holdout_loader)  # ToDo ============>>> predict should return the MSE loss as well
 
     _, candidates_uncert_after, _, _ = pt.regressor_uncertainty(
         candidates,
@@ -246,24 +260,34 @@ for i in range(cfg["iterations"]):
   #      lam = lam
   #  )
 
-    train_mse_before, train_mse_after, delta_mse = pt.mse_change(
-        candidates_uncert_before,
-        candidates_uncert_after,
-        prediction_idx_order,
-        train_uncert_idx,
-        enriched_train_loader,
-        uncertainties=[train_uncert_before, train_uncert_after],
-        data="novel",
-        save_path = SAVE_PATHS["plots"], 
-        iteration=i,
-        lam = lam
-    )
+    try:
+        train_mse_before, train_mse_after, delta_mse = pt.mse_change(
+            candidates_uncert_before,
+            candidates_uncert_after,
+            prediction_idx_order,
+            train_uncert_idx,
+            enriched_train_loader,
+            uncertainties=[train_uncert_before, train_uncert_after],
+            data="novel",
+            save_path = SAVE_PATHS["plots"], 
+            iteration=i,
+            lam = lam
+        )
+    except:
+        logging.debug("pt.mse_change failed, whatever")
+
     n_train = len(train_sample_origin)
     output_dict["holdout_pred_before"].append(holdout_pred_before) # these two are probably the only important ones
     output_dict["holdout_pred_after"].append(holdout_pred_after)
-    output_dict["mse_before"].append(train_mse_before) # these three relate to the training MSE, probably not so useful to inspect 
-    output_dict["mse_after"].append(train_mse_after)
-    output_dict["d_mse"].append(delta_mse)
+    output_dict["test_losses"].append(holdout_loss)
+    output_dict["train_losses"].append(train_loss)
+    output_dict["test_losses"].append(test_loss)
+    try:
+        output_dict["mse_before"].append(train_mse_before) # these three relate to the training MSE, probably not so useful to inspect 
+        output_dict["mse_after"].append(train_mse_after)
+        output_dict["d_mse"].append(delta_mse)
+    except:
+        pass
     output_dict["n_train_points"].append(n_train) 
 
 if not os.path.exists(SAVE_PATHS["outputs"]):
