@@ -213,9 +213,9 @@ class Regressor(nn.Module):
         losses = []
         for (x, y, z, idx) in dataloader:
             x = x.to(self.device)
-            y = y.to(self.device)
-            y_hat = self.forward(x.float())
-            pred.append(y_hat.squeeze().detach().cpu().numpy())
+            z = z.to(self.device)
+            z_hat = self.forward(x.float())
+            pred.append(z_hat.squeeze().detach().cpu().numpy())
             loss = self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
             losses.append(loss)
         average_loss = np.sum(losses) / size
@@ -452,7 +452,7 @@ def train_model(
         return model, [losses, train_accuracy, validation_losses, val_accuracy]
 
     elif model.type == "regressor":
-        return model, losses, validation_losses
+        return model, [losses, validation_losses]
 
 
 def load_model(model, save_path):

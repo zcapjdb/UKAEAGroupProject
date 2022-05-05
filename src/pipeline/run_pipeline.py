@@ -54,8 +54,9 @@ train_dataset, eval_dataset, test_dataset = pt.prepare_data(
 )
 # --- holdout set is from the test set
 plot_sample = test_dataset.sample(test_size)  # Holdout dataset
-holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
-holdout_loader = DataLoader(holdout_dataset, batch_size=batch_size,shuffle=False)  # ToDo =====>> use helper function
+holdout_set = plot_sample 
+#holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
+holdout_loader = DataLoader(holdout_set, batch_size=batch_size,shuffle=False)  # ToDo =====>> use helper function
 # --- validation set is fixed and from the evaluation
 valid_dataset = eval_dataset.sample(valid_size) # validation set
 valid_loader = DataLoader(valid_dataset, batch_size=batch_size,shuffle=False)  # ToDo =====>> use helper function
@@ -87,7 +88,7 @@ for model in PRETRAINED:
             Classifier(device) if model == "Classifier" else Regressor(device)
         )
         
-        models[model], train_loss, valid_loss = md.train_model(
+        models[model], losses  = md.train_model(
             models[model],
             train_sample,
             valid_dataset, 
@@ -95,11 +96,15 @@ for model in PRETRAINED:
             epochs=cfg["train_epochs"],
             patience=cfg["train_patience"],
         )
+        if model == 'Regressor': #To Do ==== >> do the same for classifier
+            train_loss, valid_loss = losses
+        #if model == "Classifier":  --- not used currently
+        #    losses, train_accuracy, validation_losses, val_accuracy = losses
 
     # ---- Losses before the pipeline starts
-    _, holdout_loss = model["Regressor"].predict(holdout_loader)
-    output_dict["test_losses"].append(holdout_loss)
-    output_dict["train_losses"].append(train_loss)
+_, holdout_loss = models["Regressor"].predict(holdout_loader)
+output_dict["test_losses"].append(holdout_loss)
+output_dict["train_losses"].append(train_loss)
 
 if len(train_sample) > 100_000:
     logger.warning("Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data")
