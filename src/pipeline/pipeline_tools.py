@@ -426,6 +426,7 @@ def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None) -> DataL
 
 output_dict = {
     "train_losses": [],
+    "valid_losses": []
     "test_losses": [],
     "n_train_points": [],
     "mse_before": [],
@@ -433,8 +434,8 @@ output_dict = {
     "d_mse": [],
     "d_uncert": [],
     "d_novel_uncert": [],
-    "valid_pred_before": [],
-    "valid_pred_after": [],
+    "holdout_pred_before": [],
+    "holdout_pred_after": [],
     "class_train_loss": [],
     "class_val_loss": [],
     "class_missed_loss": [],
@@ -482,6 +483,8 @@ def mse_change(
     else:
         pred_before = prediction_before
         pred_after = prediction_after
+        ground_truth = ground_truth[uncertain_loader.dataset.target]
+        ground_truth = ground_truth.to_numpy()
 
     mse_before = get_mse(pred_before, ground_truth_subset)
     mse_after = get_mse(pred_after, ground_truth_subset)
