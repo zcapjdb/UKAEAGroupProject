@@ -426,7 +426,7 @@ def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None) -> DataL
 
 output_dict = {
     "train_losses": [],
-    "valid_losses": []
+    "valid_losses": [],
     "test_losses": [],
     "n_train_points": [],
     "mse_before": [],
