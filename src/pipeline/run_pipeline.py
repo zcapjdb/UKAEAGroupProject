@@ -192,12 +192,13 @@ for i in range(cfg["iterations"]):
                 patience=cfg["patience"],
             )
 
-        output_dict["class_train_loss"].append(train_loss)
-        output_dict["class_val_loss"].append(val_loss)
-        output_dict["class_missed_loss"].append(missed_loss)
-        output_dict["class_train_acc"].append(train_acc)
-        output_dict["class_val_acc"].append(val_acc)
-        output_dict["class_missed_acc"].append(missed_acc)
+
+        output_dict["class_train_loss"].append(losses[0])
+        output_dict["class_val_loss"].append(losses[1])
+        output_dict["class_missed_loss"].append(losses[2])
+        output_dict["class_train_acc"].append(acc[0])
+        output_dict["class_val_acc"].append(acc[1])
+        output_dict["class_missed_acc"].append(acc[2])
 
         # reset buffer
         classifier_buffer = []
