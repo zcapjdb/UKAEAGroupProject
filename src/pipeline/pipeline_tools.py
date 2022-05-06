@@ -17,6 +17,26 @@ import os
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
+output_dict = {
+    "train_losses": [],
+    "valid_losses": [],
+    "test_losses": [],
+    "n_train_points": [],
+    "mse_before": [],
+    "mse_after": [],
+    "d_mse": [],
+    "d_uncert": [],
+    "d_novel_uncert": [],
+    "holdout_pred_before": [],
+    "holdout_pred_after": [],
+    "class_train_loss": [],
+    "class_val_loss": [],
+    "class_missed_loss": [],
+    "class_train_acc": [],
+    "class_val_acc": [],
+    "class_missed_acc": [],
+}
+
 # Data preparation functions
 def prepare_data(
     train_path: str,
@@ -99,7 +119,6 @@ def select_unstable_data(
     init_size = len(dataloader.dataset)
 
     unstable_points = []
-    #misclassified = []
 
     logging.info("Running classifier selection...")
 
@@ -107,21 +126,16 @@ def select_unstable_data(
         x = x.to(device)
         y_hat = classifier(x.float())
 
-        # TODO: Verify which cutoff to use for the classifer --- As I recall, the classifier is well calibrated so just using 0.5 shouldn't be an issue
         pred_class = torch.round(y_hat.squeeze().detach()).numpy()
         pred_class = pred_class.astype(int)
 
         unstable = idx[np.where(pred_class == 1)[0]]
-        #missed = idx[np.where(pred_class != y.numpy())[0]]  #---Not needed here!
-
         unstable_points.append(unstable.detach().numpy())
-        #misclassified.append(missed.detach().numpy()) #---Not needed here!
+
     # turn list of stable and misclassified points into flat arrays
     unstable_points = np.concatenate(np.asarray(unstable_points, dtype=object), axis=0)
-    #misclassified = np.concatenate(np.asarray(misclassified, dtype=object), axis=0) #---Not needed here!
 
-    logging.log(15, f"Untable points: {len(unstable_points)}")
-    #logging.log(15, f"Misclassified points: {len(misclassified)}")
+    logging.log(15, f"Unstable points: {len(unstable_points)}")
 
     # create new dataset with misclassified points
     unstable_candidates = copy.deepcopy(dataset) 
@@ -129,6 +143,21 @@ def select_unstable_data(
 
     return unstable_candidates
 
+
+def check_for_misclassified_data(candidates: ITGDatasetDF) -> ITGDatasetDF:
+    candidate_loader = DataLoader(candidates, batch_size=1, shuffle=False)
+
+    missed_points = []
+    for (x, y, z, idx) in candidate_loader:
+        # if y == 0, then it is misclassified, keep only the misclassified points
+        if y.item() == 0:
+            missed_points.append(idx.item())
+    
+    # create new dataset with misclassified points
+    missed_candidates = copy.deepcopy(candidates)
+    missed_candidates.data = missed_candidates.data.loc[missed_points]
+
+    return missed_candidates.data , len(missed_points)
 
 # Function to retrain the classifier on the misclassified points
 def retrain_classifier(
@@ -219,7 +248,7 @@ def retrain_classifier(
                 logging.debug("Early stopping criterion reached")
                 break
 
-    return train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc
+    return [train_loss, val_loss, missed_loss], [train_acc, val_acc, missed_acc]
 
 
 # Regressor tools
@@ -423,26 +452,6 @@ def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None) -> DataL
     numpy_loader = DataLoader(numpy_dataset, batch_size=batch_size, shuffle=True)
     return numpy_loader
 
-
-output_dict = {
-    "train_losses": [],
-    "valid_losses": [],
-    "test_losses": [],
-    "n_train_points": [],
-    "mse_before": [],
-    "mse_after": [],
-    "d_mse": [],
-    "d_uncert": [],
-    "d_novel_uncert": [],
-    "holdout_pred_before": [],
-    "holdout_pred_after": [],
-    "class_train_loss": [],
-    "class_val_loss": [],
-    "class_missed_loss": [],
-    "class_train_acc": [],
-    "class_val_acc": [],
-    "class_missed_acc": [],
-}
 
 # Active Learning diagonistic functions
 def get_mse(y_hat: np.array, y: np.array) -> float:
