@@ -455,14 +455,14 @@ def train_model(
         return model, [losses, validation_losses]
 
 
-def load_model(model, save_path):
+def load_model(model, save_path, device):
     logging.info(f"Model Loaded: {model}")
     if model == "Classifier":
-        classifier = Classifier()
+        classifier = Classifier(device=device)
         classifier.load_state_dict(torch.load(save_path))
         return classifier
 
     elif model == "Regressor":
-        regressor = Regressor()
+        regressor = Regressor(device=device)
         regressor.load_state_dict(torch.load(save_path))
         return regressor

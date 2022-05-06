@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 coloredlogs.install(level="DEBUG")#cfg["logging_level"])
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = 'cpu'
 
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
@@ -66,7 +67,7 @@ unlabelled_pool = eval_dataset
 
 # --- Set up saving
 save_dest = os.path.join(SAVE_PATHS["outputs"], FLUX)
-if not os.path.exists(save_dest): os.mkdir(save_dest)
+if not os.path.exists(save_dest): os.makedirs(save_dest)
 if not os.path.exists(SAVE_PATHS["outputs"]):
     os.makedirs(SAVE_PATHS["outputs"])
 # Load pretrained models
@@ -76,14 +77,10 @@ logging.info("Loaded the following models:\n")
 # ------------------------------------------- Load or train first models ------------------------------------------
 models = {}
 for model in PRETRAINED:
-#    if PRETRAINED[model][FLUX]["trained"] == False:
-#        train_sample = train_dataset.sample(20_000)
-#    else:
-#        train_sample = train_dataset     # THIS GIVES MEM ERROR!! CAN'T APPEND LISTS FOR THE SIZE OF THE ENTIRE TRAINING DATA!! see line 334 in pipeline_tools
 
     train_sample = train_dataset.sample(train_size) 
     if PRETRAINED[model][FLUX]["trained"] == True:
-        trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"])
+        trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"], device)
         models[model] = trained_model.to(device)
 
     else:
@@ -102,13 +99,14 @@ for model in PRETRAINED:
         )
         if model == 'Regressor': #To Do ==== >> do the same for classifier
             train_loss, valid_loss = losses
+            output_dict["train_losses"].append(train_loss)
         #if model == "Classifier":  --- not used currently
         #    losses, train_accuracy, validation_losses, val_accuracy = losses
 
-    # ---- Losses before the pipeline starts
+# ---- Losses before the pipeline starts
 _, holdout_loss = models["Regressor"].predict(holdout_loader)
 output_dict["test_losses"].append(holdout_loss)
-output_dict["train_losses"].append(train_loss)
+
 
 if len(train_sample) > 100_000:
     logger.warning("Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data")
@@ -117,6 +115,8 @@ if len(train_sample) > 100_000:
 logging.info(f"Training for lambda: {lam}")
 
 # ------------------------------------------------------- AL pipeline ---------------------------------------------
+classifier_buffer = []
+buffer_size = 0
 
 for i in range(cfg["iterations"]):
     logging.info(f"Iteration: {i+1}\n")
@@ -133,41 +133,6 @@ for i in range(cfg["iterations"]):
        
 
     epochs = cfg["initial_epochs"] * (i + 1)
-
-    # --- Classifier retraining: ============>>>> ToDo: Need to put this at the end of the pipeline instead
-    if cfg["retrain_classifier"]:
-        # retrain the classifier on the misclassified points 
-        (
-            train_loss,
-            train_acc,
-            val_loss,
-            val_acc,
-            missed_loss,
-            missed_acc,
-        ) = pt.retrain_classifier(
-            misclassified_sample,
-            train_sample,
-            holdout_set,
-            models["Classifier"],
-            batch_size=batch_size,
-            epochs=epochs,
-            lam=lam,
-            patience=cfg["patience"],
-        )
-
-        save_path = os.path.join(SAVE_PATHS["plots"], f"Iteration_{i+1}")
-        pt.plot_classifier_retraining(
-            train_loss, train_acc, val_loss, val_acc, missed_loss, missed_acc, save_path
-        )
-        output_dict["class_train_loss"].append(train_loss)
-        output_dict["class_val_loss"].append(val_loss)
-        output_dict["class_missed_loss"].append(missed_loss)
-        output_dict["class_train_acc"].append(train_acc)
-        output_dict["class_val_acc"].append(val_acc)
-        output_dict["class_missed_acc"].append(missed_acc)
-
-    # TODO: diagnose how well the classifier retraining does
-
 
     # ---  get most uncertain candidate inputs as decided by regressor   --- NEW AL FRAMEWORK GOES HERE
     candidates, candidates_uncert_before, data_idx, unlabelled_pool = pt.regressor_uncertainty(
@@ -194,6 +159,51 @@ for i in range(cfg["iterations"]):
 
     prediction_train_origin, loss_train_origin = models["Regressor"].predict(train_sample_origin)
 
+    # =================== >>>>>>>>>> Here goes the Qualikiz acquisition <<<<<<<<<<<<< ==================
+
+    # I am assuming here that the acquisition will modify the candidates dataset.
+    # ToDo - May need to modify dataset to account for real data points that won't have real labels. Use dummy labels until acquisition is done?
+
+    # ToDo ===========>>>> Now we do have the labels because Qualikiz gave them to us!  Need to discard misclassified data from enriched_train_loader, and retrain the classifier if buffer_size is big enough
+    # check for misclassified data in candidates and add them to the buffer
+    misclassified_data, num_misclassified = pt.check_for_misclassified_data(candidates)
+    buffer_size += num_misclassified
+    classifier_buffer.append(misclassified_data)
+    logging.info(f"Misclassified data: {num_misclassified}")
+    logging.info(f"Total Buffer size: {buffer_size}")
+
+    # --- Classifier retraining:
+    if cfg["retrain_classifier"]:
+        if buffer_size >= cfg["hyperparams"]["buffer_size"]:
+            # concatenate datasets from the buffer
+            misclassified = pd.concat(classifier_buffer)
+            misclassified_dataset = md.ITGDatasetDF(misclassified, FLUX, keep_index=True)
+
+            logging.info("Buffer full, retraining classifier")
+            # retrain the classifier on the misclassified points 
+            losses, accs = pt.retrain_classifier(
+                misclassified_dataset,
+                train_sample,
+                holdout_set,
+                models["Classifier"],
+                batch_size=batch_size,
+                epochs=epochs,
+                lam=lam,
+                patience=cfg["patience"],
+            )
+
+
+        output_dict["class_train_loss"].append(losses[0])
+        output_dict["class_val_loss"].append(losses[1])
+        output_dict["class_missed_loss"].append(losses[2])
+        output_dict["class_train_acc"].append(acc[0])
+        output_dict["class_val_acc"].append(acc[1])
+        output_dict["class_missed_acc"].append(acc[2])
+
+        # reset buffer
+        classifier_buffer = []
+        buffer_size = 0
+
 
     # --- train data enriched by new unstable candidate points
     train_sample.add(candidates) 
@@ -207,10 +217,7 @@ for i in range(cfg["iterations"]):
     # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
     holdout_pred_before, _ = models["Regressor"].predict(holdout_set) 
 
-    # =================== >>>>>>>>>> Here goes the Qualikiz acquisition <<<<<<<<<<<<< ==================
-
-    # ---------------------------------------------- Retrain Regressor with added data (ToDo: Further research required)---------------------------------
-    # ToDo ===========>>>> Now we do have the labels because Qualikiz gave them to us!  Need to discard misclassified data from enriched_train_loader, and retrain the classifier if buffer_size is big enough
+# ---------------------------------------------- Retrain Regressor with added data (ToDo: Further research required)---------------------------------
     train_loss, test_loss = pt.retrain_regressor(
         enriched_train_loader,
         valid_loader,  # ToDo ====>>> modify for consistency with md.train_model(): either datasets or dataloaders!
