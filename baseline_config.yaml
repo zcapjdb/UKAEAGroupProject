@@ -1,0 +1,18 @@
+model_type: "classifier" # can be either a classifier or a regressor
+data_mode: "random" # can be full or random 
+flux: "efiitg_gb" 
+
+data:
+  train: "/share/rcifdata/tmadula/data/UKAEA/train_data_clipped.pkl"
+  validation: "/share/rcifdata/tmadula/data/UKAEA/valid_data_clipped.pkl"
+  test: "/share/rcifdata/tmadula/data/UKAEA/test_data_clipped.pkl"
+save_paths: 
+  models: /home/tmadula/submit/out/baselines/
+  losses: /home/tmadula/submit/out/baselines/
+
+hyperparameters:
+  rand_sample_size: 20_000
+  epochs: 1
+  patience: 50
+  train_batch_size: 4096
+  valid_batch_size: 4096

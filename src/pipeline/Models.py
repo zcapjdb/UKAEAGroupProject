@@ -9,7 +9,8 @@ from sklearn.preprocessing import StandardScaler
 from scripts.utils import train_keys
 from tqdm.auto import tqdm
 import logging
-import time 
+import time
+from tqdm.auto import tqdm
 
 cuda0 = torch.device('cuda:0')
 
@@ -49,7 +50,7 @@ class Classifier(nn.Module):
         y_hat = self.model(x)
         return y_hat
 
-    def train_step(self, dataloader, optimizer):
+    def train_step(self, dataloader, optimizer, epoch=None):
         # Initalise loss function
         BCE = nn.BCELoss()
 
@@ -58,7 +59,7 @@ class Classifier(nn.Module):
 
         losses = []
         correct = 0
-        for batch, (X, y, z, idx) in enumerate(dataloader):
+        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}")):
 
             X = X.to(self.device)
             y = y.to(self.device)
@@ -108,6 +109,43 @@ class Classifier(nn.Module):
             scheduler.step(average_loss)
 
         return average_loss, correct
+    
+    def predict(self, dataloader):
+        # Debug
+
+        if not isinstance(dataloader, DataLoader):
+            # dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
+            dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=100)
+        
+        size = len(dataloader.dataset)
+        pred = []
+        losses = []
+        accuracy = []
+
+        BCE = nn.BCELoss()
+
+        for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
+            x = x.to(self.device)
+            y = y.to(self.device)
+            y_hat = self.forward(x.float())
+
+            y_hat_rounded  = torch.where(y_hat > 0.5, 1, 0)
+            acc_num  = (y_hat_rounded == y).sum()
+            acc = acc_num/len(x)
+
+            accuracy.append(acc.detach().cpu().numpy())
+            pred.append(y_hat.squeeze().detach().cpu().numpy())
+            loss = BCE(y_hat, y.unsqueeze(-1).float()).item()
+            losses.append(loss)
+        
+        average_loss = np.sum(losses) / size
+
+        ave_accuracy = np.mean(accuracy)
+        
+        pred = np.asarray(pred, dtype=object).flatten()
+
+
+        return pred, [average_loss, ave_accuracy]
 
 
 class Regressor(nn.Module):
@@ -157,14 +195,16 @@ class Regressor(nn.Module):
         MSE_loss = nn.MSELoss(reduction="sum") # LZ: ToDo this might be an input in the case the output is multitask
         return MSE_loss(y_hat, y.float())
 
-    def train_step(self, dataloader, optimizer):
+    def train_step(self, dataloader, optimizer, epoch=None):
 
         size = len(dataloader.dataset)
         num_batches = len(dataloader)
 
         losses = []
-        for batch, (X, y, z, idx) in enumerate(dataloader):
+        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader,desc=f"Epoch {epoch}"), 0):
+            
             batch_size = len(X)
+            # logging.debug(f"batch size recieved:{batch_size}")
             X = X.to(self.device)
             z = z.to(self.device)
             z_hat = self.forward(X.float())
@@ -176,10 +216,11 @@ class Regressor(nn.Module):
             optimizer.step()
 
             loss = loss.item()
+            # logging.debug(f"Loss: {loss}")
             losses.append(loss)
 
         average_loss = np.sum(losses) / size
-        logging.debug(f"Train MSE: {average_loss:>7f}")
+        logging.debug(f"Loss: {average_loss:>7f}")
         return average_loss
 
     def validation_step(self, dataloader, scheduler=None):
@@ -212,7 +253,7 @@ class Regressor(nn.Module):
         size = len(dataloader.dataset)
         pred = []
         losses = []
-        for (x, y, z, idx) in dataloader:
+        for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
             x = x.to(self.device)
             z = z.to(self.device)
             z_hat = self.forward(x.float())
@@ -368,6 +409,7 @@ def train_model(
     epochs,
     learning_rate=0.001,
     weight_decay=True,
+    pipeline = True,
     patience=None,
     checkpoint=None,
     checkpoint_path=None,
@@ -381,7 +423,10 @@ def train_model(
     if val_batch_size is None:
         val_batch_size = int(len(val_dataset) / 10)
 
-    train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
+    if pipeline: 
+        train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
+    else: 
+        train_loader = pt.pandas_to_numpy_data(train_dataset, train_batch_size)
 
     val_loader = pt.pandas_to_numpy_data(val_dataset, val_batch_size, shuffle=False)
     # Initialise the optimiser
@@ -406,7 +451,7 @@ def train_model(
         logging.debug(f"Epoch: {epoch}")
 
         if model.type == "classifier":
-            loss, train_acc = model.train_step(train_loader, opt)
+            loss, train_acc = model.train_step(train_loader, opt,epoch=epoch)
             losses.append(loss)
             train_accuracy.append(train_acc)
 
@@ -418,7 +463,7 @@ def train_model(
 
         elif model.type == "regressor":
             logging.debug(f"Epoch: {epoch}")
-            loss = model.train_step(train_loader, opt)
+            loss = model.train_step(train_loader, opt, epoch=epoch)
             losses.append(loss)
 
             val_loss = model.validation_step(val_loader)
