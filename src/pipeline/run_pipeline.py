@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 coloredlogs.install(level="DEBUG")#cfg["logging_level"])
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = 'cpu'
+#device = 'cpu'
 
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
@@ -60,7 +60,6 @@ holdout_set = plot_sample
 holdout_loader = DataLoader(holdout_set, batch_size=batch_size,shuffle=False)  # ToDo =====>> use helper function
 # --- validation set is fixed and from the evaluation
 valid_dataset = eval_dataset.sample(valid_size) # validation set
-valid_loader = DataLoader(valid_dataset, batch_size=batch_size,shuffle=False)  # ToDo =====>> use helper function
 # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
 eval_dataset.remove(valid_dataset.data.index) # 
 unlabelled_pool = eval_dataset
@@ -207,33 +206,30 @@ for i in range(cfg["iterations"]):
 
     # --- train data enriched by new unstable candidate points
     train_sample.add(candidates) 
-    enriched_train_loader = DataLoader(
-        train_sample, batch_size=batch_size, shuffle=True    
-    ) 
 
     # ---  get predictions for enriched train sample before retraining (perhaps not useful?)
-    prediction_before, _ = models["Regressor"].predict(enriched_train_loader)
+    prediction_before, _ = models["Regressor"].predict(train_sample)
     
     # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
     holdout_pred_before, _ = models["Regressor"].predict(holdout_set) 
 
 # ---------------------------------------------- Retrain Regressor with added data (ToDo: Further research required)---------------------------------
     train_loss, test_loss = pt.retrain_regressor(
-        enriched_train_loader,
-        valid_loader,  # ToDo ====>>> modify for consistency with md.train_model(): either datasets or dataloaders!
+        train_sample,
+        valid_dataset,
         models["Regressor"],
         learning_rate=cfg["learning_rate"],
         epochs=epochs,
         validation_step=True,
         lam=lam,
         patience=cfg["patience"],
+        batch_size=batch_size,
     )
 
     # ToDo =================>>>>>>> Classifier retraining goes here, if buffer_size greater than <user defined> 
 
      # --- predictions for the enriched train sample after (is that really needed?)
-    enriched_train_prediction_after, _ = models["Regressor"].predict(enriched_train_loader
-    )
+    enriched_train_prediction_after, _ = models["Regressor"].predict(train_sample)
      # --- validation on holdout set after regressor is retrained
     logging.info("Running prediction on validation data set")
     holdout_pred_after,holdout_loss = models["Regressor"].predict(holdout_loader)  # ToDo ============>>> predict should return the MSE loss as well
@@ -282,7 +278,7 @@ for i in range(cfg["iterations"]):
             candidates_uncert_after,
             prediction_idx_order,
             train_uncert_idx,
-            enriched_train_loader,
+            train_sample,
             uncertainties=[train_uncert_before, train_uncert_after],
             data="novel",
             save_path = SAVE_PATHS["plots"], 

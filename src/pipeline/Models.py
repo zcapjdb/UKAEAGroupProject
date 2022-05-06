@@ -244,11 +244,10 @@ class Regressor(nn.Module):
         return average_loss
 
     def predict(self, dataloader):
-        # Debug
 
         if not isinstance(dataloader, DataLoader):
-            # dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
-            dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=100)
+            dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=512, shuffle = False)
+            
         size = len(dataloader.dataset)
         pred = []
         losses = []
@@ -425,7 +424,7 @@ def train_model(
     else: 
         train_loader = pt.pandas_to_numpy_data(train_dataset, train_batch_size)
 
-    val_loader = pt.pandas_to_numpy_data(val_dataset, val_batch_size)
+    val_loader = pt.pandas_to_numpy_data(val_dataset, val_batch_size, shuffle=False)
     # Initialise the optimiser
     if weight_decay:
         opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
