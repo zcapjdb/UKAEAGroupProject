@@ -380,7 +380,7 @@ def train_model(
 
     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
 
-    val_loader = pt.pandas_to_numpy_data(val_dataset, val_batch_size)
+    val_loader = pt.pandas_to_numpy_data(val_dataset, val_batch_size, shuffle=False)
     # Initialise the optimiser
     if weight_decay:
         opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)

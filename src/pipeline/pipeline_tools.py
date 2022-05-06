@@ -190,7 +190,7 @@ def retrain_classifier(
     # create data loaders
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
 
-    missed_loader = DataLoader(
+    missed_loader = pandas_to_numpy_data(
         misclassified_dataset, batch_size=batch_size, shuffle=True
     )
 
@@ -253,7 +253,7 @@ def retrain_classifier(
 
 # Regressor tools
 def retrain_regressor(
-    new_loader: DataLoader,
+    new_dataset: ITGDatasetDF,
     val_loader: DataLoader,
     model: Regressor,
     learning_rate: int = 1e-4,
@@ -263,6 +263,7 @@ def retrain_regressor(
     loc: float = 0.0,
     scale: float = 0.01,
     patience: Union[None, int] = None,
+    batch_size: int = 1024,
 ) -> (list, list):
     """
     Retrain the regressor on the most uncertain points.
@@ -271,7 +272,9 @@ def retrain_regressor(
     """
 
     logging.info("Retraining regressor...\n")
-    logging.log(15, f"Training on {len(new_loader.dataset)} points")
+    logging.log(15, f"Training on {len(new_dataset)} points")
+
+    new_loader_numpy = pandas_to_numpy_data(new_dataset, batch_size=batch_size, shuffle=False)
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
     model.shrink_perturb(lam, loc, scale)
@@ -434,7 +437,7 @@ def regressor_uncertainty(
         return data_copy, out_std, idx_array
 
 
-def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None) -> DataLoader:
+def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None, shuffle: bool = True) -> DataLoader:
     """
     Helper function to convert pandas dataframe to numpy array and create a dataloader.
     Dataloaders created from numpy arrays are much faster than pandas dataframes.
@@ -449,7 +452,7 @@ def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None) -> DataL
     if batch_size is None:
         batch_size = int(0.1 * len(y_array))
 
-    numpy_loader = DataLoader(numpy_dataset, batch_size=batch_size, shuffle=True)
+    numpy_loader = DataLoader(numpy_dataset, batch_size=batch_size, shuffle=shuffle)
     return numpy_loader
 
 

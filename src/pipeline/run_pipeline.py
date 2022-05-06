@@ -60,7 +60,6 @@ holdout_set = plot_sample
 holdout_loader = DataLoader(holdout_set, batch_size=batch_size,shuffle=False)  # ToDo =====>> use helper function
 # --- validation set is fixed and from the evaluation
 valid_dataset = eval_dataset.sample(valid_size) # validation set
-valid_loader = DataLoader(valid_dataset, batch_size=batch_size,shuffle=False)  # ToDo =====>> use helper function
 # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
 eval_dataset.remove(valid_dataset.data.index) # 
 unlabelled_pool = eval_dataset
@@ -220,20 +219,20 @@ for i in range(cfg["iterations"]):
 # ---------------------------------------------- Retrain Regressor with added data (ToDo: Further research required)---------------------------------
     train_loss, test_loss = pt.retrain_regressor(
         enriched_train_loader,
-        valid_loader,  # ToDo ====>>> modify for consistency with md.train_model(): either datasets or dataloaders!
+        valid_dataset,
         models["Regressor"],
         learning_rate=cfg["learning_rate"],
         epochs=epochs,
         validation_step=True,
         lam=lam,
         patience=cfg["patience"],
+        batch_size=batch_size,
     )
 
     # ToDo =================>>>>>>> Classifier retraining goes here, if buffer_size greater than <user defined> 
 
      # --- predictions for the enriched train sample after (is that really needed?)
-    enriched_train_prediction_after, _ = models["Regressor"].predict(enriched_train_loader
-    )
+    enriched_train_prediction_after, _ = models["Regressor"].predict(enriched_train_loader)
      # --- validation on holdout set after regressor is retrained
     logging.info("Running prediction on validation data set")
     holdout_pred_after,holdout_loss = models["Regressor"].predict(holdout_loader)  # ToDo ============>>> predict should return the MSE loss as well
