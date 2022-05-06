@@ -254,7 +254,7 @@ def retrain_classifier(
 # Regressor tools
 def retrain_regressor(
     new_dataset: ITGDatasetDF,
-    val_loader: DataLoader,
+    val_dataset: ITGDatasetDF,
     model: Regressor,
     learning_rate: int = 1e-4,
     epochs: int = 10,
@@ -274,7 +274,8 @@ def retrain_regressor(
     logging.info("Retraining regressor...\n")
     logging.log(15, f"Training on {len(new_dataset)} points")
 
-    new_loader_numpy = pandas_to_numpy_data(new_dataset, batch_size=batch_size, shuffle=False)
+    new_loader = pandas_to_numpy_data(new_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = pandas_to_numpy_data(val_dataset, batch_size=batch_size, shuffle=False)
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
     model.shrink_perturb(lam, loc, scale)
@@ -467,7 +468,7 @@ def mse_change(
     prediction_after: list,
     prediction_order: list,
     uncert_data_order: list,
-    uncertain_loader: DataLoader,
+    uncertain_dataset: Dataset,
     uncertainties: Union[None, list] = None,
     plot: bool = True,
     data: str = "novel",
@@ -482,9 +483,9 @@ def mse_change(
 
     if data == 'train':
         idxs = prediction_order.astype(int)
-        ground_truth = uncertain_loader.dataset.data.loc[idxs]
+        ground_truth = uncertain_dataset.data.loc[idxs]
 
-        ground_truth = ground_truth[uncertain_loader.dataset.target]
+        ground_truth = ground_truth[uncertain_dataset.target]
         ground_truth = ground_truth.to_numpy()
 
         idx = np.isin(prediction_order, uncert_data_order)
@@ -495,7 +496,7 @@ def mse_change(
     else:
         pred_before = prediction_before
         pred_after = prediction_after
-        ground_truth = ground_truth[uncertain_loader.dataset.target]
+        ground_truth = ground_truth[uncertain_dataste.target]
         ground_truth = ground_truth.to_numpy()
 
     mse_before = get_mse(pred_before, ground_truth_subset)
@@ -514,7 +515,7 @@ def mse_change(
             save_path=save_path, 
             iteration=iteration, 
             lam=lam,
-            target=uncertain_loader.dataset.target
+            target=uncertain_dataset.target
         )
 
     return mse_before, mse_after, perc_change

@@ -203,10 +203,9 @@ class Regressor(nn.Module):
         return average_loss
 
     def predict(self, dataloader):
-        # Debug
 
         if not isinstance(dataloader, DataLoader):
-            dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
+            dataloader = DataLoader(dataloader, batch_size=512,shuffle=False) # --- batch size doesnt matter here because it's just prediction
 
         size = len(dataloader.dataset)
         pred = []
