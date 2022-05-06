@@ -64,7 +64,11 @@ valid_loader = DataLoader(valid_dataset, batch_size=batch_size,shuffle=False)  #
 eval_dataset.remove(valid_dataset.data.index) # 
 unlabelled_pool = eval_dataset
 
-
+# --- Set up saving
+save_dest = os.path.join(SAVE_PATHS["outputs"], FLUX)
+if not os.path.exists(save_dest): os.mkdir(save_dest)
+if not os.path.exists(SAVE_PATHS["outputs"]):
+    os.makedirs(SAVE_PATHS["outputs"])
 # Load pretrained models
 logging.info("Loaded the following models:\n")
 
@@ -295,12 +299,11 @@ for i in range(cfg["iterations"]):
         pass
     output_dict["n_train_points"].append(n_train) 
 
-if not os.path.exists(SAVE_PATHS["outputs"]):
-    os.makedirs(SAVE_PATHS["outputs"])
-
-save_dest = os.path.join(SAVE_PATHS["outputs"], FLUX)
-if not os.path.exists(save_dest): os.mkdir(save_dest)
-
-output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}.pkl")
-with open(output_path, "wb") as f:
-    pickle.dump(output_dict, f)
+    # --- Save at end of iteration
+    output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl")
+    with open(output_path, "wb") as f:
+        pickle.dump(output_dict, f)
+    regressor_path = os.path.join(save_dest, f"regressor_lam_{lam}_iteration_{i}.pkl")
+    torch.save(models["Regressor"].state_dict(), regressor_path)
+    classifier_path = os.path.join(save_dest, f"classifier_lam_{lam}_iteration_{i}.pkl")
+    torch.save(models["Classifier"].state_dict(), classifier_path)
