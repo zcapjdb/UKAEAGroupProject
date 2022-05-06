@@ -246,8 +246,10 @@ class Regressor(nn.Module):
     def predict(self, dataloader):
 
         if not isinstance(dataloader, DataLoader):
-            dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=512, shuffle = False)
-            
+            batch_size = min(len(dataloader), 512)
+            dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=batch_size, shuffle=False)# --- batch size doesnt matter here because it's just prediction
+
+
         size = len(dataloader.dataset)
         pred = []
         losses = []
@@ -266,13 +268,15 @@ class Regressor(nn.Module):
 
 
 class ITGDataset(Dataset):
-    def __init__(self, X, y, z=None):
+    def __init__(self, X, y, z=None, indices=None):
         self.X = X
         self.y = y
         self.z = z
+        self.indices = indices
 
-        # add indices to all the data points
-        self.indices = np.arange(len(self.X))
+        if self.indices is None:
+            # add indices to all the data points
+            self.indices = np.arange(len(self.X))
 
     # number of rows in the dataset
     def __len__(self):

@@ -340,18 +340,16 @@ def regressor_uncertainty(
     comparison before and after retraining.
 
     """
+
+    data_copy = copy.deepcopy(dataset)
+
     if train_data:
         logging.info("Running MC Dropout on Training Data....\n")
     else:
         logging.info("Running MC Dropout on Novel Data....\n")
 
-    data_copy = copy.deepcopy(dataset)
-    if train_data:
-        batch_size = 2 ** (int(np.log(len(dataset)))) // 4
-    else:
-        batch_size = len(dataset)
-
-    dataloader = DataLoader(data_copy, batch_size=batch_size, shuffle=False)
+    batch_size = min(len(dataset), 512)
+    dataloader = pandas_to_numpy_data(data_copy, batch_size=batch_size, shuffle=False)
 
     regressor.eval()
     regressor.enable_dropout()
@@ -386,18 +384,20 @@ def regressor_uncertainty(
 
     # If not evaluating on the training data (or validation ?) sort the indices by uncertainty
     # and return the top keep% of the points
+
+    uncertain_list_indices = np.argsort(out_std)[-int(n_out_std * keep) :]
+
     if not train_data:
-        top_idx = np.argsort(out_std)[-int(n_out_std * keep) :]
-        drop_idx = np.argsort(out_std)[: n_out_std - int(n_out_std * keep)]
-        drop_idx = idx_array[drop_idx]
-        real_idx = idx_array[top_idx]
+        certain_list_indices = np.argsort(out_std)[: n_out_std - int(n_out_std * keep)]
+        certain_data_idx = idx_array[certain_list_indices]
+        uncertain_data_idx = idx_array[uncertain_list_indices]
 
     if order_idx is None and train_data == False:
         logging.log(15, f"no valid before : {len(unlabelled_pool)}")
 
         # Take the points that are not in the most uncertain points and add back into the validation set
         temp_dataset = copy.deepcopy(dataset)  
-        temp_dataset.remove(indices=real_idx)
+        temp_dataset.remove(indices=uncertain_data_idx)
         unlabelled_pool.add(temp_dataset)
 
         logging.log(15, f"no valid after : {len(unlabelled_pool)}")
@@ -405,7 +405,7 @@ def regressor_uncertainty(
         del temp_dataset
 
         # Remove them from the sample
-        data_copy.remove(drop_idx)
+        data_copy.remove(certain_data_idx)
 
     if plot:
         if order_idx is not None:
@@ -415,24 +415,23 @@ def regressor_uncertainty(
 
         plot_uncertainties(out_std, keep, tag)
 
-    top_indices = np.argsort(out_std)[-int(len(out_std) * keep) :]
 
     if order_idx is not None:
         # matching the real indices to the array position
         reorder = np.array([np.where(idx_array == i) for i in order_idx]).flatten()
-        real_idx = idx_array[reorder]
+        uncertain_data_idx = idx_array[reorder]
 
         # selecting the corresposing std ordered according to order_idx
-        top_indices = reorder
+        uncertain_list_indices = reorder
 
         # Make sure the real indices match
-        assert list(np.unique(real_idx)) == list(np.unique(order_idx))
+        assert list(np.unique(uncertain_data_idx)) == list(np.unique(order_idx))
 
         # Make sure they are in the same order
-        assert real_idx.tolist() == order_idx.tolist(), logging.error("Ordering error")
+        assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error("Ordering error")
 
     if not train_data:
-        return data_copy, out_std[top_indices], real_idx, unlabelled_pool
+        return data_copy, out_std[uncertain_list_indices], uncertain_data_idx, unlabelled_pool
 
     else:
         return data_copy, out_std, idx_array
@@ -447,8 +446,9 @@ def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None, shuffle:
     x_array = dataset.data[train_keys].values
     y_array = dataset.data[dataset.label].values
     z_array = dataset.data[dataset.target].values
+    idx_array = dataset.data["index"].values
 
-    numpy_dataset = ITGDataset(x_array, y_array, z_array)
+    numpy_dataset = ITGDataset(x_array, y_array, z_array, idx_array)
 
     if batch_size is None:
         batch_size = int(0.1 * len(y_array))
