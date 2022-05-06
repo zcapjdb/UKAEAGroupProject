@@ -50,7 +50,7 @@ class Classifier(nn.Module):
         y_hat = self.model(x)
         return y_hat
 
-    def train_step(self, dataloader, optimizer):
+    def train_step(self, dataloader, optimizer, epoch=None):
         # Initalise loss function
         BCE = nn.BCELoss()
 
@@ -59,7 +59,7 @@ class Classifier(nn.Module):
 
         losses = []
         correct = 0
-        for batch, (X, y, z, idx) in enumerate(dataloader):
+        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}")):
 
             X = X.to(self.device)
             y = y.to(self.device)
@@ -109,6 +109,43 @@ class Classifier(nn.Module):
             scheduler.step(average_loss)
 
         return average_loss, correct
+    
+    def predict(self, dataloader):
+        # Debug
+
+        if not isinstance(dataloader, DataLoader):
+            # dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
+            dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=100)
+        
+        size = len(dataloader.dataset)
+        pred = []
+        losses = []
+        accuracy = []
+
+        BCE = nn.BCELoss()
+
+        for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
+            x = x.to(self.device)
+            y = y.to(self.device)
+            y_hat = self.forward(x.float())
+
+            y_hat_rounded  = torch.where(y_hat > 0.5, 1, 0)
+            acc_num  = (y_hat_rounded == y).sum()
+            acc = acc_num/len(x)
+
+            accuracy.append(acc.detach().cpu().numpy())
+            pred.append(y_hat.squeeze().detach().cpu().numpy())
+            loss = BCE(y_hat, y.unsqueeze(-1).float()).item()
+            losses.append(loss)
+        
+        average_loss = np.sum(losses) / size
+
+        ave_accuracy = np.mean(accuracy)
+        
+        pred = np.asarray(pred, dtype=object).flatten()
+
+
+        return pred, [average_loss, ave_accuracy]
 
 
 class Regressor(nn.Module):
@@ -210,12 +247,12 @@ class Regressor(nn.Module):
         # Debug
 
         if not isinstance(dataloader, DataLoader):
-            dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
-
+            # dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
+            dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=100)
         size = len(dataloader.dataset)
         pred = []
         losses = []
-        for (x, y, z, idx) in dataloader:
+        for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
             x = x.to(self.device)
             z = z.to(self.device)
             z_hat = self.forward(x.float())
