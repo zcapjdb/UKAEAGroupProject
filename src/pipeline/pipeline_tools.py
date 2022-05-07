@@ -223,7 +223,7 @@ def retrain_classifier(
 
         logging.debug(f"Train Step:  {epoch}")
 
-        loss, acc = classifier.train_step(train_loader, opt, disable_tqdm)
+        loss, acc = classifier.train_step(train_loader, opt, epoch=epoch, disable_tqdm=disable_tqdm)
         train_loss.append(loss.item())
         train_acc.append(acc)
 
@@ -304,7 +304,7 @@ def retrain_regressor(
 
     for epoch in range(epochs):
         logging.log(15, f"Epoch: {epoch}")
-        loss = model.train_step(new_loader, opt, disable_tqdm=disable_tqdm)
+        loss = model.train_step(new_loader, opt, epoch = epoch, disable_tqdm=disable_tqdm)
         train_loss.append(loss.item())
 
         logging.log(15, f"Training Loss: {loss.item():.4f}")
