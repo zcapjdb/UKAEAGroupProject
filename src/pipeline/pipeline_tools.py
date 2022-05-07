@@ -27,8 +27,11 @@ output_dict = {
     "d_mse": [],
     "d_uncert": [],
     "d_novel_uncert": [],
+    "novel_uncert_before": [],
+    "novel_uncert_after": [],
     "holdout_pred_before": [],
     "holdout_pred_after": [],
+    "holdout_ground_truth": [],
     "class_train_loss": [],
     "class_val_loss": [],
     "class_missed_loss": [],
@@ -167,12 +170,13 @@ def retrain_classifier(
     classifier: Classifier,
     learning_rate: int = 5e-4,
     epochs: int = 10,
-    batch_size: int = 128,
+    batch_size: int = 1024,
     validation_step: bool = True,
     lam: Union[float, int] = 1,
     loc: float = 0.0,
     scale: float = 0.01,
     patience: Union[None, int] = None,
+    disable_tqdm: bool = True,
 ) -> (list, list, list, list, list, list):
     """
     Retrain the classifier on the misclassified points.
@@ -188,12 +192,8 @@ def retrain_classifier(
     train.add(misclassified_dataset)
 
     # create data loaders
-    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
-
-    missed_loader = pandas_to_numpy_data(
-        misclassified_dataset, batch_size=batch_size, shuffle=True
-    )
-
+    train_loader = pandas_to_numpy_data(train, batch_size=batch_size, shuffle=True)
+    missed_loader = pandas_to_numpy_data(misclassified_dataset, shuffle=True)
     valid_loader = pandas_to_numpy_data(valid_dataset)
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
@@ -223,7 +223,7 @@ def retrain_classifier(
 
         logging.debug(f"Train Step:  {epoch}")
 
-        loss, acc = classifier.train_step(train_loader, opt)
+        loss, acc = classifier.train_step(train_loader, opt, disable_tqdm)
         train_loss.append(loss.item())
         train_acc.append(acc)
 
@@ -264,6 +264,7 @@ def retrain_regressor(
     scale: float = 0.01,
     patience: Union[None, int] = None,
     batch_size: int = 1024,
+    disable_tqdm: bool = True,
 ) -> (list, list):
     """
     Retrain the regressor on the most uncertain points.
@@ -303,7 +304,7 @@ def retrain_regressor(
 
     for epoch in range(epochs):
         logging.log(15, f"Epoch: {epoch}")
-        loss = model.train_step(new_loader, opt)
+        loss = model.train_step(new_loader, opt, disable_tqdm=disable_tqdm)
         train_loss.append(loss.item())
 
         logging.log(15, f"Training Loss: {loss.item():.4f}")
@@ -522,7 +523,12 @@ def mse_change(
 
 
 def uncertainty_change(
-    x: Union[list, np.array], y: Union[np.array, list], plot: bool = True, plot_title: str = None, iteration:int = None
+    x: Union[list, np.array], 
+    y: Union[np.array, list], 
+    plot: bool = True, 
+    plot_title: str = None, 
+    iteration:int = None,
+    save_destination: str = None,
 ) -> float:
     """
     Calculate the change in uncertainty after training for a given set of predictions
@@ -535,7 +541,7 @@ def uncertainty_change(
     no_change = 100 - increase - decrease
 
     if plot:
-        plot_scatter(x, y,plot_title,iteration)
+        plot_scatter(x, y,plot_title,iteration,save_destination)
 
     av_uncert_before = np.mean(x)
     av_uncer_after = np.mean(y)
@@ -580,16 +586,13 @@ def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None) -> None:
     plt.clf()
 
 
-def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray,title: str, it: int) -> None:
+def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray,title: str, it: int, save_dest: str) -> None:
     """
     Plot the scatter plot of the initial and final standard deviations of the predictions.
     """
 
     sns.jointplot(initial_std,final_std, kind='reg')
 
-    #plt.figure()
-    #plt.scatter(initial_std, final_std, s=3, alpha=1)
-    # y = x dotted line to show no change
     plt.plot(
         [initial_std.min(), final_std.max()],
         [initial_std.min(), final_std.max()],
@@ -599,7 +602,8 @@ def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray,title: str, it: 
     plt.xlabel("Initial Standard Deviation")
     plt.ylabel("Final Standard Deviation")
     plt.title(title)
-    plt.savefig(f"scatter_plot_iter{it}.png")
+    save_path = os.path.join(save_dest, f"{it}_scatter_plot.png")
+    plt.savefig(save_path)
 
 
 def plot_mse_change(
