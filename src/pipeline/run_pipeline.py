@@ -194,9 +194,9 @@ for i in range(cfg["iterations"]):
             output_dict["class_train_loss"].append(losses[0])
             output_dict["class_val_loss"].append(losses[1])
             output_dict["class_missed_loss"].append(losses[2])
-            output_dict["class_train_acc"].append(acc[0])
-            output_dict["class_val_acc"].append(acc[1])
-            output_dict["class_missed_acc"].append(acc[2])
+            output_dict["class_train_acc"].append(accs[0])
+            output_dict["class_val_acc"].append(accs[1])
+            output_dict["class_missed_acc"].append(accs[2])
 
             # reset buffer
             classifier_buffer = []
