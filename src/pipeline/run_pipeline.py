@@ -248,15 +248,29 @@ for i in range(cfg["iterations"]):
     ) # --- uncertainty on first training set before points were added (is that really needed?)
 
     logging.info("Change in uncertainty for most uncertain data points:")
+    
     output_dict["d_novel_uncert"].append(
-        pt.uncertainty_change(x=candidates_uncert_before, y=candidates_uncert_after, plot_title='Novel data', iteration=i)
+        pt.uncertainty_change(
+            x=candidates_uncert_before,
+            y=candidates_uncert_after,
+            plot_title='Novel data',
+            iteration=i,
+            save_path=save_dest
+        )
     )
+
     output_dict["novel_uncert_before"].append(candidates_uncert_before)
     output_dict["novel_uncert_after"].append(candidates_uncert_after)
 
     logging.info("Change in uncertainty for training data:")
     output_dict["d_uncert"].append(
-        pt.uncertainty_change(x=train_uncert_before, y=train_uncert_after, plot_title='Train data', iteration=i, save_path=save_dest)
+        pt.uncertainty_change(
+            x=train_uncert_before,
+            y=train_uncert_after,
+            plot_title='Train data',
+            iteration=i,
+            save_path=save_dest
+        )
     )
 
     # --- Prediction on train dataset not needed
