@@ -12,7 +12,7 @@ import pickle
 import torch
 from Models import Classifier, Regressor
 import argparse
-
+import pandas as pd
 
 # add argument to pass config file
 parser = argparse.ArgumentParser()
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 coloredlogs.install(level="DEBUG")#cfg["logging_level"])
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#device = 'cpu'
+device = 'cpu'
 
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
@@ -191,17 +191,16 @@ for i in range(cfg["iterations"]):
                 patience=cfg["patience"],
             )
 
+            output_dict["class_train_loss"].append(losses[0])
+            output_dict["class_val_loss"].append(losses[1])
+            output_dict["class_missed_loss"].append(losses[2])
+            output_dict["class_train_acc"].append(accs[0])
+            output_dict["class_val_acc"].append(accs[1])
+            output_dict["class_missed_acc"].append(accs[2])
 
-        output_dict["class_train_loss"].append(losses[0])
-        output_dict["class_val_loss"].append(losses[1])
-        output_dict["class_missed_loss"].append(losses[2])
-        output_dict["class_train_acc"].append(acc[0])
-        output_dict["class_val_acc"].append(acc[1])
-        output_dict["class_missed_acc"].append(acc[2])
-
-        # reset buffer
-        classifier_buffer = []
-        buffer_size = 0
+            # reset buffer
+            classifier_buffer = []
+            buffer_size = 0
 
 
     # --- train data enriched by new unstable candidate points
@@ -226,7 +225,6 @@ for i in range(cfg["iterations"]):
         batch_size=batch_size,
     )
 
-    # ToDo =================>>>>>>> Classifier retraining goes here, if buffer_size greater than <user defined> 
 
      # --- predictions for the enriched train sample after (is that really needed?)
     enriched_train_prediction_after, _ = models["Regressor"].predict(train_sample)
@@ -253,10 +251,12 @@ for i in range(cfg["iterations"]):
     output_dict["d_novel_uncert"].append(
         pt.uncertainty_change(x=candidates_uncert_before, y=candidates_uncert_after, plot_title='Novel data', iteration=i)
     )
+    output_dict["novel_uncert_before"].append(candidates_uncert_before)
+    output_dict["novel_uncert_after"].append(candidates_uncert_after)
 
     logging.info("Change in uncertainty for training data:")
     output_dict["d_uncert"].append(
-        pt.uncertainty_change(x=train_uncert_before, y=train_uncert_after, plot_title='Train data', iteration=i)
+        pt.uncertainty_change(x=train_uncert_before, y=train_uncert_after, plot_title='Train data', iteration=i, save_path=save_dest)
     )
 
     # --- Prediction on train dataset not needed
@@ -291,6 +291,7 @@ for i in range(cfg["iterations"]):
     n_train = len(train_sample_origin)
     output_dict["holdout_pred_before"].append(holdout_pred_before) # these two are probably the only important ones
     output_dict["holdout_pred_after"].append(holdout_pred_after)
+    output_dict["holdout_ground_truth"].append(holdout_set.target)
     output_dict["test_losses"].append(holdout_loss)
     output_dict["train_losses"].append(train_loss)
     output_dict["test_losses"].append(test_loss)

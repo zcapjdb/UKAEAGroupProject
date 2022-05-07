@@ -50,7 +50,7 @@ class Classifier(nn.Module):
         y_hat = self.model(x)
         return y_hat
 
-    def train_step(self, dataloader, optimizer, epoch=None):
+    def train_step(self, dataloader, optimizer, epoch=None, disable_tqdm=False):
         # Initalise loss function
         BCE = nn.BCELoss()
 
@@ -59,7 +59,7 @@ class Classifier(nn.Module):
 
         losses = []
         correct = 0
-        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}")):
+        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}", disable=disable_tqdm)):
 
             X = X.to(self.device)
             y = y.to(self.device)
@@ -195,13 +195,13 @@ class Regressor(nn.Module):
         MSE_loss = nn.MSELoss(reduction="sum") # LZ: ToDo this might be an input in the case the output is multitask
         return MSE_loss(y_hat, y.float())
 
-    def train_step(self, dataloader, optimizer, epoch=None):
+    def train_step(self, dataloader, optimizer, epoch=None, disable_tqdm=False):
 
         size = len(dataloader.dataset)
         num_batches = len(dataloader)
 
         losses = []
-        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader,desc=f"Epoch {epoch}"), 0):
+        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader,desc=f"Epoch {epoch}", disable=disable_tqdm), 0):
             
             batch_size = len(X)
             # logging.debug(f"batch size recieved:{batch_size}")
