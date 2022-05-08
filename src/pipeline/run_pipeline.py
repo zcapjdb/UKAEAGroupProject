@@ -37,6 +37,7 @@ FLUX = cfg["flux"]
 PRETRAINED = cfg["pretrained"]
 PATHS = cfg["data"]
 SAVE_PATHS = cfg["save_paths"]
+sample_size = cfg["sample_size_debug"] # percentage of data to use - lower for debugging
 lam = cfg["hyperparams"]["lambda"]
 train_size = cfg["hyperparams"]["train_size"]
 valid_size = cfg["hyperparams"]["valid_size"]
@@ -51,7 +52,7 @@ output_dict = pt.output_dict
 
 # --------------------------------------------- Load data ----------------------------------------------------------
 train_dataset, eval_dataset, test_dataset = pt.prepare_data(
-    PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=0.1
+    PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=sample_size
 )
 # --- holdout set is from the test set
 plot_sample = test_dataset.sample(test_size)  # Holdout dataset
@@ -187,7 +188,7 @@ for i in range(cfg["iterations"]):
             losses, accs = pt.retrain_classifier(
                 misclassified_dataset,
                 train_sample,
-                holdout_set,
+                valid_dataset,
                 models["Classifier"],
                 batch_size=batch_size,
                 epochs=epochs,
@@ -312,7 +313,7 @@ for i in range(cfg["iterations"]):
     output_dict["holdout_ground_truth"].append(holdout_set.target)
     output_dict["retrain_losses"].append(train_loss)
     output_dict["retrain_test_losses"].append(test_loss)
-    output_dict["post_test_losses"].append(holdout_loss)
+    output_dict["post_test_loss"].append(holdout_loss)
     try:
         output_dict["mse_before"].append(train_mse_before) # these three relate to the training MSE, probably not so useful to inspect 
         output_dict["mse_after"].append(train_mse_after)
