@@ -18,9 +18,13 @@ import os
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 output_dict = {
-    "train_losses": [],
-    "valid_losses": [],
-    "test_losses": [],
+    "train_loss_init": [], # Regressor performance before pipeline
+    "test_loss_init": [],
+
+    "retrain_losses": [], # regressor performance during retraining
+    "retrain_test_losses": [],
+    "post_test_loss": [], # regressor performance after retraining
+
     "n_train_points": [],
     "mse_before": [],
     "mse_after": [],
@@ -241,7 +245,6 @@ def retrain_classifier(
             miss_loss, miss_acc = classifier.validation_step(missed_loader)
             missed_loss.append(miss_loss)
             missed_acc.append(miss_acc)
-            print("\n")
 
         if len(val_loss) > patience:
             if np.mean(val_acc[-patience:]) > val_acc[-1]:
@@ -528,7 +531,7 @@ def uncertainty_change(
     plot: bool = True, 
     plot_title: str = None, 
     iteration:int = None,
-    save_destination: str = None,
+    save_path: str = "./",
 ) -> float:
     """
     Calculate the change in uncertainty after training for a given set of predictions
@@ -541,7 +544,7 @@ def uncertainty_change(
     no_change = 100 - increase - decrease
 
     if plot:
-        plot_scatter(x, y,plot_title,iteration,save_destination)
+        plot_scatter(x, y, plot_title, iteration, save_path)
 
     av_uncert_before = np.mean(x)
     av_uncer_after = np.mean(y)

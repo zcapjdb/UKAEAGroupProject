@@ -98,13 +98,13 @@ for model in PRETRAINED:
         )
         if model == 'Regressor': #To Do ==== >> do the same for classifier
             train_loss, valid_loss = losses
-            output_dict["train_losses"].append(train_loss)
+            output_dict["train_loss_init"].append(train_loss)
         #if model == "Classifier":  --- not used currently
         #    losses, train_accuracy, validation_losses, val_accuracy = losses
 
 # ---- Losses before the pipeline starts
 _, holdout_loss = models["Regressor"].predict(holdout_loader)
-output_dict["test_losses"].append(holdout_loss)
+output_dict["test_loss_init"].append(holdout_loss)
 
 
 if len(train_sample) > 100_000:
@@ -119,6 +119,10 @@ buffer_size = 0
 
 for i in range(cfg["iterations"]):
     logging.info(f"Iteration: {i+1}\n")
+
+    if i != 0:
+        # reset the output dictionary for each iteration
+        output_dict = pt.output_dict
 
     # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
     candidates = unlabelled_pool.sample(candidate_size)  
@@ -248,15 +252,29 @@ for i in range(cfg["iterations"]):
     ) # --- uncertainty on first training set before points were added (is that really needed?)
 
     logging.info("Change in uncertainty for most uncertain data points:")
+    
     output_dict["d_novel_uncert"].append(
-        pt.uncertainty_change(x=candidates_uncert_before, y=candidates_uncert_after, plot_title='Novel data', iteration=i)
+        pt.uncertainty_change(
+            x=candidates_uncert_before,
+            y=candidates_uncert_after,
+            plot_title='Novel data',
+            iteration=i,
+            save_path=save_dest
+        )
     )
+
     output_dict["novel_uncert_before"].append(candidates_uncert_before)
     output_dict["novel_uncert_after"].append(candidates_uncert_after)
 
     logging.info("Change in uncertainty for training data:")
     output_dict["d_uncert"].append(
-        pt.uncertainty_change(x=train_uncert_before, y=train_uncert_after, plot_title='Train data', iteration=i, save_path=save_dest)
+        pt.uncertainty_change(
+            x=train_uncert_before,
+            y=train_uncert_after,
+            plot_title='Train data',
+            iteration=i,
+            save_path=save_dest
+        )
     )
 
     # --- Prediction on train dataset not needed
@@ -292,16 +310,16 @@ for i in range(cfg["iterations"]):
     output_dict["holdout_pred_before"].append(holdout_pred_before) # these two are probably the only important ones
     output_dict["holdout_pred_after"].append(holdout_pred_after)
     output_dict["holdout_ground_truth"].append(holdout_set.target)
-    output_dict["test_losses"].append(holdout_loss)
-    output_dict["train_losses"].append(train_loss)
-    output_dict["test_losses"].append(test_loss)
+    output_dict["retrain_losses"].append(train_loss)
+    output_dict["retrain_test_losses"].append(test_loss)
+    output_dict["post_test_losses"].append(holdout_loss)
     try:
         output_dict["mse_before"].append(train_mse_before) # these three relate to the training MSE, probably not so useful to inspect 
         output_dict["mse_after"].append(train_mse_after)
         output_dict["d_mse"].append(delta_mse)
     except:
         pass
-    output_dict["n_train_points"].append(n_train) 
+    output_dict["n_train_points"].append(n_train)
 
     # --- Save at end of iteration
     output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl")
