@@ -120,6 +120,10 @@ buffer_size = 0
 for i in range(cfg["iterations"]):
     logging.info(f"Iteration: {i+1}\n")
 
+    if i != 0:
+        # reset the output dictionary for each iteration
+        output_dict = pt.output_dict
+
     # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
     candidates = unlabelled_pool.sample(candidate_size)  
     # --- remove the sampled data points from the dataset
@@ -315,7 +319,7 @@ for i in range(cfg["iterations"]):
         output_dict["d_mse"].append(delta_mse)
     except:
         pass
-    output_dict["n_train_points"].append(n_train) 
+    output_dict["n_train_points"].append(n_train)
 
     # --- Save at end of iteration
     output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl")
