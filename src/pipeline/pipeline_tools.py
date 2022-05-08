@@ -18,9 +18,13 @@ import os
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 output_dict = {
-    "train_losses": [],
-    "valid_losses": [],
-    "test_losses": [],
+    "train_loss_init": [], # Regressor performance before pipeline
+    "test_loss_init": [],
+
+    "retrain_losses": [], # regressor performance during retraining
+    "retrain_test_losses": [],
+    "post_test_loss": [], # regressor performance after retraining
+
     "n_train_points": [],
     "mse_before": [],
     "mse_after": [],

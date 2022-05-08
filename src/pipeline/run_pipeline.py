@@ -98,13 +98,13 @@ for model in PRETRAINED:
         )
         if model == 'Regressor': #To Do ==== >> do the same for classifier
             train_loss, valid_loss = losses
-            output_dict["train_losses"].append(train_loss)
+            output_dict["train_loss_init"].append(train_loss)
         #if model == "Classifier":  --- not used currently
         #    losses, train_accuracy, validation_losses, val_accuracy = losses
 
 # ---- Losses before the pipeline starts
 _, holdout_loss = models["Regressor"].predict(holdout_loader)
-output_dict["test_losses"].append(holdout_loss)
+output_dict["test_loss_init"].append(holdout_loss)
 
 
 if len(train_sample) > 100_000:
@@ -310,9 +310,9 @@ for i in range(cfg["iterations"]):
     output_dict["holdout_pred_before"].append(holdout_pred_before) # these two are probably the only important ones
     output_dict["holdout_pred_after"].append(holdout_pred_after)
     output_dict["holdout_ground_truth"].append(holdout_set.target)
-    output_dict["test_losses"].append(holdout_loss)
-    output_dict["train_losses"].append(train_loss)
-    output_dict["test_losses"].append(test_loss)
+    output_dict["retrain_losses"].append(train_loss)
+    output_dict["retrain_test_losses"].append(test_loss)
+    output_dict["post_test_losses"].append(holdout_loss)
     try:
         output_dict["mse_before"].append(train_mse_before) # these three relate to the training MSE, probably not so useful to inspect 
         output_dict["mse_after"].append(train_mse_after)
