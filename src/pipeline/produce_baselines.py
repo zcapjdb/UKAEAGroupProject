@@ -49,6 +49,7 @@ train_dataset, eval_dataset, test_dataset = prepare_data(
 
 if MODE =="random": 
     train_dataset = train_dataset.sample(PARAMS["rand_sample_size"])
+    train_idx = list(train_dataset.data.index)
 # ------------------------------------------- Train models ------------------------------------------
 
 
@@ -96,16 +97,14 @@ if MODE =='full':
     torch.save(model.state_dict(), model_out)
 
 elif MODE == 'random':
-    loss_name = f"{MODE}_{FLUX}_{TYPE}_losses_{PARAMS['rand_sample_size']}K.pkl"
+    # same the indecies of the training set
+    output_dict['train_indecies'] = train_idx
+
+    loss_name = f"{MODE}_{FLUX}_{TYPE}_losses_{PARAMS['rand_sample_size']//1_000}K.pkl"
     output_path = os.path.join(OUTPUT["losses"], loss_name)
 
     with open(output_path, "wb") as f:
         pickle.dump(output_dict, f)
-    
-    #output training dataset used
-    data_name = f"{FLUX}_{TYPE}_train_data_{PARAMS['rand_sample_size']}.pkl"
-    output_path = os.path.join(OUTPUT["losses"], data_name)
-    train_dataset.data.to_pickle(output_path)
 
     model_name = f"{MODE}_{FLUX}_{PARAMS['rand_sample_size']}_{TYPE}.pt"
     model_out = os.path.join(OUTPUT["models"], model_name)

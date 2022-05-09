@@ -120,7 +120,7 @@ class Classifier(nn.Module):
         size = len(dataloader.dataset)
         pred = []
         losses = []
-        accuracy = []
+        correct = 0 
 
         BCE = nn.BCELoss()
 
@@ -129,23 +129,22 @@ class Classifier(nn.Module):
             y = y.to(self.device)
             y_hat = self.forward(x.float())
 
-            y_hat_rounded  = torch.where(y_hat > 0.5, 1, 0)
-            acc_num  = (y_hat_rounded == y).sum()
-            acc = acc_num/len(x)
-
-            accuracy.append(acc.detach().cpu().numpy())
             pred.append(y_hat.squeeze().detach().cpu().numpy())
             loss = BCE(y_hat, y.unsqueeze(-1).float()).item()
             losses.append(loss)
+
+            # calculate test accuracy
+            pred_class = torch.round(y_hat.squeeze()) #torch.round(y_hat.squeeze())
+            correct += torch.sum(pred_class == y.float()).item() #torch.sum(pred_class == y.float()).item()
         
         average_loss = np.sum(losses) / size
 
-        ave_accuracy = np.mean(accuracy)
+        correct /= size
         
         pred = np.asarray(pred, dtype=object).flatten()
 
 
-        return pred, [average_loss, ave_accuracy]
+        return pred, [average_loss, correct]
 
 
 class Regressor(nn.Module):
