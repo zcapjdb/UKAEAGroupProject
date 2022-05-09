@@ -1,6 +1,8 @@
 import coloredlogs, verboselogs, logging
 import os
 import copy
+#import comet_ml import Experiment
+
 
 import pipeline.pipeline_tools as pt
 import pipeline.Models as md
@@ -29,7 +31,10 @@ logger = logging.getLogger(__name__)
 coloredlogs.install(level="DEBUG")#cfg["logging_level"])
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = 'cpu'
+
+#comet_project_name = "AL-pipeline"
+#experiment = Experiment(project_name = comet_project_name)
+
 
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
@@ -50,7 +55,7 @@ output_dict = pt.output_dict
 
 
 # --------------------------------------------- Load data ----------------------------------------------------------
-train_dataset, eval_dataset, test_dataset = pt.prepare_data(
+train_dataset, eval_dataset, test_dataset,scaler = pt.prepare_data(
     PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=0.1
 )
 # --- holdout set is from the test set
@@ -85,7 +90,7 @@ for model in PRETRAINED:
     else:
         logging.info(f"{model} not trained - training now")
         models[model] = (
-            Classifier(device) if model == "Classifier" else Regressor(device)
+            Classifier(device) if model == "Classifier" else Regressor(device, scaler)
         )
         
         models[model], losses  = md.train_model(
@@ -234,7 +239,7 @@ for i in range(cfg["iterations"]):
     enriched_train_prediction_after, _ = models["Regressor"].predict(train_sample)
      # --- validation on holdout set after regressor is retrained
     logging.info("Running prediction on validation data set")
-    holdout_pred_after,holdout_loss = models["Regressor"].predict(holdout_loader)  # ToDo ============>>> predict should return the MSE loss as well
+    holdout_pred_after,holdout_loss, holdout_loss_unscaled = models["Regressor"].predict(holdout_loader,unscale=True)  
 
     _, candidates_uncert_after, _, _ = pt.regressor_uncertainty(
         candidates,
@@ -312,7 +317,9 @@ for i in range(cfg["iterations"]):
     output_dict["holdout_ground_truth"].append(holdout_set.target)
     output_dict["retrain_losses"].append(train_loss)
     output_dict["retrain_test_losses"].append(test_loss)
-    output_dict["post_test_losses"].append(holdout_loss)
+    output_dict["post_test_loss"].append(holdout_loss)
+    output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
+
     try:
         output_dict["mse_before"].append(train_mse_before) # these three relate to the training MSE, probably not so useful to inspect 
         output_dict["mse_after"].append(train_mse_after)

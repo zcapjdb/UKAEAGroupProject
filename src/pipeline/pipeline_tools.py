@@ -24,6 +24,7 @@ output_dict = {
     "retrain_losses": [], # regressor performance during retraining
     "retrain_test_losses": [],
     "post_test_loss": [], # regressor performance after retraining
+    "post_test_loss_unscaled": [], # regressor performance after retraining, unscaled
 
     "n_train_points": [],
     "mse_before": [],
@@ -54,7 +55,7 @@ def prepare_data(
     valid_size: int = None,
     test_size: int = None,
     samplesize_debug: int = 1,
-) -> (ITGDatasetDF, ITGDatasetDF, ITGDatasetDF):
+) -> (ITGDatasetDF, ITGDatasetDF, ITGDatasetDF, StandardScaler):
     """
     Loads the data from the given paths and prepares it for training.
     train_path, valid_path point to pickle files containing the data in dataframes.
@@ -107,7 +108,7 @@ def prepare_data(
     valid_dataset.scale(scaler)
     test_dataset.scale(scaler)
 
-    return train_dataset, valid_dataset, test_dataset
+    return train_dataset, valid_dataset, test_dataset, scaler
 
 
 # classifier tools
