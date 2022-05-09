@@ -198,10 +198,14 @@ class Regressor(nn.Module):
                     param.copy_(param_update)
 
     def loss_function(self, y, y_hat, unscale=False):    # LZ : ToDo if given mode is predicted not to develop, set the outputs related to that mode to zero, and should not contribute to the loss
+
+        loss = self.loss(y_hat, y.float())
         if unscale:
             y_hat = torch.Tensor(self.unscale(y_hat.detach().cpu().numpy()))
             y = torch.Tensor(self.unscale(y.detach().cpu().numpy()))
-        return self.loss(y_hat, y.float())
+            loss_unscaled = self.loss(y_hat, y.float())
+            return loss, loss_unscaled
+        return loss
 
     def train_step(self, dataloader, optimizer, epoch=None, disable_tqdm=False):
 
@@ -261,17 +265,24 @@ class Regressor(nn.Module):
         size = len(dataloader.dataset)
         pred = []
         losses = []
+        losses_unscaled = []
         for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
             x = x.to(self.device)
             z = z.to(self.device)
             z_hat = self.forward(x.float())
             pred.append(z_hat.squeeze().detach().cpu().numpy())
-            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat,unscale=unscale).item()
-            losses.append(loss)
+            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat,unscale=unscale)
+            if unscale:
+                losses_unscaled.append(loss[1].item())
+                loss = loss[0]
+            losses.append(loss.item())
         average_loss = np.sum(losses) / size
         
         pred = np.asarray(pred, dtype=object).flatten()
 
+        if unscale:
+            unscaled_avg_loss = np.sum(losses_unscaled) / size
+            return pred, average_loss, unscaled_avg_loss
         return pred, average_loss
 
 
