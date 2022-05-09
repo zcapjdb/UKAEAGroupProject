@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 import copy
 import logging
-from scripts.utils import train_keys
+from scripts.utils import train_keys, target_keys
 from pipeline.Models import ITGDatasetDF, ITGDataset, Classifier, Regressor
 from typing import Union
 import os
@@ -75,8 +75,8 @@ def prepare_data(
         test_data = test_data.sample(samplesize_debug*test_size)
 
 
-    if target_column not in ["efeetg_gb", "efetem_gb", "efiitg_gb"]:
-        raise ValueError("Currently only leading fluxes are supported")
+    if target_column not in target_keys:
+        raise ValueError("Flux variable to supported")
 
     # Remove NaN's and add appropripate class labels
     keep_keys = train_keys + [target_column]
@@ -325,6 +325,158 @@ def retrain_regressor(
                 break
 
     return train_loss, val_loss
+
+def get_uncertainty(
+    dataset: ITGDatasetDF,
+    regressor: Regressor,
+    n_runs: int = 25,
+    order_idx: Union[None, list, np.array] = None,
+    train_data: bool = False,
+    plot: bool = False,
+    device : torch.device = None,
+) -> (np.array, np.array)
+
+    """
+    Calculates the uncertainty of the regressor on the points in the dataloader.
+    Returns the most uncertain points.
+    If order_idx is provided, the points are ordered according to the order_idx to allow
+    comparison before and after retraining.
+
+    """
+
+    data_copy = copy.deepcopy(dataset)
+
+    if train_data:
+        logging.info("Running MC Dropout on Training Data....\n")
+    else:
+        logging.info("Running MC Dropout on Novel Data....\n")
+
+    batch_size = min(len(dataset), 512)
+    dataloader = pandas_to_numpy_data(data_copy, batch_size=batch_size, shuffle=False)
+
+    regressor.eval()
+    regressor.enable_dropout()
+
+    # evaluate model on training data n_runs times and return points with largest uncertainty
+    runs = []
+
+    for i in tqdm(range(n_runs)):
+        step_list = []
+        for step, (x, y, z, idx) in enumerate(dataloader):
+            x = x.to(device)
+            predictions = regressor(x.float()).detach().numpy()
+            step_list.append(predictions)
+
+        flat_list = [item for sublist in step_list for item in sublist]
+        flattened_predictions = np.array(flat_list).flatten()
+        runs.append(flattened_predictions)
+
+    out_std = np.std(np.array(runs), axis=0)
+    n_out_std = out_std.shape[0]
+
+    logging.log(15, f"Number of points passed for MC dropout: {n_out_std}")
+
+    # Get the list of indices of the dataframe
+    idx_list = []
+    for step, (x, y, z, idx) in enumerate(dataloader):
+        idx_list.append(idx.detach().numpy())
+
+    # flatten the list of indices
+    flat_list = [item for sublist in idx_list for item in sublist]
+    idx_array = np.asarray(flat_list, dtype=object).flatten()
+
+    if plot:
+        if order_idx == None: 
+            tag = "Initial"
+        else: 
+            tag = "Final"
+        keep = 1.0
+        plot_uncertainties(out_std, keep, tag)
+    
+    if order_idx is not None:
+        # matching the real indices to the array position
+        reorder = np.array([np.where(idx_array == i) for i in order_idx]).flatten()
+        uncertain_data_idx = idx_array[reorder]
+
+        # selecting the corresposing std ordered according to order_idx
+        uncertain_list_indices = reorder
+
+        # Make sure the real indices match
+        assert list(np.unique(uncertain_data_idx)) == list(np.unique(order_idx))
+
+        # Make sure they are in the same order
+        assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error("Ordering error")
+
+        return out_std[reorder], uncertain_data_idx
+    else: 
+        return out_std, idx_array
+
+def get_most_uncertain(
+    dataset: ITGDatasetDF,
+    out_std_1: np.array, 
+    idx_array_1: np.array, 
+    keep: float = 0.25, 
+    unlabelled_pool: Union[None, ITGDataset] = None,
+    plot: bool= True,
+    out_std_2: np.array  = None,
+    idx_array_2: np.array = None,
+):
+
+    '''
+    Inputs:
+
+        dataset: dataset of points that MC drop out was ran on 
+        out_std_1: standard deviation from MC dropout from regressor 1 
+        idx_array_1: order of the datapoints from data loader 
+        keep: percentage of most uncertain points to keep
+        plot: Whether to plot the distribution of the uncertainties
+        out_std_2: [optional] standard deviation from MC dropout from regressors 2 
+        idx_array_2: [optional] order of the datapoints from data loader 
+
+    Outputs:
+        data_copy: a dataset object containing only the most uncertain points
+        out_std: standard deviation of the most ucnertain points
+        idx_array: idx_array used for ordering  (which one have we followed)
+
+    '''
+    data_copy = copy.deepcopy(dataset)
+    n_out_std = out_std_1.shape[0]
+    if out_std_2 != None: 
+        assert idx_array_2 != None, "Missing index order of second std entry "
+
+        # sort out the standard deviations so that match
+        reorder = np.array([np.where(idx_array_2 == i) for i in idx_array_1]).flatten()
+        out_std_2 = out_std_2[reorder]
+
+        # add the uncertainties from the two regressors
+        total_std = out_std_1 + out_std_2
+        
+
+        uncertain_list_indices = np.argsort(total_std)[-int(n_out_std * keep) :]
+        certain_list_indices = np.argsort(total_std)[: n_out_std - int(n_out_std * keep)]
+
+    else: 
+        total_std = out_std_1
+        uncertain_list_indices = np.argsort(out_std_1)[-int(n_out_std * keep) :]
+        certain_list_indices = np.argsort(out_std_1)[: n_out_std - int(n_out_std * keep)]
+
+    certain_data_idx = idx_array_1[certain_list_indices]
+    uncertain_data_idx = idx_array_1[uncertain_list_indices]
+
+    # Take the points that are not in the most uncertain points and add back into the validation set
+    temp_dataset = copy.deepcopy(dataset)  
+    temp_dataset.remove(indices=uncertain_data_idx)
+    unlabelled_pool.add(temp_dataset)
+
+    logging.log(15, f"no valid after : {len(unlabelled_pool)}")
+
+    del temp_dataset
+
+    # Remove them from the sample
+    data_copy.remove(certain_data_idx)
+
+        
+    return data_copy, total_std[uncertain_list_indices], idx_array_1, unlabelled_pool
 
 
 def regressor_uncertainty(

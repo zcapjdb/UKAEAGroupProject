@@ -143,15 +143,45 @@ for i in range(cfg["iterations"]):
     epochs = cfg["initial_epochs"] * (i + 1)
 
     # ---  get most uncertain candidate inputs as decided by regressor   --- NEW AL FRAMEWORK GOES HERE
-    candidates, candidates_uncert_before, data_idx, unlabelled_pool = pt.regressor_uncertainty(
-        candidates, # ---only unstable candidates are returned
-        models["Regressor"],
-        n_runs=cfg["MC_dropout_runs"],
+    # get the uncertainties from regressor 1
+    candidates_uncert_1, data_idx_1 = pt.get_uncertainty(
+        candidates,
+        models["Regressor"], 
+        n_runs=cfg["MC_dropout_runs"], 
         keep=cfg["keep_prob"],
-        unlabelled_pool=unlabelled_pool,  #---non uncertain points are added back to the unlabeled pool
-        device = device,
+        device=device,
+
     )
+
+    #get the uncertainties from regressor 2
+    candidates_uncert_2, data_idx_2 = pt.get_uncertainty(
+       candidates, 
+       models[""], # Need to figure out how to load the model here 
+       n_runs=cfg["keep_prob"],
+       device=device 
+    )
+
+    candidates, candidates_uncert_before, data_idx, unlabelled_pool = pt.get_most_uncertain(
+        candidates,
+        unlabelled_pool=unlabelled_pool,
+        out_std_1=candidates_uncert_1,
+        idx_array_1=data_idx_1,
+        out_std_2=candidates_uncert_2, 
+        idx_array_2=data_idx_2,
+
+    )
+
+    # candidates, candidates_uncert_before, data_idx, unlabelled_pool = pt.regressor_uncertainty(
+    #     candidates, # ---only unstable candidates are returned
+    #     models["Regressor"],
+    #     n_runs=cfg["MC_dropout_runs"],
+    #     keep=cfg["keep_prob"],
+    #     unlabelled_pool=unlabelled_pool,  #---non uncertain points are added back to the unlabeled pool
+    #     device = device,
+    # )
     prediction_candidates_before = models["Regressor"].predict(candidates)
+
+    prediction_candidates_before2 = models[""].predict(candidates) #TODO: Get this working 
 
     # --- get prediction and uncertainty of train sample (is that really needed?)
     (
@@ -164,6 +194,11 @@ for i in range(cfg["iterations"]):
         n_runs=cfg["MC_dropout_runs"],
         train_data=True,
     )
+    train_sample_origin = md.ITGDatasetDF(
+        train_dataset.data.iloc[train_uncert_idx], 
+        target_column = FLUX,
+        
+        )
 
     prediction_train_origin, loss_train_origin = models["Regressor"].predict(train_sample_origin)
 
@@ -248,6 +283,7 @@ for i in range(cfg["iterations"]):
         keep=cfg["keep_prob"],
         order_idx=data_idx,
     ) # --- uncertainty of newly added points
+
     _, train_uncert_after, _ = pt.regressor_uncertainty(
         train_sample_origin,
         models["Regressor"],
