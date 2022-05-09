@@ -197,10 +197,32 @@ for i in range(cfg["iterations"]):
     train_sample_origin = md.ITGDatasetDF(
         train_dataset.data.iloc[train_uncert_idx], 
         target_column = FLUX,
-        
+
         )
+    
+    train_uncert_before_1, train_uncert_idx = pt.get_uncertainty(
+        train_sample,
+        models["Regressor"], 
+        n_runs=cfg["MC_drop_out_runs"],
+        train_data=True, 
+        device=device
+    )
+
+    train_uncert_before_2, train_uncert_idx_2 = pt.get_uncertainty(
+        train_sample,
+        models[""], # TODO: add second model name here
+        n_runs=cfg["MC_drop_out_runs"],
+        train_data=True, 
+        device=device
+    )
+
+    train_uncert_before_2 = pt.reoder_arrays(train_uncert_before_2, train_uncert_idx, train_uncert_idx_2)
+
+    train_uncert_before = train_uncert_before_1 + train_uncert_before_2
 
     prediction_train_origin, loss_train_origin = models["Regressor"].predict(train_sample_origin)
+
+    prediction_train_origin2, loss_train_origin2 = model[""].predict(train_sample_origin) #TODO: fill in
 
     # =================== >>>>>>>>>> Here goes the Qualikiz acquisition <<<<<<<<<<<<< ==================
 
@@ -252,9 +274,13 @@ for i in range(cfg["iterations"]):
 
     # ---  get predictions for enriched train sample before retraining (perhaps not useful?)
     prediction_before, _ = models["Regressor"].predict(train_sample)
+
+    predicition_before2, _ = models[""].predict(train_sample) #TODO: Fill in
     
     # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
     holdout_pred_before, _ = models["Regressor"].predict(holdout_set) 
+
+    holdout_pred_before2, _ = models[""].predict(holdout_set) #TODO: Fill in
 
 # ---------------------------------------------- Retrain Regressor with added data (ToDo: Further research required)---------------------------------
     train_loss, test_loss = pt.retrain_regressor(
@@ -269,12 +295,15 @@ for i in range(cfg["iterations"]):
         batch_size=batch_size,
     )
 
+    #TODO: Retrain second regressor
 
      # --- predictions for the enriched train sample after (is that really needed?)
     enriched_train_prediction_after, _ = models["Regressor"].predict(train_sample)
      # --- validation on holdout set after regressor is retrained
     logging.info("Running prediction on validation data set")
-    holdout_pred_after,holdout_loss, holdout_loss_unscaled = models["Regressor"].predict(holdout_loader,unscale=True)  
+    holdout_pred_after,holdout_loss, holdout_loss_unscaled = models["Regressor"].predict(holdout_loader,unscale=True) 
+
+    #TODO: Same for second regressor 
 
     _, candidates_uncert_after, _, _ = pt.regressor_uncertainty(
         candidates,
@@ -282,7 +311,7 @@ for i in range(cfg["iterations"]):
         n_runs=cfg["MC_dropout_runs"],
         keep=cfg["keep_prob"],
         order_idx=data_idx,
-    ) # --- uncertainty of newly added points
+    ) # --- uncertainty of newly added points TODO: Breakdown this calculation
 
     _, train_uncert_after, _ = pt.regressor_uncertainty(
         train_sample_origin,
@@ -290,7 +319,7 @@ for i in range(cfg["iterations"]):
         n_runs=cfg["MC_dropout_runs"],
         order_idx=train_uncert_idx,
         train_data=True,
-    ) # --- uncertainty on first training set before points were added (is that really needed?)
+    ) # --- uncertainty on first training set before points were added (is that really needed?) # TODO: Breakdown calc
 
     logging.info("Change in uncertainty for most uncertain data points:")
     
@@ -302,7 +331,7 @@ for i in range(cfg["iterations"]):
             iteration=i,
             save_path=save_dest
         )
-    )
+    ) # TODO: need for second regressor
 
     output_dict["novel_uncert_before"].append(candidates_uncert_before)
     output_dict["novel_uncert_after"].append(candidates_uncert_after)
@@ -335,7 +364,7 @@ for i in range(cfg["iterations"]):
         train_mse_before, train_mse_after, delta_mse = pt.mse_change(
             candidates_uncert_before,
             candidates_uncert_after,
-            prediction_idx_order,
+            prediction_idx_order, 
             train_uncert_idx,
             train_sample,
             uncertainties=[train_uncert_before, train_uncert_after],

@@ -256,6 +256,16 @@ def retrain_classifier(
 
 
 # Regressor tools
+def reoder_arrays(array, order1, order2):
+    '''
+    Inputs: 
+        array: The array to be reordered
+        order1: the desired index ordering
+        order2: the current index ordering
+    '''
+    reorder = np.array([np.where(order2 == i) for i in order1]).flatten()
+    return array[reorder]
+
 def retrain_regressor(
     new_dataset: ITGDatasetDF,
     val_dataset: ITGDatasetDF,
