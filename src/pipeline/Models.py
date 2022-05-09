@@ -50,7 +50,7 @@ class Classifier(nn.Module):
         y_hat = self.model(x)
         return y_hat
 
-    def train_step(self, dataloader, optimizer, epoch=None):
+    def train_step(self, dataloader, optimizer, epoch=None, disable_tqdm=False):
         # Initalise loss function
         BCE = nn.BCELoss()
 
@@ -59,7 +59,7 @@ class Classifier(nn.Module):
 
         losses = []
         correct = 0
-        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}")):
+        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}", disable=disable_tqdm)):
 
             X = X.to(self.device)
             y = y.to(self.device)
@@ -148,10 +148,13 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self,device):
+    def __init__(self,device,scaler):
         super().__init__()
         self.type = "regressor"
         self.device = device
+        self.scaler = scaler
+        self.loss = nn.MSELoss(reduction="sum") # LZ: ToDo this might be an input in the case the output is multitask
+
         self.model = nn.Sequential(
             nn.Linear(15, 512),
             nn.Dropout(p=0.1),
@@ -168,6 +171,9 @@ class Regressor(nn.Module):
     def forward(self, x):
         y_hat = self.model(x.float())
         return y_hat
+
+    def unscale(self,y):
+        return y*self.scaler.scale_[1]+self.scaler.mean_[1]
 
     def enable_dropout(self):
         """Function to enable the dropout layers during test-time"""
@@ -190,17 +196,23 @@ class Regressor(nn.Module):
                     param_update = (param * lam) + noise
                     param.copy_(param_update)
 
-    def loss_function(self, y, y_hat):    # LZ : ToDo if given mode is predicted not to develop, set the outputs related to that mode to zero, and should not contribute to the loss
-        MSE_loss = nn.MSELoss(reduction="sum") # LZ: ToDo this might be an input in the case the output is multitask
-        return MSE_loss(y_hat, y.float())
+    def loss_function(self, y, y_hat, unscale=False):    # LZ : ToDo if given mode is predicted not to develop, set the outputs related to that mode to zero, and should not contribute to the loss
 
-    def train_step(self, dataloader, optimizer, epoch=None):
+        loss = self.loss(y_hat, y.float())
+        if unscale:
+            y_hat = torch.Tensor(self.unscale(y_hat.detach().cpu().numpy()))
+            y = torch.Tensor(self.unscale(y.detach().cpu().numpy()))
+            loss_unscaled = self.loss(y_hat, y.float())
+            return loss, loss_unscaled
+        return loss
+
+    def train_step(self, dataloader, optimizer, epoch=None, disable_tqdm=False):
 
         size = len(dataloader.dataset)
         num_batches = len(dataloader)
 
         losses = []
-        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader,desc=f"Epoch {epoch}"), 0):
+        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader,desc=f"Epoch {epoch}", disable=disable_tqdm), 0):
             
             batch_size = len(X)
             # logging.debug(f"batch size recieved:{batch_size}")
@@ -242,37 +254,47 @@ class Regressor(nn.Module):
         logging.debug(f"Test MSE: {average_loss:>7f}")
         return average_loss
 
-    def predict(self, dataloader):
-        # Debug
+    def predict(self, dataloader, unscale=False):
 
         if not isinstance(dataloader, DataLoader):
-            # dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
-            dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=100)
+            batch_size = min(len(dataloader), 512)
+            dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=batch_size, shuffle=False)# --- batch size doesnt matter here because it's just prediction
+
+
         size = len(dataloader.dataset)
         pred = []
         losses = []
+        losses_unscaled = []
         for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
             x = x.to(self.device)
             z = z.to(self.device)
             z_hat = self.forward(x.float())
             pred.append(z_hat.squeeze().detach().cpu().numpy())
-            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
-            losses.append(loss)
+            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat,unscale=unscale)
+            if unscale:
+                losses_unscaled.append(loss[1].item())
+                loss = loss[0]
+            losses.append(loss.item())
         average_loss = np.sum(losses) / size
         
         pred = np.asarray(pred, dtype=object).flatten()
 
+        if unscale:
+            unscaled_avg_loss = np.sum(losses_unscaled) / size
+            return pred, average_loss, unscaled_avg_loss
         return pred, average_loss
 
 
 class ITGDataset(Dataset):
-    def __init__(self, X, y, z=None):
+    def __init__(self, X, y, z=None, indices=None):
         self.X = X
         self.y = y
         self.z = z
+        self.indices = indices
 
-        # add indices to all the data points
-        self.indices = np.arange(len(self.X))
+        if self.indices is None:
+            # add indices to all the data points
+            self.indices = np.arange(len(self.X))
 
     # number of rows in the dataset
     def __len__(self):
@@ -424,7 +446,7 @@ def train_model(
     else: 
         train_loader = pt.pandas_to_numpy_data(train_dataset, train_batch_size)
 
-    val_loader = pt.pandas_to_numpy_data(val_dataset, val_batch_size)
+    val_loader = pt.pandas_to_numpy_data(val_dataset, val_batch_size, shuffle=False)
     # Initialise the optimiser
     if weight_decay:
         opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
