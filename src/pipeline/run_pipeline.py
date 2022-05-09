@@ -73,6 +73,10 @@ if not os.path.exists(SAVE_PATHS["outputs"]):
 # Load pretrained models
 logging.info("Loaded the following models:\n")
 
+# save copy of yaml file used for reproducibility
+with open(os.path.join(save_dest, "config.yaml"), "w") as f:
+    out = yaml.dump(cfg, f, default_flow_style=False)
+
 
 # ------------------------------------------- Load or train first models ------------------------------------------
 models = {}
@@ -123,7 +127,8 @@ for i in range(cfg["iterations"]):
 
     if i != 0:
         # reset the output dictionary for each iteration
-        output_dict = pt.output_dict
+        for value in output_dict.values():
+            del value[:]
 
     # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
     candidates = unlabelled_pool.sample(candidate_size)  
