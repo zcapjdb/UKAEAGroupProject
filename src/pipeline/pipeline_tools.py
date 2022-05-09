@@ -208,7 +208,7 @@ def retrain_classifier(
         patience = epochs
 
     # instantiate optimiser
-    opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate)
+    opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate,weight_decay=1.e-4)
     # create scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         opt,
@@ -295,7 +295,7 @@ def retrain_regressor(
     model.train()
 
     # instantiate optimiser
-    opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1.e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         opt,
         mode="min",
