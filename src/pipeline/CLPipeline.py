@@ -16,14 +16,15 @@ from Models import Classifier, Regressor
 import argparse
 import pandas as pd
 
-
 class CLTaskManager:
-    def __init__(self, config_tasks, CL_mode='shrink_perturb'):
+    def __init__(self, config_tasks: dict = None,  CL_mode: str = 'shrink_perturb',
+     save_path: str = "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL" ):
         self.config_tasks = config_tasks # --- List of config files for the different tasks
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.classifier = Classifier(device)
         self.regressor = Regressor(device)
         self.cl_mode = CL_mode
+        self.save_path = save_path
         
     def shrink_perturb(self):
         self.classifier.shrink_perturb(lam=cfg['lam'], scale=0.01, loc=0.0)
@@ -37,8 +38,10 @@ class CLTaskManager:
 
     def run(self):
         models = {'Classifier':self.classifier,'Regressor':self.regressor}
-        for cfg in self.config_tasks:
-            ALpipeline(cfg, models)
+        test_data = {}
+        forgetting = {}
+        for i,cfg in enumerate(self.config_tasks):
+            test_data = ALpipeline(cfg, models)
             if self.cl_mode == 'shrink_perturb':
                 self.shrink_perturb()
             elif self.cl_mode == 'EWC':
@@ -48,8 +51,18 @@ class CLTaskManager:
             else:
                 pass
 
+            test_data.update({f'task{i}':test_data})
+            if i!=0:
+                for k in test_data.keys():
+                    _, test_loss = self.regressor.predict(test_data[k])
+                    forgetting.update({f'task{j}_model{i}':test_loss})
 
-def ALpipeline(cfg,models):
+        with open(output_path, "wb") as f:
+            pickle.dump(output_dict, f)
+
+
+
+def ALpipeline(cfg: dict, models: dict) -> None:
     # Create logger object for use in pipeline
     verboselogs.install()
     logger = logging.getLogger(__name__)
@@ -99,16 +112,9 @@ def ALpipeline(cfg,models):
         os.makedirs(SAVE_PATHS["outputs"])
 
     # ------------------------------------------- Load or train first models ------------------------------------------
-    models = {}
-    for model in PRETRAINED:
+    for model in models.keys():
 
-        train_sample = train_dataset.sample(train_size) 
-
-        logging.info(f"{model} not trained - training now")
-        models[model] = (
-            Classifier(device) if model == "Classifier" else Regressor(device, scaler)
-        )
-        
+        train_sample = train_dataset.sample(train_size)        
         models[model], losses  = md.train_model(
             models[model],
             train_sample,
@@ -353,5 +359,28 @@ def ALpipeline(cfg,models):
         classifier_path = os.path.join(save_dest, f"classifier_lam_{lam}_iteration_{i}.pkl")
         torch.save(models["Classifier"].state_dict(), classifier_path)
 
+        return holdout_set
 
 
+
+if __name__=='__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config", help="config file", required=True)
+    args = parser.parse_args()
+
+    with open(args.config) as f:
+        cfg = yaml.load(f, Loader=yaml.FullLoader)
+
+    task1 = cfg['task1']            
+    task2 = cfg['task2']
+    common = cfg['common']
+     
+    task1.update(common)
+    task2.update(common)
+
+    config_tasks = [task1,task2]
+    CL_mode = cfg['CL_method']
+    # ToDo =====> add to cfg
+    #save_path = /home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject 
+    PL = CLTaskManager(config_tasks, CL_mode)
+    PL.run()
