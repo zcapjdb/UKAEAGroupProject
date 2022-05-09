@@ -149,10 +149,13 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self,device):
+    def __init__(self,device,scaler):
         super().__init__()
         self.type = "regressor"
         self.device = device
+        self.scaler = scaler
+        self.loss = nn.MSELoss(reduction="sum") # LZ: ToDo this might be an input in the case the output is multitask
+
         self.model = nn.Sequential(
             nn.Linear(15, 512),
             nn.Dropout(p=0.1),
@@ -169,6 +172,9 @@ class Regressor(nn.Module):
     def forward(self, x):
         y_hat = self.model(x.float())
         return y_hat
+
+    def unscale(self,y):
+        return y*self.scaler.scale_[1]+self.scaler.mean_[1]
 
     def enable_dropout(self):
         """Function to enable the dropout layers during test-time"""
@@ -191,9 +197,11 @@ class Regressor(nn.Module):
                     param_update = (param * lam) + noise
                     param.copy_(param_update)
 
-    def loss_function(self, y, y_hat):    # LZ : ToDo if given mode is predicted not to develop, set the outputs related to that mode to zero, and should not contribute to the loss
-        MSE_loss = nn.MSELoss(reduction="sum") # LZ: ToDo this might be an input in the case the output is multitask
-        return MSE_loss(y_hat, y.float())
+    def loss_function(self, y, y_hat, unscale=False):    # LZ : ToDo if given mode is predicted not to develop, set the outputs related to that mode to zero, and should not contribute to the loss
+        if unscale:
+            y_hat = torch.Tensor(self.unscale(y_hat.detach().cpu().numpy()))
+            y = torch.Tensor(self.unscale(y.detach().cpu().numpy()))
+        return self.loss(y_hat, y.float())
 
     def train_step(self, dataloader, optimizer, epoch=None, disable_tqdm=False):
 
@@ -243,7 +251,7 @@ class Regressor(nn.Module):
         logging.debug(f"Test MSE: {average_loss:>7f}")
         return average_loss
 
-    def predict(self, dataloader):
+    def predict(self, dataloader, unscale=False):
 
         if not isinstance(dataloader, DataLoader):
             batch_size = min(len(dataloader), 512)
@@ -258,7 +266,7 @@ class Regressor(nn.Module):
             z = z.to(self.device)
             z_hat = self.forward(x.float())
             pred.append(z_hat.squeeze().detach().cpu().numpy())
-            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
+            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat,unscale=unscale).item()
             losses.append(loss)
         average_loss = np.sum(losses) / size
         
