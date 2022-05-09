@@ -20,15 +20,15 @@ class CLTaskManager:
     def __init__(self, config_tasks: dict = None,  CL_mode: str = 'shrink_perturb',
      save_path: str = "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL" ):
         self.config_tasks = config_tasks # --- List of config files for the different tasks
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.classifier = Classifier(device)
-        self.regressor = Regressor(device)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.classifier = Classifier(self.device)
+        self.regressor = Regressor(self.device)
         self.cl_mode = CL_mode
         self.save_path = save_path
         
-    def shrink_perturb(self):
-        self.classifier.shrink_perturb(lam=cfg['lam'], scale=0.01, loc=0.0)
-        self.regressor.shrink_perturb(lam=cfg['lam'], scale=0.01, loc=0.0)     
+    def shrink_perturb(self,lam):
+        self.classifier.shrink_perturb(lam=lam, scale=0.01, loc=0.0)
+        self.regressor.shrink_perturb(lam=lam, scale=0.01, loc=0.0)     
 
     def EWC(self):
         raise ValueError('Not implemented')
@@ -41,9 +41,9 @@ class CLTaskManager:
         test_data = {}
         forgetting = {}
         for i,cfg in enumerate(self.config_tasks):
-            test_data = ALpipeline(cfg, models)
+            test_data_temp = ALpipeline(cfg, models,self.device)
             if self.cl_mode == 'shrink_perturb':
-                self.shrink_perturb()
+                self.shrink_perturb(cfg['hyperparams']['lambda'])
             elif self.cl_mode == 'EWC':
                 self.EWC()
             elif self.cl_mode == 'OGD': # ToDo =========>>> implement other frameworks
@@ -51,18 +51,19 @@ class CLTaskManager:
             else:
                 pass
 
-            test_data.update({f'task{i}':test_data})
+            test_data.update({f'task{i}':test_data_temp})
             if i!=0:
                 for k in test_data.keys():
                     _, test_loss = self.regressor.predict(test_data[k])
-                    forgetting.update({f'task{j}_model{i}':test_loss})
+                    forgetting.update({f'{k}_model{i}':test_loss})
 
-        with open(output_path, "wb") as f:
-            pickle.dump(output_dict, f)
+        with open(self.save_path+'/forgetting.pkl', "wb") as f:
+            pickle.dump(forgetting, f)
 
 
 
-def ALpipeline(cfg: dict, models: dict) -> None:
+
+def ALpipeline(cfg: dict, models: dict, device: torch.device) -> None:
     # Create logger object for use in pipeline
     verboselogs.install()
     logger = logging.getLogger(__name__)
@@ -105,6 +106,7 @@ def ALpipeline(cfg: dict, models: dict) -> None:
     eval_dataset.remove(valid_dataset.data.index) # 
     unlabelled_pool = eval_dataset
 
+    models['Regressor'].scaler = scaler #ToDo : =============>>>> use proper setter
     # --- Set up saving
     save_dest = os.path.join(SAVE_PATHS["outputs"], FLUX)
     if not os.path.exists(save_dest): os.makedirs(save_dest)
