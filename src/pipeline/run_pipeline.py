@@ -39,7 +39,7 @@ device = torch.device('cpu')
 
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
-FLUX = cfg["flux"]
+FLUXES = cfg["flux"] # is now a list of the relevant fluxes
 PRETRAINED = cfg["pretrained"]
 PATHS = cfg["data"]
 SAVE_PATHS = cfg["save_paths"]
@@ -56,10 +56,16 @@ output_dict = pt.output_dict
 # To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test loss
 
 
+
 # --------------------------------------------- Load data ----------------------------------------------------------
-train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
-    PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=sample_size
-)
+if len(FLUXES) > 1: 
+    train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
+        PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUXES[0], other_targets=FLUXES[1:], samplesize_debug=sample_size
+    )
+else: 
+    train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
+        PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUXES[0], samplesize_debug=sample_size
+    )
 # --- holdout set is from the test set
 plot_sample = test_dataset.sample(test_size)  # Holdout dataset
 holdout_set = plot_sample 
@@ -72,7 +78,7 @@ eval_dataset.remove(valid_dataset.data.index) #
 unlabelled_pool = eval_dataset
 
 # --- Set up saving
-save_dest = os.path.join(SAVE_PATHS["outputs"], FLUX)
+save_dest = os.path.join(SAVE_PATHS["outputs"], FLUXES[0])
 if not os.path.exists(save_dest): os.makedirs(save_dest)
 if not os.path.exists(SAVE_PATHS["outputs"]):
     os.makedirs(SAVE_PATHS["outputs"])
@@ -87,33 +93,33 @@ with open(os.path.join(save_dest, "config.yaml"), "w") as f:
 # ------------------------------------------- Load or train first models ------------------------------------------
 models = {}
 for model in PRETRAINED:
+    train_sample = train_dataset.sample(train_size)
+    for FLUX in FLUXES:
+        if PRETRAINED[model][FLUX]["trained"] == True:
+            trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX)
+            models[FLUX] = {model: trained_model.to(device)}
 
-    train_sample = train_dataset.sample(train_size) 
-    if PRETRAINED[model][FLUX]["trained"] == True:
-        trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX)
-        models[model] = trained_model.to(device)
+        else:
+            logging.info(f"{FLUX} {model} not trained - training now")
+            models[FLUX][model] = (
+                Classifier(device) if model == "Classifier" else Regressor(device, scaler, FLUX)
+            )
+            
+            models[FLUX][model], losses  = md.train_model(
+                models[FLUX][model],
+                train_sample,
+                valid_dataset, 
+                save_path=PRETRAINED[model][FLUX]["save_path"],
+                epochs=cfg["train_epochs"],
+                patience=cfg["train_patience"],
+            )
+            if model == 'Regressor': #To Do ==== >> do the same for classifier
+                train_loss, valid_loss = losses
+                output_dict["train_loss_init"].append(train_loss)
+            #if model == "Classifier":  --- not used currently
+            #    losses, train_accuracy, validation_losses, val_accuracy = losses
 
-    else:
-        logging.info(f"{model} not trained - training now")
-        models[model] = (
-            Classifier(device) if model == "Classifier" else Regressor(device, scaler, FLUX)
-        )
-        
-        models[model], losses  = md.train_model(
-            models[model],
-            train_sample,
-            valid_dataset, 
-            save_path=PRETRAINED[model][FLUX]["save_path"],
-            epochs=cfg["train_epochs"],
-            patience=cfg["train_patience"],
-        )
-        if model == 'Regressor': #To Do ==== >> do the same for classifier
-            train_loss, valid_loss = losses
-            output_dict["train_loss_init"].append(train_loss)
-        #if model == "Classifier":  --- not used currently
-        #    losses, train_accuracy, validation_losses, val_accuracy = losses
-
-# ---- Losses before the pipeline starts
+# ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
 _, holdout_loss = models["Regressor"].predict(holdout_loader)
 output_dict["test_loss_init"].append(holdout_loss)
 
@@ -151,6 +157,7 @@ for i in range(cfg["iterations"]):
 
     # ---  get most uncertain candidate inputs as decided by regressor   --- NEW AL FRAMEWORK GOES HERE
     # get the uncertainties from regressor 1
+    
     candidates_uncert_1, data_idx_1 = pt.get_uncertainty(
         candidates,
         models["Regressor"], 

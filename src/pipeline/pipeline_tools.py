@@ -51,6 +51,7 @@ def prepare_data(
     valid_path: str,
     test_path: str,
     target_column: str,
+    other_targets: list,
     train_size: int = None,
     valid_size: int = None,
     test_size: int = None,
@@ -79,7 +80,11 @@ def prepare_data(
         raise ValueError("Flux variable to supported")
 
     # Remove NaN's and add appropripate class labels
-    keep_keys = train_keys + [target_column]
+    if other_targets != None:
+        target_columns = other_targets.append(target_column)
+        keep_keys = train_keys + target_columns
+    else: 
+        keep_keys = train_keys + [target_column]
 
     train_data = train_data[keep_keys]
     validation_data = validation_data[keep_keys]
