@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 coloredlogs.install(level="DEBUG")#cfg["logging_level"])
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
 
 #comet_project_name = "AL-pipeline"
 #experiment = Experiment(project_name = comet_project_name)
@@ -56,7 +57,7 @@ output_dict = pt.output_dict
 
 
 # --------------------------------------------- Load data ----------------------------------------------------------
-train_dataset, eval_dataset, test_dataset ,scaler = pt.prepare_data(
+train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
     PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=sample_size
 )
 # --- holdout set is from the test set
@@ -89,13 +90,13 @@ for model in PRETRAINED:
 
     train_sample = train_dataset.sample(train_size) 
     if PRETRAINED[model][FLUX]["trained"] == True:
-        trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"], device)
+        trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX)
         models[model] = trained_model.to(device)
 
     else:
         logging.info(f"{model} not trained - training now")
         models[model] = (
-            Classifier(device) if model == "Classifier" else Regressor(device, scaler)
+            Classifier(device) if model == "Classifier" else Regressor(device, scaler, FLUX)
         )
         
         models[model], losses  = md.train_model(
