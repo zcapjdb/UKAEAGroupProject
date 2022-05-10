@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 coloredlogs.install(level="DEBUG")#cfg["logging_level"])
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
 
 #comet_project_name = "AL-pipeline"
 #experiment = Experiment(project_name = comet_project_name)
@@ -42,6 +43,7 @@ FLUX = cfg["flux"]
 PRETRAINED = cfg["pretrained"]
 PATHS = cfg["data"]
 SAVE_PATHS = cfg["save_paths"]
+sample_size = cfg["sample_size_debug"] # percentage of data to use - lower for debugging
 lam = cfg["hyperparams"]["lambda"]
 train_size = cfg["hyperparams"]["train_size"]
 valid_size = cfg["hyperparams"]["valid_size"]
@@ -55,8 +57,8 @@ output_dict = pt.output_dict
 
 
 # --------------------------------------------- Load data ----------------------------------------------------------
-train_dataset, eval_dataset, test_dataset,scaler = pt.prepare_data(
-    PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=0.1
+train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
+    PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=sample_size
 )
 # --- holdout set is from the test set
 plot_sample = test_dataset.sample(test_size)  # Holdout dataset
@@ -77,6 +79,10 @@ if not os.path.exists(SAVE_PATHS["outputs"]):
 # Load pretrained models
 logging.info("Loaded the following models:\n")
 
+# save copy of yaml file used for reproducibility
+with open(os.path.join(save_dest, "config.yaml"), "w") as f:
+    out = yaml.dump(cfg, f, default_flow_style=False)
+
 
 # ------------------------------------------- Load or train first models ------------------------------------------
 models = {}
@@ -84,13 +90,13 @@ for model in PRETRAINED:
 
     train_sample = train_dataset.sample(train_size) 
     if PRETRAINED[model][FLUX]["trained"] == True:
-        trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"], device)
+        trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX)
         models[model] = trained_model.to(device)
 
     else:
         logging.info(f"{model} not trained - training now")
         models[model] = (
-            Classifier(device) if model == "Classifier" else Regressor(device, scaler)
+            Classifier(device) if model == "Classifier" else Regressor(device, scaler, FLUX)
         )
         
         models[model], losses  = md.train_model(
@@ -127,7 +133,8 @@ for i in range(cfg["iterations"]):
 
     if i != 0:
         # reset the output dictionary for each iteration
-        output_dict = pt.output_dict
+        for value in output_dict.values():
+            del value[:]
 
     # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
     candidates = unlabelled_pool.sample(candidate_size)  
@@ -249,7 +256,7 @@ for i in range(cfg["iterations"]):
             losses, accs = pt.retrain_classifier(
                 misclassified_dataset,
                 train_sample,
-                holdout_set,
+                valid_dataset,
                 models["Classifier"],
                 batch_size=batch_size,
                 epochs=epochs,

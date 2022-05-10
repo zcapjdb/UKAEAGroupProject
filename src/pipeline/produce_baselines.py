@@ -43,7 +43,7 @@ TYPE = cfg["model_type"]
 logging.info(f"Training a {TYPE} using {MODE} dataset for {FLUX}")
 # --------------------------------------------- Load data ----------------------------------------------------------
 
-train_dataset, eval_dataset, test_dataset = prepare_data(
+train_dataset, eval_dataset, test_dataset, _ = prepare_data(
     PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=0.1
 )
 
@@ -78,11 +78,12 @@ trained_model, losses = train_model(
 
 # Evaluate Model performance
 logging.debug("Evaluating Model Performance")
-predictions, test_lossses = model.predict(test_dataset)
+predictions, test_lossses, test_losses_unscaled = model.predict(test_dataset,unscale=True)
 
 output_dict = {
     "metrics": losses,
     "test_losses": test_lossses,
+    "test_losses_unscaled": test_losses_unscaled
 }
 
 if MODE =='full': 

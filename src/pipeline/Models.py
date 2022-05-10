@@ -111,7 +111,6 @@ class Classifier(nn.Module):
         return average_loss, correct
     
     def predict(self, dataloader):
-        # Debug
 
         if not isinstance(dataloader, DataLoader):
             # dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
@@ -148,12 +147,13 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self,device,scaler):
+    def __init__(self,device,scaler,flux):
         super().__init__()
         self.type = "regressor"
         self.device = device
         self.scaler = scaler
         self.loss = nn.MSELoss(reduction="sum") # LZ: ToDo this might be an input in the case the output is multitask
+        self.flux = flux
 
         self.model = nn.Sequential(
             nn.Linear(15, 512),
@@ -172,8 +172,12 @@ class Regressor(nn.Module):
         y_hat = self.model(x.float())
         return y_hat
 
-    def unscale(self,y):
-        return y*self.scaler.scale_[1]+self.scaler.mean_[1]
+    def unscale(self, y):
+        # get the index of the scaler that corresponds to the target
+        scaler_features = self.scaler.feature_names_in_
+        scaler_index = np.where(scaler_features == self.flux)[0][0]
+
+        return y*self.scaler.scale_[scaler_index]+self.scaler.mean_[scaler_index]
 
     def enable_dropout(self):
         """Function to enable the dropout layers during test-time"""
@@ -521,7 +525,7 @@ def train_model(
         return model, [losses, validation_losses]
 
 
-def load_model(model, save_path, device):
+def load_model(model, save_path, device, scaler, flux):
     logging.info(f"Model Loaded: {model}")
     if model == "Classifier":
         classifier = Classifier(device=device)
@@ -529,6 +533,6 @@ def load_model(model, save_path, device):
         return classifier
 
     elif model == "Regressor":
-        regressor = Regressor(device=device)
+        regressor = Regressor(device=device, scaler=scaler, flux=flux)
         regressor.load_state_dict(torch.load(save_path))
         return regressor
