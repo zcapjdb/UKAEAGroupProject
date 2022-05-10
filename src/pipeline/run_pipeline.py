@@ -1,7 +1,8 @@
 import coloredlogs, verboselogs, logging
 import os
 import copy
-#import comet_ml import Experiment
+
+# import comet_ml import Experiment
 
 
 import pipeline.pipeline_tools as pt
@@ -28,22 +29,24 @@ with open(args.config) as f:
 # Create logger object for use in pipeline
 verboselogs.install()
 logger = logging.getLogger(__name__)
-coloredlogs.install(level="DEBUG")#cfg["logging_level"])
+coloredlogs.install(level="DEBUG")  # cfg["logging_level"])
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = torch.device('cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 
-#comet_project_name = "AL-pipeline"
-#experiment = Experiment(project_name = comet_project_name)
+# comet_project_name = "AL-pipeline"
+# experiment = Experiment(project_name = comet_project_name)
 
 
 # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
-FLUXES = cfg["flux"] # is now a list of the relevant fluxes
+FLUXES = cfg["flux"]  # is now a list of the relevant fluxes
 PRETRAINED = cfg["pretrained"]
 PATHS = cfg["data"]
 SAVE_PATHS = cfg["save_paths"]
-sample_size = cfg["sample_size_debug"] # percentage of data to use - lower for debugging
+sample_size = cfg[
+    "sample_size_debug"
+]  # percentage of data to use - lower for debugging
 lam = cfg["hyperparams"]["lambda"]
 train_size = cfg["hyperparams"]["train_size"]
 valid_size = cfg["hyperparams"]["valid_size"]
@@ -56,30 +59,41 @@ output_dict = pt.output_dict
 # To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test loss
 
 
-
 # --------------------------------------------- Load data ----------------------------------------------------------
-if len(FLUXES) > 1: 
+if len(FLUXES) > 1:
     train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
-        PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUXES[0], other_targets=FLUXES[1:], samplesize_debug=sample_size
+        PATHS["train"],
+        PATHS["validation"],
+        PATHS["test"],
+        target_column=FLUXES[0],
+        other_targets=FLUXES[1:],
+        samplesize_debug=sample_size,
     )
-else: 
+else:
     train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
-        PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUXES[0], samplesize_debug=sample_size
+        PATHS["train"],
+        PATHS["validation"],
+        PATHS["test"],
+        target_column=FLUXES[0],
+        samplesize_debug=sample_size,
     )
 # --- holdout set is from the test set
 plot_sample = test_dataset.sample(test_size)  # Holdout dataset
-holdout_set = plot_sample 
-#holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
-holdout_loader = DataLoader(holdout_set, batch_size=batch_size,shuffle=False)  # ToDo =====>> use helper function
+holdout_set = plot_sample
+# holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
+holdout_loader = DataLoader(
+    holdout_set, batch_size=batch_size, shuffle=False
+)  # ToDo =====>> use helper function
 # --- validation set is fixed and from the evaluation
-valid_dataset = eval_dataset.sample(valid_size) # validation set
+valid_dataset = eval_dataset.sample(valid_size)  # validation set
 # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
-eval_dataset.remove(valid_dataset.data.index) # 
+eval_dataset.remove(valid_dataset.data.index)  #
 unlabelled_pool = eval_dataset
 
 # --- Set up saving
 save_dest = os.path.join(SAVE_PATHS["outputs"], FLUXES[0])
-if not os.path.exists(save_dest): os.makedirs(save_dest)
+if not os.path.exists(save_dest):
+    os.makedirs(save_dest)
 if not os.path.exists(SAVE_PATHS["outputs"]):
     os.makedirs(SAVE_PATHS["outputs"])
 # Load pretrained models
@@ -96,27 +110,31 @@ for model in PRETRAINED:
     train_sample = train_dataset.sample(train_size)
     for FLUX in FLUXES:
         if PRETRAINED[model][FLUX]["trained"] == True:
-            trained_model = md.load_model(model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX)
+            trained_model = md.load_model(
+                model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX
+            )
             models[FLUX] = {model: trained_model.to(device)}
 
         else:
             logging.info(f"{FLUX} {model} not trained - training now")
             models[FLUX][model] = (
-                Classifier(device) if model == "Classifier" else Regressor(device, scaler, FLUX)
+                Classifier(device)
+                if model == "Classifier"
+                else Regressor(device, scaler, FLUX)
             )
-            
-            models[FLUX][model], losses  = md.train_model(
+
+            models[FLUX][model], losses = md.train_model(
                 models[FLUX][model],
                 train_sample,
-                valid_dataset, 
+                valid_dataset,
                 save_path=PRETRAINED[model][FLUX]["save_path"],
                 epochs=cfg["train_epochs"],
                 patience=cfg["train_patience"],
             )
-            if model == 'Regressor': #To Do ==== >> do the same for classifier
+            if model == "Regressor":  # To Do ==== >> do the same for classifier
                 train_loss, valid_loss = losses
                 output_dict["train_loss_init"].append(train_loss)
-            #if model == "Classifier":  --- not used currently
+            # if model == "Classifier":  --- not used currently
             #    losses, train_accuracy, validation_losses, val_accuracy = losses
 
 # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
@@ -125,7 +143,9 @@ output_dict["test_loss_init"].append(holdout_loss)
 
 
 if len(train_sample) > 100_000:
-    logger.warning("Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data")
+    logger.warning(
+        "Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data"
+    )
 
 
 logging.info(f"Training for lambda: {lam}")
@@ -143,63 +163,55 @@ for i in range(cfg["iterations"]):
             del value[:]
 
     # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
-    candidates = unlabelled_pool.sample(candidate_size)  
+    candidates = unlabelled_pool.sample(candidate_size)
     # --- remove the sampled data points from the dataset
     unlabelled_pool.remove(candidates.data.index)
 
     # --- See Issue #37 --- candidates are only those that the classifier selects as unstable.
     candidates = pt.select_unstable_data(
-        candidates, batch_size=batch_size, classifier=models["Classifier"], device=device
-    )   # It's not the classifier's job to say whether a point is stable or not. This happens at the end of the pipeline when we get the true labels by running Qualikiz.
-       
+        candidates,
+        batch_size=batch_size,
+        classifier=models[FLUXES[0]]["Classifier"],
+        device=device,
+    )  # It's not the classifier's job to say whether a point is stable or not. This happens at the end of the pipeline when we get the true labels by running Qualikiz.
 
     epochs = cfg["initial_epochs"] * (i + 1)
 
     # ---  get most uncertain candidate inputs as decided by regressor   --- NEW AL FRAMEWORK GOES HERE
-    # get the uncertainties from regressor 1
-    
-    candidates_uncert_1, data_idx_1 = pt.get_uncertainty(
+    # get the uncertainties from regressors
+    candidates_uncerts, data_idxs = [], []
+
+    for FLUX in FLUXES:
+        temp_uncert, temp_idx = pt.get_uncertainty(
+            candidates,
+            models["Regressor"],
+            n_runs=cfg["MC_dropout_runs"],
+            keep=cfg["keep_prob"],
+            device=device,
+        )
+        candidates_uncerts.append(temp_uncert)
+        data_idxs.append(temp_idx)
+
+    (
         candidates,
-        models["Regressor"], 
-        n_runs=cfg["MC_dropout_runs"], 
-        keep=cfg["keep_prob"],
-        device=device,
-
-    )
-
-    #get the uncertainties from regressor 2
-    candidates_uncert_2, data_idx_2 = pt.get_uncertainty(
-       candidates, 
-       models[""], # Need to figure out how to load the model here 
-       n_runs=cfg["keep_prob"],
-       device=device 
-    )
-
-    candidates, candidates_uncert_before, data_idx, unlabelled_pool = pt.get_most_uncertain(
+        candidates_uncert_before,
+        data_idx,
+        unlabelled_pool,
+    ) = pt.get_most_uncertain(
         candidates,
         unlabelled_pool=unlabelled_pool,
-        out_std_1=candidates_uncert_1,
-        idx_array_1=data_idx_1,
-        out_std_2=candidates_uncert_2, 
-        idx_array_2=data_idx_2,
-
+        out_stds=candidates_uncerts,
+        idx_arrays=data_idxs,
     )
-
-    # candidates, candidates_uncert_before, data_idx, unlabelled_pool = pt.regressor_uncertainty(
-    #     candidates, # ---only unstable candidates are returned
-    #     models["Regressor"],
-    #     n_runs=cfg["MC_dropout_runs"],
-    #     keep=cfg["keep_prob"],
-    #     unlabelled_pool=unlabelled_pool,  #---non uncertain points are added back to the unlabeled pool
-    #     device = device,
-    # )
-    prediction_candidates_before = models["Regressor"].predict(candidates)
-
-    prediction_candidates_before2 = models[""].predict(candidates) #TODO: Get this working 
+    prediction_candidates_before = []
+    for FLUX in FLUXES:
+        prediction_candidates_before.append(
+            models[FLUX]["Regressor"].predict(candidates)
+        )
 
     # --- get prediction and uncertainty of train sample (is that really needed?)
     (
-        train_sample_origin,   # --- why is it called different tha train_sample? Are they not exactly the same?
+        train_sample_origin,  # --- why is it called different tha train_sample? Are they not exactly the same?
         train_uncert_before,
         train_uncert_idx,
     ) = pt.regressor_uncertainty(
@@ -209,34 +221,39 @@ for i in range(cfg["iterations"]):
         train_data=True,
     )
     train_sample_origin = md.ITGDatasetDF(
-        train_dataset.data.iloc[train_uncert_idx], 
-        target_column = FLUX,
+        train_dataset.data.iloc[train_uncert_idx],
+        target_column=FLUX,
+    )
 
-        )
-    
     train_uncert_before_1, train_uncert_idx = pt.get_uncertainty(
         train_sample,
-        models["Regressor"], 
+        models["Regressor"],
         n_runs=cfg["MC_drop_out_runs"],
-        train_data=True, 
-        device=device
+        train_data=True,
+        device=device,
     )
 
     train_uncert_before_2, train_uncert_idx_2 = pt.get_uncertainty(
         train_sample,
-        models[""], # TODO: add second model name here
+        models[""],  # TODO: add second model name here
         n_runs=cfg["MC_drop_out_runs"],
-        train_data=True, 
-        device=device
+        train_data=True,
+        device=device,
     )
 
-    train_uncert_before_2 = pt.reoder_arrays(train_uncert_before_2, train_uncert_idx, train_uncert_idx_2)
+    train_uncert_before_2 = pt.reoder_arrays(
+        train_uncert_before_2, train_uncert_idx, train_uncert_idx_2
+    )
 
     train_uncert_before = train_uncert_before_1 + train_uncert_before_2
 
-    prediction_train_origin, loss_train_origin = models["Regressor"].predict(train_sample_origin)
+    prediction_train_origin, loss_train_origin = models["Regressor"].predict(
+        train_sample_origin
+    )
 
-    prediction_train_origin2, loss_train_origin2 = model[""].predict(train_sample_origin) #TODO: fill in
+    prediction_train_origin2, loss_train_origin2 = model[""].predict(
+        train_sample_origin
+    )  # TODO: fill in
 
     # =================== >>>>>>>>>> Here goes the Qualikiz acquisition <<<<<<<<<<<<< ==================
 
@@ -256,10 +273,12 @@ for i in range(cfg["iterations"]):
         if buffer_size >= cfg["hyperparams"]["buffer_size"]:
             # concatenate datasets from the buffer
             misclassified = pd.concat(classifier_buffer)
-            misclassified_dataset = md.ITGDatasetDF(misclassified, FLUX, keep_index=True)
+            misclassified_dataset = md.ITGDatasetDF(
+                misclassified, FLUX, keep_index=True
+            )
 
             logging.info("Buffer full, retraining classifier")
-            # retrain the classifier on the misclassified points 
+            # retrain the classifier on the misclassified points
             losses, accs = pt.retrain_classifier(
                 misclassified_dataset,
                 train_sample,
@@ -282,21 +301,20 @@ for i in range(cfg["iterations"]):
             classifier_buffer = []
             buffer_size = 0
 
-
     # --- train data enriched by new unstable candidate points
-    train_sample.add(candidates) 
+    train_sample.add(candidates)
 
     # ---  get predictions for enriched train sample before retraining (perhaps not useful?)
     prediction_before, _ = models["Regressor"].predict(train_sample)
 
-    predicition_before2, _ = models[""].predict(train_sample) #TODO: Fill in
-    
+    predicition_before2, _ = models[""].predict(train_sample)  # TODO: Fill in
+
     # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
-    holdout_pred_before, _ = models["Regressor"].predict(holdout_set) 
+    holdout_pred_before, _ = models["Regressor"].predict(holdout_set)
 
-    holdout_pred_before2, _ = models[""].predict(holdout_set) #TODO: Fill in
+    holdout_pred_before2, _ = models[""].predict(holdout_set)  # TODO: Fill in
 
-# ---------------------------------------------- Retrain Regressor with added data (ToDo: Further research required)---------------------------------
+    # ---------------------------------------------- Retrain Regressor with added data (ToDo: Further research required)---------------------------------
     train_loss, test_loss = pt.retrain_regressor(
         train_sample,
         valid_dataset,
@@ -309,15 +327,17 @@ for i in range(cfg["iterations"]):
         batch_size=batch_size,
     )
 
-    #TODO: Retrain second regressor
+    # TODO: Retrain second regressor
 
-     # --- predictions for the enriched train sample after (is that really needed?)
+    # --- predictions for the enriched train sample after (is that really needed?)
     enriched_train_prediction_after, _ = models["Regressor"].predict(train_sample)
-     # --- validation on holdout set after regressor is retrained
+    # --- validation on holdout set after regressor is retrained
     logging.info("Running prediction on validation data set")
-    holdout_pred_after,holdout_loss, holdout_loss_unscaled = models["Regressor"].predict(holdout_loader,unscale=True) 
+    holdout_pred_after, holdout_loss, holdout_loss_unscaled = models[
+        "Regressor"
+    ].predict(holdout_loader, unscale=True)
 
-    #TODO: Same for second regressor 
+    # TODO: Same for second regressor
 
     _, candidates_uncert_after, _, _ = pt.regressor_uncertainty(
         candidates,
@@ -325,7 +345,7 @@ for i in range(cfg["iterations"]):
         n_runs=cfg["MC_dropout_runs"],
         keep=cfg["keep_prob"],
         order_idx=data_idx,
-    ) # --- uncertainty of newly added points TODO: Breakdown this calculation
+    )  # --- uncertainty of newly added points TODO: Breakdown this calculation
 
     _, train_uncert_after, _ = pt.regressor_uncertainty(
         train_sample_origin,
@@ -333,19 +353,19 @@ for i in range(cfg["iterations"]):
         n_runs=cfg["MC_dropout_runs"],
         order_idx=train_uncert_idx,
         train_data=True,
-    ) # --- uncertainty on first training set before points were added (is that really needed?) # TODO: Breakdown calc
+    )  # --- uncertainty on first training set before points were added (is that really needed?) # TODO: Breakdown calc
 
     logging.info("Change in uncertainty for most uncertain data points:")
-    
+
     output_dict["d_novel_uncert"].append(
         pt.uncertainty_change(
             x=candidates_uncert_before,
             y=candidates_uncert_after,
-            plot_title='Novel data',
+            plot_title="Novel data",
             iteration=i,
-            save_path=save_dest
+            save_path=save_dest,
         )
-    ) # TODO: need for second regressor
+    )  # TODO: need for second regressor
 
     output_dict["novel_uncert_before"].append(candidates_uncert_before)
     output_dict["novel_uncert_after"].append(candidates_uncert_after)
@@ -355,43 +375,45 @@ for i in range(cfg["iterations"]):
         pt.uncertainty_change(
             x=train_uncert_before,
             y=train_uncert_after,
-            plot_title='Train data',
+            plot_title="Train data",
             iteration=i,
-            save_path=save_dest
+            save_path=save_dest,
         )
     )
 
     # --- Prediction on train dataset not needed
-  #  _ = pt.mse_change(
-  #      prediction_before,
-  #      enriched_train_prediction_after,
-  #      prediction_idx_order,
-  #      data_idx,
-  #      enriched_train_loader,
-  #      [candidates_uncert_before, candidates_uncert_after],
-  #      save_path = SAVE_PATHS["plots"], 
-  #      iteration=i,
-  #      lam = lam
-  #  )
+    #  _ = pt.mse_change(
+    #      prediction_before,
+    #      enriched_train_prediction_after,
+    #      prediction_idx_order,
+    #      data_idx,
+    #      enriched_train_loader,
+    #      [candidates_uncert_before, candidates_uncert_after],
+    #      save_path = SAVE_PATHS["plots"],
+    #      iteration=i,
+    #      lam = lam
+    #  )
 
     try:
         train_mse_before, train_mse_after, delta_mse = pt.mse_change(
             candidates_uncert_before,
             candidates_uncert_after,
-            prediction_idx_order, 
+            prediction_idx_order,
             train_uncert_idx,
             train_sample,
             uncertainties=[train_uncert_before, train_uncert_after],
             data="novel",
-            save_path = SAVE_PATHS["plots"], 
+            save_path=SAVE_PATHS["plots"],
             iteration=i,
-            lam = lam
+            lam=lam,
         )
     except:
         logging.debug("pt.mse_change failed, whatever")
 
     n_train = len(train_sample_origin)
-    output_dict["holdout_pred_before"].append(holdout_pred_before) # these two are probably the only important ones
+    output_dict["holdout_pred_before"].append(
+        holdout_pred_before
+    )  # these two are probably the only important ones
     output_dict["holdout_pred_after"].append(holdout_pred_after)
     output_dict["holdout_ground_truth"].append(holdout_set.target)
     output_dict["retrain_losses"].append(train_loss)
@@ -400,7 +422,9 @@ for i in range(cfg["iterations"]):
     output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
 
     try:
-        output_dict["mse_before"].append(train_mse_before) # these three relate to the training MSE, probably not so useful to inspect 
+        output_dict["mse_before"].append(
+            train_mse_before
+        )  # these three relate to the training MSE, probably not so useful to inspect
         output_dict["mse_after"].append(train_mse_after)
         output_dict["d_mse"].append(delta_mse)
     except:
@@ -408,7 +432,9 @@ for i in range(cfg["iterations"]):
     output_dict["n_train_points"].append(n_train)
 
     # --- Save at end of iteration
-    output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl")
+    output_path = os.path.join(
+        save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl"
+    )
     with open(output_path, "wb") as f:
         pickle.dump(output_dict, f)
     regressor_path = os.path.join(save_dest, f"regressor_lam_{lam}_iteration_{i}.pkl")
