@@ -49,16 +49,17 @@ class CLTaskManager:
         models = {'Classifier':self.classifier,'Regressor':self.regressor}
         test_data = {}
         forgetting = {}
-        for i,cfg in enumerate(self.config_tasks):
-            if i==0:
+        for j,cfg in enumerate(self.config_tasks):
+            if j==0:
                 train, val, test, scaler = self.get_data(self.config_tasks[0])  
             else:
-                train, val, test, _ = self.get_data(self.config_tasks[i]) 
-                print(train)
+                train, val, test, _ = self.get_data(self.config_tasks[j]) 
                 # ---  in CL with AL, there is not train set, only the unlabelled pool. Some points will have been labelled, these are entirely the val and test set 
                 train.remove(train.data.index)  # --- initialise empty dataset, which will be augmented with candidates
 
-            test = ALpipeline(cfg, models, i, self.device, scaler, train,val, test) 
+            # ToDo: =====>> think a bit better about the scaler!! still use the scaler for the first task??
+            test = ALpipeline(cfg, models, j, self.device, self.cl_mode, scaler, train,val, test, ) 
+            # ToDo: ====>> instead, load each model from task 1 and retrain from same point on task 2 based on the various strategies
             if self.cl_mode == 'shrink_perturb':
                 self.shrink_perturb(cfg['hyperparams']['lambda'])
             elif self.cl_mode == 'EWC':
@@ -68,11 +69,13 @@ class CLTaskManager:
             else: # --- Few-shot transfer learning, we don't care about forgetting
                 pass
 
-            test_data.update({f'task{i}':test})
-            if i!=0:
+            test_data.update({f'task{j}':test})
+            if j!=0:
                 for k in test_data.keys():
-                    _, test_loss = self.regressor.predict(test_data[k])
-                    forgetting.update({f'{k}_model{i}':test_loss})
+                    _, regr_test_loss = self.regressor.predict(test_data[k])
+                    _, class_test_loss = self.classifier.predict(test_data[k])
+                    forgetting.update({f'regression_task{k}_model{j}':regr_test_loss})
+                    forgetting.update({f'classification_task{k}_model{j}':class_test_loss})
 
         with open(self.save_path+f'/forgetting_{self.cl_mode}.pkl', "wb") as f:
             pickle.dump(forgetting, f)
@@ -80,7 +83,7 @@ class CLTaskManager:
 
 
 
-def ALpipeline(cfg: dict, models: dict, i: str, device: torch.device, scaler: StandardScaler,
+def ALpipeline(cfg: dict, models: dict, j: str, device: torch.device, cl_mode: str, scaler: StandardScaler,
             train_dataset: ITGDatasetDF,
             eval_dataset: ITGDatasetDF,
             test_dataset: ITGDatasetDF) -> None:
@@ -100,7 +103,8 @@ def ALpipeline(cfg: dict, models: dict, i: str, device: torch.device, scaler: St
     PRETRAINED = cfg["pretrained"]
     PATHS = cfg["data"]
     SAVE_PATHS = cfg["save_paths"]
-    lam = cfg["hyperparams"]["lambda"]
+    lamb = cfg["hyperparams"]["lambda"]
+    lam = 1 # TodO: ======> perhaps also shrink perturb on AL pipeline, but different lambda?
     train_size = cfg["hyperparams"]["train_size"]
     valid_size = cfg["hyperparams"]["valid_size"]
     test_size = cfg["hyperparams"]["test_size"]
@@ -108,6 +112,8 @@ def ALpipeline(cfg: dict, models: dict, i: str, device: torch.device, scaler: St
     candidate_size = cfg["hyperparams"]["candidate_size"]
     # Dictionary to store results of the classifier and regressor for later use
     output_dict = pt.output_dict
+    if j>0:
+        print(output_dict)
 
     # To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test loss
     # --- holdout set is from the test set
@@ -128,14 +134,14 @@ def ALpipeline(cfg: dict, models: dict, i: str, device: torch.device, scaler: St
         os.makedirs(SAVE_PATHS["outputs"])
 
     # ------------------------------------------- Load or train first models ------------------------------------------
-    if i>0: # --- overwrite evaluation and test data
+    if j>0: # --- overwrite evaluation and test data
         train_sample = train_dataset
     else:
         train_sample = train_dataset.sample(train_size) 
 
     for model in models.keys():
 
-        if i == 0:  # --- Retrain from scratch only for first iteration, then AL on the other task
+        if j == 0:  # --- Retrain from scratch only for first iteration, then AL on the other task
                    
             models[model], losses  = md.train_model(
                 models[model],
@@ -168,6 +174,7 @@ def ALpipeline(cfg: dict, models: dict, i: str, device: torch.device, scaler: St
     buffer_size = 0
 
     for i in range(cfg["iterations"]):
+        print('printing', i,cfg["iterations"])
         logging.info(f"Iteration: {i+1}\n")
 
         if i != 0:
@@ -374,15 +381,15 @@ def ALpipeline(cfg: dict, models: dict, i: str, device: torch.device, scaler: St
         output_dict["n_train_points"].append(n_train)
 
         # --- Save at end of iteration
-        output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl")
+        output_path = os.path.join(save_dest, f"pipeline_outputs_{cl_mode}_lam_{lamb}_iteration_{i}.pkl")
         with open(output_path, "wb") as f:
             pickle.dump(output_dict, f)
-        regressor_path = os.path.join(save_dest, f"regressor_lam_{lam}_iteration_{i}.pkl")
+        regressor_path = os.path.join(save_dest, f"regressor_lam_{cl_mode}_{lamb}_iteration_{i}.pkl")
         torch.save(models["Regressor"].state_dict(), regressor_path)
-        classifier_path = os.path.join(save_dest, f"classifier_lam_{lam}_iteration_{i}.pkl")
+        classifier_path = os.path.join(save_dest, f"classifier_lam_{cl_mode}_{lamb}_iteration_{i}.pkl")
         torch.save(models["Classifier"].state_dict(), classifier_path)
 
-        return  holdout_set
+    return  holdout_set
 
 
 
@@ -403,7 +410,7 @@ if __name__=='__main__':
 
     config_tasks = [task1,task2]
     CL_mode = cfg['CL_method']
-    # ToDo =====> add to cfg
+    # ToDo =====> add following to cfg
     #save_path = /home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject 
     PL = CLTaskManager(config_tasks, CL_mode)
     PL.run()
