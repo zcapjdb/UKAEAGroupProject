@@ -2,6 +2,7 @@ import coloredlogs, verboselogs, logging
 import os
 import copy
 #import comet_ml import Experiment
+from sklearn.preprocessing import StandardScaler
 
 
 import pipeline.pipeline_tools as pt
@@ -12,12 +13,12 @@ from scripts.utils import train_keys
 import yaml
 import pickle
 import torch
-from Models import Classifier, Regressor
+from Models import Classifier, ITGDatasetDF, Regressor
 import argparse
 import pandas as pd
 
 class CLTaskManager:
-    def __init__(self, config_tasks: dict = None,  CL_mode: str = 'shrink_perturb',
+    def __init__(self, config_tasks: list = None,  CL_mode: str = 'shrink_perturb', 
      save_path: str = "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL" ):
         self.config_tasks = config_tasks # --- List of config files for the different tasks
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -26,6 +27,14 @@ class CLTaskManager:
         self.cl_mode = CL_mode
         self.save_path = save_path
         
+    def get_data(self,cfg):
+        PATHS = cfg["data"]
+        FLUX = cfg["flux"]
+        train_dataset, eval_dataset, test_dataset,scaler = pt.prepare_data(
+        PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=0.1
+    ) 
+        return train_dataset, eval_dataset, test_dataset,scaler
+
     def shrink_perturb(self,lam):
         self.classifier.shrink_perturb(lam=lam, scale=0.01, loc=0.0)
         self.regressor.shrink_perturb(lam=lam, scale=0.01, loc=0.0)     
@@ -41,29 +50,40 @@ class CLTaskManager:
         test_data = {}
         forgetting = {}
         for i,cfg in enumerate(self.config_tasks):
-            test_data_temp = ALpipeline(cfg, models,self.device)
+            if i==0:
+                train, val, test, scaler = self.get_data(self.config_tasks[0])  
+            else:
+                train, val, test, _ = self.get_data(self.config_tasks[i]) 
+                print(train)
+                # ---  in CL with AL, there is not train set, only the unlabelled pool. Some points will have been labelled, these are entirely the val and test set 
+                train.remove(train.data.index)  # --- initialise empty dataset, which will be augmented with candidates
+
+            test = ALpipeline(cfg, models, i, self.device, scaler, train,val, test) 
             if self.cl_mode == 'shrink_perturb':
                 self.shrink_perturb(cfg['hyperparams']['lambda'])
             elif self.cl_mode == 'EWC':
                 self.EWC()
             elif self.cl_mode == 'OGD': # ToDo =========>>> implement other frameworks
                 self.other()
-            else:
+            else: # --- Few-shot transfer learning, we don't care about forgetting
                 pass
 
-            test_data.update({f'task{i}':test_data_temp})
+            test_data.update({f'task{i}':test})
             if i!=0:
                 for k in test_data.keys():
                     _, test_loss = self.regressor.predict(test_data[k])
                     forgetting.update({f'{k}_model{i}':test_loss})
 
-        with open(self.save_path+'/forgetting.pkl', "wb") as f:
+        with open(self.save_path+f'/forgetting_{self.cl_mode}.pkl', "wb") as f:
             pickle.dump(forgetting, f)
 
 
 
 
-def ALpipeline(cfg: dict, models: dict, device: torch.device) -> None:
+def ALpipeline(cfg: dict, models: dict, i: str, device: torch.device, scaler: StandardScaler,
+            train_dataset: ITGDatasetDF,
+            eval_dataset: ITGDatasetDF,
+            test_dataset: ITGDatasetDF) -> None:
     # Create logger object for use in pipeline
     verboselogs.install()
     logger = logging.getLogger(__name__)
@@ -90,12 +110,6 @@ def ALpipeline(cfg: dict, models: dict, device: torch.device) -> None:
     output_dict = pt.output_dict
 
     # To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test loss
-
-
-    # --------------------------------------------- Load data ----------------------------------------------------------
-    train_dataset, eval_dataset, test_dataset,scaler = pt.prepare_data(
-        PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=0.1
-    )
     # --- holdout set is from the test set
     plot_sample = test_dataset.sample(test_size)  # Holdout dataset
     holdout_set = plot_sample 
@@ -114,30 +128,37 @@ def ALpipeline(cfg: dict, models: dict, device: torch.device) -> None:
         os.makedirs(SAVE_PATHS["outputs"])
 
     # ------------------------------------------- Load or train first models ------------------------------------------
+    if i>0: # --- overwrite evaluation and test data
+        train_sample = train_dataset
+    else:
+        train_sample = train_dataset.sample(train_size) 
+
     for model in models.keys():
 
-        train_sample = train_dataset.sample(train_size)        
-        models[model], losses  = md.train_model(
-            models[model],
-            train_sample,
-            valid_dataset, 
-            save_path=PRETRAINED[model][FLUX]["save_path"],
-            epochs=cfg["train_epochs"],
-            patience=cfg["train_patience"],
-        )
-        if model == 'Regressor': #To Do ==== >> do the same for classifier
-            train_loss, valid_loss = losses
-            output_dict["train_loss_init"].append(train_loss)
-            #if model == "Classifier":  --- not used currently
-            #    losses, train_accuracy, validation_losses, val_accuracy = losses
+        if i == 0:  # --- Retrain from scratch only for first iteration, then AL on the other task
+                   
+            models[model], losses  = md.train_model(
+                models[model],
+                train_sample,
+                valid_dataset, 
+                save_path=PRETRAINED[model][FLUX]["save_path"],
+                epochs=cfg["train_epochs"],
+                patience=cfg["train_patience"],
+            )
+            if model == 'Regressor': #To Do ==== >> do the same for classifier
+                train_loss, valid_loss = losses
+                output_dict["train_loss_init"].append(train_loss)
+                #if model == "Classifier":  --- not used currently
+                #    losses, train_accuracy, validation_losses, val_accuracy = losses
 
-    # ---- Losses before the pipeline starts
+        # ---- Losses before the pipeline starts
+    
     _, holdout_loss = models["Regressor"].predict(holdout_set)
     output_dict["test_loss_init"].append(holdout_loss)
 
 
-    if len(train_sample) > 100_000:
-        logger.warning("Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data")
+#    if len(train_sample) > 100_000:
+#        logger.warning("Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data")
 
 
     logging.info(f"Training for lambda: {lam}")
@@ -178,18 +199,18 @@ def ALpipeline(cfg: dict, models: dict, device: torch.device) -> None:
         prediction_candidates_before = models["Regressor"].predict(candidates)
 
         # --- get prediction and uncertainty of train sample (is that really needed?)
-        (
-            train_sample_origin,   # --- why is it called different tha train_sample? Are they not exactly the same?
-            train_uncert_before,
-            train_uncert_idx,
-        ) = pt.regressor_uncertainty(
-            train_sample,
-            models["Regressor"],
-            n_runs=cfg["MC_dropout_runs"],
-            train_data=True,
-        )
+        #(
+        #    train_sample_origin,   # --- why is it called different tha train_sample? Are they not exactly the same?
+        #    train_uncert_before,
+        #    train_uncert_idx,
+        #) = pt.regressor_uncertainty(
+        #    train_sample,
+        #    models["Regressor"],
+        #    n_runs=cfg["MC_dropout_runs"],
+        #    train_data=True,
+        #)
 
-        prediction_train_origin, loss_train_origin = models["Regressor"].predict(train_sample_origin)
+        #prediction_train_origin, loss_train_origin = models["Regressor"].predict(train_sample_origin)
 
         # =================== >>>>>>>>>> Here goes the Qualikiz acquisition <<<<<<<<<<<<< ==================
 
@@ -272,13 +293,13 @@ def ALpipeline(cfg: dict, models: dict, device: torch.device) -> None:
             keep=cfg["keep_prob"],
             order_idx=data_idx,
         ) # --- uncertainty of newly added points
-        _, train_uncert_after, _ = pt.regressor_uncertainty(
-            train_sample_origin,
-            models["Regressor"],
-            n_runs=cfg["MC_dropout_runs"],
-            order_idx=train_uncert_idx,
-            train_data=True,
-        ) # --- uncertainty on first training set before points were added (is that really needed?)
+        #_, train_uncert_after, _ = pt.regressor_uncertainty(
+        #    train_sample_origin,
+        #    models["Regressor"],
+        #    n_runs=cfg["MC_dropout_runs"],
+        #    order_idx=train_uncert_idx,
+        #    train_data=True,
+        #) # --- uncertainty on first training set before points were added (is that really needed?)
 
         logging.info("Change in uncertainty for most uncertain data points:")
         
@@ -295,16 +316,16 @@ def ALpipeline(cfg: dict, models: dict, device: torch.device) -> None:
         output_dict["novel_uncert_before"].append(candidates_uncert_before)
         output_dict["novel_uncert_after"].append(candidates_uncert_after)
 
-        logging.info("Change in uncertainty for training data:")
-        output_dict["d_uncert"].append(
-            pt.uncertainty_change(
-                x=train_uncert_before,
-                y=train_uncert_after,
-                plot_title='Train data',
-                iteration=i,
-                save_path=save_dest
-            )
-        )
+        #logging.info("Change in uncertainty for training data:")
+        #output_dict["d_uncert"].append(
+        #    pt.uncertainty_change(
+        #        x=train_uncert_before,
+        #        y=train_uncert_after,
+        #        plot_title='Train data',
+        #        iteration=i,
+        #        save_path=save_dest
+        #    )
+        #)
 
         # --- Prediction on train dataset not needed
     #  _ = pt.mse_change(
@@ -335,7 +356,7 @@ def ALpipeline(cfg: dict, models: dict, device: torch.device) -> None:
         except:
             logging.debug("pt.mse_change failed, whatever")
 
-        n_train = len(train_sample_origin)
+        n_train = len(train_sample)
         output_dict["holdout_pred_before"].append(holdout_pred_before) # these two are probably the only important ones
         output_dict["holdout_pred_after"].append(holdout_pred_after)
         output_dict["holdout_ground_truth"].append(holdout_set.target)
@@ -361,7 +382,7 @@ def ALpipeline(cfg: dict, models: dict, device: torch.device) -> None:
         classifier_path = os.path.join(save_dest, f"classifier_lam_{lam}_iteration_{i}.pkl")
         torch.save(models["Classifier"].state_dict(), classifier_path)
 
-        return holdout_set
+        return  holdout_set
 
 
 
