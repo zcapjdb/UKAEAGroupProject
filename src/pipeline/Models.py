@@ -361,6 +361,7 @@ class ITGDatasetDF(Dataset):
         self.data = df
         self.target = target_column
         self.label = target_var
+      
 
         # make sure the dataframe contains the variable information we need
         assert target_column and target_var in list(self.data.columns)

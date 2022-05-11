@@ -256,20 +256,21 @@ for i in range(cfg["iterations"]):
         holdout_pred_before.append(preds)
 
     # ---------------------------------------------- Retrain Regressor with added data (ToDo: Further research required)---------------------------------
-    train_loss, test_loss = pt.retrain_regressor(
-        train_sample,
-        valid_dataset,
-        models["Regressor"],
-        learning_rate=cfg["learning_rate"],
-        epochs=epochs,
-        validation_step=True,
-        lam=lam,
-        patience=cfg["patience"],
-        batch_size=batch_size,
-    )
-
-    # TODO: Retrain second regressor
-
+    train_losses, test_losses = [], []
+    for FLUX in FLUXES:
+        train_loss, test_loss = pt.retrain_regressor(
+            train_sample,
+            valid_dataset,
+            models[FLUX]["Regressor"],
+            learning_rate=cfg["learning_rate"],
+            epochs=epochs,
+            validation_step=True,
+            lam=lam,
+            patience=cfg["patience"],
+            batch_size=batch_size,
+        )
+        train_losses.append(train_loss)
+        test_losses.append(test_loss)
 
     # --- validation on holdout set after regressor is retrained
     logging.info("Running prediction on validation data set")

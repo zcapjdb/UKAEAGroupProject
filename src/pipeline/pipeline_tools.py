@@ -292,9 +292,10 @@ def retrain_regressor(
 
     logging.info("Retraining regressor...\n")
     logging.log(15, f"Training on {len(new_dataset)} points")
+    # variable the regressor is trained on 
 
-    new_loader = pandas_to_numpy_data(new_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = pandas_to_numpy_data(val_dataset, batch_size=batch_size, shuffle=False)
+    new_loader = pandas_to_numpy_data(new_dataset, model.flux, batch_size=batch_size, shuffle=True)
+    val_loader = pandas_to_numpy_data(val_dataset, model.flux,batch_size=batch_size, shuffle=False)
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
     model.shrink_perturb(lam, loc, scale)
@@ -366,7 +367,7 @@ def get_uncertainty(
         logging.info("Running MC Dropout on Novel Data....\n")
 
     batch_size = min(len(dataset), 512)
-    dataloader = pandas_to_numpy_data(data_copy, batch_size=batch_size, shuffle=False)
+    dataloader = pandas_to_numpy_data(data_copy,regressor_var=regressor.flux, batch_size=batch_size, shuffle=False)
 
     regressor.eval()
     regressor.enable_dropout()
@@ -524,7 +525,7 @@ def regressor_uncertainty(
         logging.info("Running MC Dropout on Novel Data....\n")
 
     batch_size = min(len(dataset), 512)
-    dataloader = pandas_to_numpy_data(data_copy, batch_size=batch_size, shuffle=False)
+    dataloader = pandas_to_numpy_data(data_copy,regressor_var=regressor.flux, batch_size=batch_size, shuffle=False)
 
     regressor.eval()
     regressor.enable_dropout()
@@ -612,15 +613,23 @@ def regressor_uncertainty(
         return data_copy, out_std, idx_array
 
 
-def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None, shuffle: bool = True) -> DataLoader:
+def pandas_to_numpy_data(
+    dataset: ITGDatasetDF,
+    regressor_var: str = None,
+    batch_size: int = None,
+    shuffle: bool = True,
+      ) -> DataLoader:
     """
     Helper function to convert pandas dataframe to numpy array and create a dataloader.
     Dataloaders created from numpy arrays are much faster than pandas dataframes.
     """
-
+    if regressor_var == None:
+        regressor_var = dataset.target
+        logging.INFO("No regressor value chosen, setting z to {regressor_var}")
+    
     x_array = dataset.data[train_keys].values
     y_array = dataset.data[dataset.label].values
-    z_array = dataset.data[dataset.target].values
+    z_array = dataset.data[regressor_var].values
     idx_array = dataset.data["index"].values
 
     numpy_dataset = ITGDataset(x_array, y_array, z_array, idx_array)
