@@ -60,23 +60,13 @@ output_dict = pt.output_dict
 
 
 # --------------------------------------------- Load data ----------------------------------------------------------
-if len(FLUXES) > 1:
-    train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
-        PATHS["train"],
-        PATHS["validation"],
-        PATHS["test"],
-        target_column=FLUXES[0],
-        other_targets=FLUXES[1:],
-        samplesize_debug=sample_size,
-    )
-else:
-    train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
-        PATHS["train"],
-        PATHS["validation"],
-        PATHS["test"],
-        target_column=FLUXES[0],
-        samplesize_debug=sample_size,
-    )
+train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
+    PATHS["train"],
+    PATHS["validation"],
+    PATHS["test"],
+    fluxes=FLUXES,
+    samplesize_debug=sample_size,
+)
 # --- holdout set is from the test set
 plot_sample = test_dataset.sample(test_size)  # Holdout dataset
 holdout_set = plot_sample
@@ -94,8 +84,7 @@ unlabelled_pool = eval_dataset
 save_dest = os.path.join(SAVE_PATHS["outputs"], FLUXES[0])
 if not os.path.exists(save_dest):
     os.makedirs(save_dest)
-if not os.path.exists(SAVE_PATHS["outputs"]):
-    os.makedirs(SAVE_PATHS["outputs"])
+
 # Load pretrained models
 logging.info("Loaded the following models:\n")
 
@@ -138,8 +127,9 @@ for model in PRETRAINED:
             #    losses, train_accuracy, validation_losses, val_accuracy = losses
 
 # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
-_, holdout_loss = models["Regressor"].predict(holdout_loader)
-output_dict["test_loss_init"].append(holdout_loss)
+for FLUX in FLUXES:
+    _, holdout_loss = models[FLUX]["Regressor"].predict(holdout_loader)
+    output_dict["test_loss_init"].append(holdout_loss)
 
 
 if len(train_sample) > 100_000:
@@ -184,7 +174,7 @@ for i in range(cfg["iterations"]):
     for FLUX in FLUXES:
         temp_uncert, temp_idx = pt.get_uncertainty(
             candidates,
-            models["Regressor"],
+            models[FLUX]["Regressor"],
             n_runs=cfg["MC_dropout_runs"],
             keep=cfg["keep_prob"],
             device=device,
@@ -209,52 +199,6 @@ for i in range(cfg["iterations"]):
             models[FLUX]["Regressor"].predict(candidates)
         )
 
-    # --- get prediction and uncertainty of train sample (is that really needed?)
-    (
-        train_sample_origin,  # --- why is it called different tha train_sample? Are they not exactly the same?
-        train_uncert_before,
-        train_uncert_idx,
-    ) = pt.regressor_uncertainty(
-        train_sample,
-        models["Regressor"],
-        n_runs=cfg["MC_dropout_runs"],
-        train_data=True,
-    )
-    train_sample_origin = md.ITGDatasetDF(
-        train_dataset.data.iloc[train_uncert_idx],
-        target_column=FLUX,
-    )
-
-    train_uncert_before_1, train_uncert_idx = pt.get_uncertainty(
-        train_sample,
-        models["Regressor"],
-        n_runs=cfg["MC_drop_out_runs"],
-        train_data=True,
-        device=device,
-    )
-
-    train_uncert_before_2, train_uncert_idx_2 = pt.get_uncertainty(
-        train_sample,
-        models[""],  # TODO: add second model name here
-        n_runs=cfg["MC_drop_out_runs"],
-        train_data=True,
-        device=device,
-    )
-
-    train_uncert_before_2 = pt.reoder_arrays(
-        train_uncert_before_2, train_uncert_idx, train_uncert_idx_2
-    )
-
-    train_uncert_before = train_uncert_before_1 + train_uncert_before_2
-
-    prediction_train_origin, loss_train_origin = models["Regressor"].predict(
-        train_sample_origin
-    )
-
-    prediction_train_origin2, loss_train_origin2 = model[""].predict(
-        train_sample_origin
-    )  # TODO: fill in
-
     # =================== >>>>>>>>>> Here goes the Qualikiz acquisition <<<<<<<<<<<<< ==================
 
     # I am assuming here that the acquisition will modify the candidates dataset.
@@ -274,7 +218,7 @@ for i in range(cfg["iterations"]):
             # concatenate datasets from the buffer
             misclassified = pd.concat(classifier_buffer)
             misclassified_dataset = md.ITGDatasetDF(
-                misclassified, FLUX, keep_index=True
+                misclassified, FLUXES[0], keep_index=True
             )
 
             logging.info("Buffer full, retraining classifier")
@@ -303,16 +247,13 @@ for i in range(cfg["iterations"]):
 
     # --- train data enriched by new unstable candidate points
     train_sample.add(candidates)
-
-    # ---  get predictions for enriched train sample before retraining (perhaps not useful?)
-    prediction_before, _ = models["Regressor"].predict(train_sample)
-
-    predicition_before2, _ = models[""].predict(train_sample)  # TODO: Fill in
+    n_train = len(train_sample)
 
     # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
-    holdout_pred_before, _ = models["Regressor"].predict(holdout_set)
-
-    holdout_pred_before2, _ = models[""].predict(holdout_set)  # TODO: Fill in
+    holdout_pred_before = []
+    for FLUX in FLUXES:
+        preds, _ = models[FLUX]["Regressor"].predict(holdout_loader)
+        holdout_pred_before.append(preds)
 
     # ---------------------------------------------- Retrain Regressor with added data (ToDo: Further research required)---------------------------------
     train_loss, test_loss = pt.retrain_regressor(
@@ -329,8 +270,7 @@ for i in range(cfg["iterations"]):
 
     # TODO: Retrain second regressor
 
-    # --- predictions for the enriched train sample after (is that really needed?)
-    enriched_train_prediction_after, _ = models["Regressor"].predict(train_sample)
+
     # --- validation on holdout set after regressor is retrained
     logging.info("Running prediction on validation data set")
     holdout_pred_after, holdout_loss, holdout_loss_unscaled = models[
@@ -347,13 +287,6 @@ for i in range(cfg["iterations"]):
         order_idx=data_idx,
     )  # --- uncertainty of newly added points TODO: Breakdown this calculation
 
-    _, train_uncert_after, _ = pt.regressor_uncertainty(
-        train_sample_origin,
-        models["Regressor"],
-        n_runs=cfg["MC_dropout_runs"],
-        order_idx=train_uncert_idx,
-        train_data=True,
-    )  # --- uncertainty on first training set before points were added (is that really needed?) # TODO: Breakdown calc
 
     logging.info("Change in uncertainty for most uncertain data points:")
 
@@ -370,47 +303,6 @@ for i in range(cfg["iterations"]):
     output_dict["novel_uncert_before"].append(candidates_uncert_before)
     output_dict["novel_uncert_after"].append(candidates_uncert_after)
 
-    logging.info("Change in uncertainty for training data:")
-    output_dict["d_uncert"].append(
-        pt.uncertainty_change(
-            x=train_uncert_before,
-            y=train_uncert_after,
-            plot_title="Train data",
-            iteration=i,
-            save_path=save_dest,
-        )
-    )
-
-    # --- Prediction on train dataset not needed
-    #  _ = pt.mse_change(
-    #      prediction_before,
-    #      enriched_train_prediction_after,
-    #      prediction_idx_order,
-    #      data_idx,
-    #      enriched_train_loader,
-    #      [candidates_uncert_before, candidates_uncert_after],
-    #      save_path = SAVE_PATHS["plots"],
-    #      iteration=i,
-    #      lam = lam
-    #  )
-
-    try:
-        train_mse_before, train_mse_after, delta_mse = pt.mse_change(
-            candidates_uncert_before,
-            candidates_uncert_after,
-            prediction_idx_order,
-            train_uncert_idx,
-            train_sample,
-            uncertainties=[train_uncert_before, train_uncert_after],
-            data="novel",
-            save_path=SAVE_PATHS["plots"],
-            iteration=i,
-            lam=lam,
-        )
-    except:
-        logging.debug("pt.mse_change failed, whatever")
-
-    n_train = len(train_sample_origin)
     output_dict["holdout_pred_before"].append(
         holdout_pred_before
     )  # these two are probably the only important ones

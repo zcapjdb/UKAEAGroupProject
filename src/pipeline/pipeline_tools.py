@@ -50,8 +50,7 @@ def prepare_data(
     train_path: str,
     valid_path: str,
     test_path: str,
-    target_column: str,
-    other_targets: list,
+    fluxes: list,
     train_size: int = None,
     valid_size: int = None,
     test_size: int = None,
@@ -75,14 +74,14 @@ def prepare_data(
     if test_size is not None:
         test_data = test_data.sample(samplesize_debug*test_size)
 
+    target_column = fluxes[0]
 
     if target_column not in target_keys:
         raise ValueError("Flux variable to supported")
 
     # Remove NaN's and add appropripate class labels
-    if other_targets != None:
-        target_columns = other_targets.append(target_column)
-        keep_keys = train_keys + target_columns
+    if len(fluxes) > 1:
+        keep_keys = train_keys + fluxes
     else: 
         keep_keys = train_keys + [target_column]
 
@@ -261,7 +260,7 @@ def retrain_classifier(
 
 
 # Regressor tools
-def reoder_arrays(array, order1, order2):
+def reorder_arrays(array, order1, order2):
     '''
     Inputs: 
         array: The array to be reordered
@@ -453,27 +452,31 @@ def get_most_uncertain(
     data_copy = copy.deepcopy(dataset)
     n_candidates = out_stds[0].shape[0]
     
-    
     if len(out_stds) > 1: 
         assert len(idx_arrays) == len(out_stds), "N indices doesn't match N stds"
-        total_std = None
-        for i in range():
-            if i == 0: 
-                total_std = out_stds[0]
-            else:
-                reorder = np.array([np.where(idx_arrays[i] == j) for j in idx_arrays[0]]).flatten()
-                out_stds[i] = out_stds[i][reorder]
-                # add the uncertainties from the two regressors
-                total_std += out_stds[i]
+
+        # total_std = 0
+        # for i in range(len(idx_arrays[0])):
+
+        #     reorder = np.array([np.where(idx_arrays[i] == j) for j in idx_arrays[0]]).flatten()
+        #     out_stds[i] = out_stds[i][reorder]
+        #     # add the uncertainties from the two regressors
+        #     total_std += out_stds[i]
+
+        # reorder idx_arrays to match the order of idx_arrays[0]
+        for i in range(len(idx_arrays[0])):
+            reorder = np.array([np.where(idx_arrays[0] == j) for j in idx_arrays[0]]).flatten()
+            out_stds[i] = out_stds[i][reorder]
         
+        out_stds = np.array(out_stds)
+        # sum the uncertainties from both regressors
+        total_std = np.sum(out_stds, axis=0)
 
-        uncertain_list_indices = np.argsort(total_std)[-int(n_candidates * keep) :]
-        certain_list_indices = np.argsort(total_std)[: n_candidates - int(n_candidates * keep)]
-
-    else: 
+    else:
         total_std = out_stds[0]
-        uncertain_list_indices = np.argsort(total_std)[-int(n_candidates * keep) :]
-        certain_list_indices = np.argsort(total_std)[: n_candidates - int(n_candidates * keep)]
+
+    uncertain_list_indices = np.argsort(total_std)[-int(n_candidates * keep) :]
+    certain_list_indices = np.argsort(total_std)[: n_candidates - int(n_candidates * keep)]
 
     certain_data_idx = idx_arrays[0][certain_list_indices]
     uncertain_data_idx = idx_arrays[0][uncertain_list_indices]
