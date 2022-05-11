@@ -264,15 +264,21 @@ def retrain_classifier(
 
 
 # Regressor tools
-def reorder_arrays(array, order1, order2):
+def reorder_arrays(arrays:list, orders:list, arrangement:np.array):
     """
     Inputs:
-        array: The array to be reordered
-        order1: the desired index ordering
-        order2: the current index ordering
+        arrays: The arrays to be reordered
+        orders: The current ordering of the arrays
+        arrangements: The desired orderings
+    Outputs: 
+        arrays: a list of the original arrays ordering according to arrangement
     """
-    reorder = np.array([np.where(order2 == i) for i in order1]).flatten()
-    return array[reorder]
+
+    for k in range(len(arrays)):
+        reorder = np.array([np.where(orders[k] == i) for i in arrangement]).flatten()
+        arrays[k] = arrays[k][reorder]
+    
+    return arrays
 
 
 def retrain_regressor(
@@ -295,7 +301,7 @@ def retrain_regressor(
     Returns the losses of the training and validation steps.
     """
 
-    logging.info("Retraining regressor...\n")
+    logging.info(f"Retraining {model.flux} regressor...\n")
     logging.log(15, f"Training on {len(new_dataset)} points")
     # variable the regressor is trained on
 

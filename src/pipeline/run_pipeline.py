@@ -16,6 +16,7 @@ import torch
 from Models import Classifier, Regressor
 import argparse
 import pandas as pd
+import numpy as np 
 
 # add argument to pass config file
 parser = argparse.ArgumentParser()
@@ -251,13 +252,12 @@ for i in range(cfg["iterations"]):
 
     # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
     holdout_pred_before = []
+    train_losses, test_losses = [], []
+    holdout_pred_after, holdout_loss, holdout_loss_unscaled = [], [], []
     for FLUX in FLUXES:
         preds, _ = models[FLUX]["Regressor"].predict(holdout_loader)
         holdout_pred_before.append(preds)
 
-    # ---------------------------------------------- Retrain Regressor with added data (ToDo: Further research required)---------------------------------
-    train_losses, test_losses = [], []
-    for FLUX in FLUXES:
         train_loss, test_loss = pt.retrain_regressor(
             train_sample,
             valid_dataset,
@@ -269,24 +269,41 @@ for i in range(cfg["iterations"]):
             patience=cfg["patience"],
             batch_size=batch_size,
         )
+
         train_losses.append(train_loss)
         test_losses.append(test_loss)
+        
+        logging.info(f"Running prediction on validation data set")
+        # --- validation on holdout set after regressor is retrained
+        hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_loader, unscale=True)
+        holdout_pred_after.append(hold_pred_after)
+        holdout_loss.append(hold_loss)
+        holdout_loss_unscaled.append(hold_loss_unscaled)
 
-    # --- validation on holdout set after regressor is retrained
-    logging.info("Running prediction on validation data set")
-    holdout_pred_after, holdout_loss, holdout_loss_unscaled = models[
-        "Regressor"
-    ].predict(holdout_loader, unscale=True)
 
-    # TODO: Same for second regressor
+    candidates_uncerts_after, data_idxs_after = [], []
 
-    _, candidates_uncert_after, _, _ = pt.regressor_uncertainty(
-        candidates,
-        models["Regressor"],
-        n_runs=cfg["MC_dropout_runs"],
-        keep=cfg["keep_prob"],
-        order_idx=data_idx,
-    )  # --- uncertainty of newly added points TODO: Breakdown this calculation
+    for FLUX in FLUXES:
+        temp_uncert, temp_idx = pt.get_uncertainty(
+            candidates,
+            models[FLUX]["Regressor"],
+            n_runs=cfg["MC_dropout_runs"],
+            keep=cfg["keep_prob"],
+            device=device,
+        )
+
+        candidates_uncerts_after.append(temp_uncert)
+        data_idxs_after.append(temp_idx)
+    
+    candidates_uncert_after = pt.reorder_arrays(
+        candidates_uncerts_after,
+        data_idxs_after,
+        data_idx
+        )
+    
+    candidates_uncert_after = np.concatenate(candidates_uncert_after)
+
+    candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
 
     logging.info("Change in uncertainty for most uncertain data points:")
 
@@ -298,7 +315,8 @@ for i in range(cfg["iterations"]):
             iteration=i,
             save_path=save_dest,
         )
-    )  # TODO: need for second regressor
+    )
+
 
     output_dict["novel_uncert_before"].append(candidates_uncert_before)
     output_dict["novel_uncert_after"].append(candidates_uncert_after)
@@ -308,8 +326,8 @@ for i in range(cfg["iterations"]):
     )  # these two are probably the only important ones
     output_dict["holdout_pred_after"].append(holdout_pred_after)
     output_dict["holdout_ground_truth"].append(holdout_set.target)
-    output_dict["retrain_losses"].append(train_loss)
-    output_dict["retrain_test_losses"].append(test_loss)
+    output_dict["retrain_losses"].append(train_losses)
+    output_dict["retrain_test_losses"].append(test_losses)
     output_dict["post_test_loss"].append(holdout_loss)
     output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
 
@@ -321,6 +339,7 @@ for i in range(cfg["iterations"]):
         output_dict["d_mse"].append(delta_mse)
     except:
         pass
+    
     output_dict["n_train_points"].append(n_train)
 
     # --- Save at end of iteration
@@ -329,7 +348,10 @@ for i in range(cfg["iterations"]):
     )
     with open(output_path, "wb") as f:
         pickle.dump(output_dict, f)
-    regressor_path = os.path.join(save_dest, f"regressor_lam_{lam}_iteration_{i}.pkl")
-    torch.save(models["Regressor"].state_dict(), regressor_path)
-    classifier_path = os.path.join(save_dest, f"classifier_lam_{lam}_iteration_{i}.pkl")
-    torch.save(models["Classifier"].state_dict(), classifier_path)
+    
+    for FLUX in FLUXES:
+        regressor_path = os.path.join(save_dest, f"{FLUX}_regressor_lam_{lam}_iteration_{i}.pkl")
+        torch.save(models[FLUX]["Regressor"].state_dict(), regressor_path)
+    
+    classifier_path = os.path.join(save_dest, f"{FLUXES[0]}_classifier_lam_{lam}_iteration_{i}.pkl")
+    torch.save(models[FLUXES[0]]["Classifier"].state_dict(), classifier_path)
