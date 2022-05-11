@@ -96,13 +96,18 @@ def ALpipeline(cfg):
             if model == 'Regressor': #To Do ==== >> do the same for classifier
                 train_loss, valid_loss = losses
                 output_dict["train_loss_init"].append(train_loss)
-            if model == "Classifier": 
-                losses, train_accuracy, validation_losses, val_accuracy = losses
-                output_dict["train_loss_init"].append(train_loss)
+            if model == "Classifier":  
+                train_loss, train_accuracy, validation_losses, val_accuracy = losses
+                output_dict['class_train_loss_init'].append(train_loss)
+                output_dict["class_train_acc"].append(train_accuracy)
                 
     # ---- Losses before the pipeline starts
     _, holdout_loss = models["Regressor"].predict(holdout_set)
     output_dict["test_loss_init"].append(holdout_loss)
+    _, holdout_losses = models["Classifier"].predict(holdout_set)
+    holdout_class_loss, holdout_class_acc = holdout_losses
+    output_dict["class_test_loss_init"].append(holdout_class_loss)
+    output_dict["class_test_acc_init"].append(holdout_class_acc)
 
 
     if len(train_sample) > 100_000:
