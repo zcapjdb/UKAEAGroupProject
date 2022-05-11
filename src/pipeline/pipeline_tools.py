@@ -20,6 +20,10 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 output_dict = {
     "train_loss_init": [], # Regressor performance before pipeline
     "test_loss_init": [],
+    "class_train_loss_init": [], # Regressor performance before pipeline
+    "class_test_loss_init": [],
+    "class_train_acc_init": [], # Regressor performance before pipeline
+    "class_test_acc_init": [],
 
     "retrain_losses": [], # regressor performance during retraining
     "retrain_test_losses": [],
@@ -37,13 +41,17 @@ output_dict = {
     "holdout_pred_before": [],
     "holdout_pred_after": [],
     "holdout_ground_truth": [],
+
     "class_train_loss": [],
     "class_val_loss": [],
     "class_missed_loss": [],
     "class_train_acc": [],
     "class_val_acc": [],
     "class_missed_acc": [],
+    "holdout_class_acc": [],
+    "holdout_class_loss": []
 }
+
 
 # Data preparation functions
 def prepare_data(
@@ -134,11 +142,11 @@ def select_unstable_data(
         x = x.to(device)
         y_hat = classifier(x.float())
 
-        pred_class = torch.round(y_hat.squeeze().detach()).numpy()
+        pred_class = torch.round(y_hat.squeeze().detach().cpu()).numpy()
         pred_class = pred_class.astype(int)
 
         unstable = idx[np.where(pred_class == 1)[0]]
-        unstable_points.append(unstable.detach().numpy())
+        unstable_points.append(unstable.detach().cpu().numpy())
 
     # turn list of stable and misclassified points into flat arrays
     unstable_points = np.concatenate(np.asarray(unstable_points, dtype=object), axis=0)
@@ -366,7 +374,7 @@ def regressor_uncertainty(
         step_list = []
         for step, (x, y, z, idx) in enumerate(dataloader):
             x = x.to(device)
-            predictions = regressor(x.float()).detach().numpy()
+            predictions = regressor(x.float()).detach().cpu().numpy()
             step_list.append(predictions)
 
         flat_list = [item for sublist in step_list for item in sublist]
