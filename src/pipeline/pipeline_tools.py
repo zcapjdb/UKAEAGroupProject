@@ -344,7 +344,7 @@ def get_uncertainty(
     train_data: bool = False,
     plot: bool = False,
     device : torch.device = None,
-) -> (np.array, np.array)
+) -> (np.array, np.array):
 
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
