@@ -1,4 +1,6 @@
 import coloredlogs, verboselogs, logging
+from multiprocessing import Pool
+import numpy as np
 import os
 import copy
 #import comet_ml import Experiment
@@ -41,6 +43,7 @@ def ALpipeline(cfg):
     test_size = cfg["hyperparams"]["test_size"]
     batch_size = cfg["hyperparams"]["batch_size"]
     candidate_size = cfg["hyperparams"]["candidate_size"]
+    model_size = cfg["hyperparams"]["model_size"]
     # Dictionary to store results of the classifier and regressor for later use
     output_dict = pt.output_dict
 
@@ -80,7 +83,7 @@ def ALpipeline(cfg):
         else:
             logging.info(f"{model} not trained - training now")
             models[model] = (
-                Classifier(device) if model == "Classifier" else Regressor(device, scaler)
+                Classifier(device,model_size) if model == "Classifier" else Regressor(device, model_size, scaler,FLUX)
             )
             
             models[model], losses  = md.train_model(
@@ -107,6 +110,9 @@ def ALpipeline(cfg):
     output_dict["class_test_loss_init"].append(holdout_class_loss)
     output_dict["class_test_acc_init"].append(holdout_class_acc)
 
+    output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}_initial_{model_size}.pkl")
+    with open(output_path, "wb") as f:
+        pickle.dump(output_dict, f)
 
     if len(train_sample) > 100_000:
         logger.warning("Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data")
@@ -329,13 +335,15 @@ def ALpipeline(cfg):
         output_dict["n_train_points"].append(n_train)
 
         # --- Save at end of iteration
-        output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl")
+        output_path = os.path.join(save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}_{model_size}.pkl")
         with open(output_path, "wb") as f:
             pickle.dump(output_dict, f)
-        regressor_path = os.path.join(save_dest, f"regressor_lam_{lam}_iteration_{i}.pkl")
+        regressor_path = os.path.join(save_dest, f"regressor_lam_{lam}_iteration_{i}_{model_size}.pkl")
         torch.save(models["Regressor"].state_dict(), regressor_path)
-        classifier_path = os.path.join(save_dest, f"classifier_lam_{lam}_iteration_{i}.pkl")
+        classifier_path = os.path.join(save_dest, f"classifier_lam_{lam}_iteration_{i}_{model_size}.pkl")
         torch.save(models["Classifier"].state_dict(), classifier_path)
+    
+    return output_dict
 
 
 # add argument to pass config file
@@ -347,5 +355,20 @@ if __name__=='__main__':
 
     with open(args.config) as f:
         cfg = yaml.load(f, Loader=yaml.FullLoader)
-    ALpipeline(cfg)
+
+    Nbootstraps = cfg['Nbootstraps']        
+    lam = cfg["hyperparams"]["lambda"]
+    model_size = cfg['hyperparams']['model_size']
+    
+    if Nbootstraps is not None:
+        cfg = np.repeat(cfg,Nbootstraps)
+        with Pool(Nbootstraps) as p:            
+            output = p.map(ALpipeline,cfg)
+        output = {'out':output}
+        with open(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/bootstrapped_AL_lam_{lam}_{model_size}.pkl","wb") as f:
+            pickle.dump(output,f)                        
+    else:        
+        ALpipeline(cfg)
+
+
     print('pipeline terminated')

@@ -1,14 +1,17 @@
-flux: efiitg_gb
+
+
+flux: "efiitg_gb"
+Nbootstraps: 10 # if None, runs only one instance otherwise it spawns Nbootstraps instances
 
 data:
-  train: /path/to/train_data.pkl
-  validation: /path/to/valid_data.pkl
-  test: /path/to/test_data.pkl
+  train: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/train_data_clipped.pkl"
+  validation: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/valid_data_clipped.pkl"
+  test: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/test_data_clipped.pkl"
 save_paths:
-  plots: /path/to/plots
-  outputs: /path/to/outputs
+  plots: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/"
+  outputs: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/"
 
-retrain_classifier: True
+retrain_classifier: False
 retrain_regressor: True
 
 
@@ -16,23 +19,23 @@ retrain_regressor: True
 pretrained:
   Classifier:
       efiitg_gb:
-          save_path: /path/to/pretrained/itg_class.pt
-          trained: True
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ITGclassifier.pt"
+          trained: False
       efetem_gb:
-          save_path: /path/to/pretrained/etg_class.pt
-          trained: True
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/TEMclassifier.pt"
+          trained: False
       efeetg_gb:
-          save_path: /path/to/pretrained/tem_class.pt
-          trained: True
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ETGclassifier.pt"
+          trained: False
   Regressor:
       efiitg_gb:
-          save_path: /path/to/pretrained/itg_reg.pt
-          trained: True
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ITGregressor.pt"
+          trained: False
       efetem_gb:
-          save_path: /path/to/pretrained/etg_reg.pt
-          trained: True
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/TEMclassifier.pt"
+          trained: False
       efeetg_gb:
-          save_path: /path/to/pretrained/tem_reg.pt
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ETGclassifier.pt"
           trained: True
 
 hyperparams:
@@ -43,19 +46,19 @@ hyperparams:
     batch_size: 256
     lambda: 1
     buffer_size: 500
+    model_size: 'deep' # 'shallow_wide' #deep
 
 logging_level: DEBUG
 # Pipeline parameters
-iterations: 10
-initial_epochs: 50
-MC_dropout_runs: 50
+iterations: 20
+initial_epochs: 30
+MC_dropout_runs: 5
 keep_prob: 0.25 
 patience: 20
 learning_rate: 0.001
 
-sample_size_debug: 0.1
-
 # if training models from scratch, the hyperparameters below are used
 train_epochs: 30
-train_patience: 15
+train_patience: 10
+
 
