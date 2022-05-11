@@ -93,7 +93,7 @@ def ALpipeline(cfg):
                 epochs=cfg["train_epochs"],
                 patience=cfg["train_patience"],
             )
-            if model == 'Regressor': #To Do ==== >> do the same for classifier
+            if model == 'Regressor': 
                 train_loss, valid_loss = losses
                 output_dict["train_loss_init"].append(train_loss)
             if model == "Classifier":  
