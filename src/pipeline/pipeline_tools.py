@@ -51,6 +51,7 @@ def prepare_data(
     valid_path: str,
     test_path: str,
     target_column: str,
+    other_targets: list,
     train_size: int = None,
     valid_size: int = None,
     test_size: int = None,
@@ -79,7 +80,11 @@ def prepare_data(
         raise ValueError("Flux variable to supported")
 
     # Remove NaN's and add appropripate class labels
-    keep_keys = train_keys + [target_column]
+    if other_targets != None:
+        target_columns = other_targets.append(target_column)
+        keep_keys = train_keys + target_columns
+    else: 
+        keep_keys = train_keys + [target_column]
 
     train_data = train_data[keep_keys]
     validation_data = validation_data[keep_keys]
@@ -423,25 +428,21 @@ def get_uncertainty(
 
 def get_most_uncertain(
     dataset: ITGDatasetDF,
-    out_std_1: np.array, 
-    idx_array_1: np.array, 
+    out_stds: Union[list, np.array], 
+    idx_arrays: Union[list, np.array], 
     keep: float = 0.25, 
     unlabelled_pool: Union[None, ITGDataset] = None,
     plot: bool= True,
-    out_std_2: np.array  = None,
-    idx_array_2: np.array = None,
 ):
 
     '''
     Inputs:
 
         dataset: dataset of points that MC drop out was ran on 
-        out_std_1: standard deviation from MC dropout from regressor 1 
-        idx_array_1: order of the datapoints from data loader 
+        out_stds: standard deviations from MC dropout from regressors
+        idx_arrays: order of the datapoints from dataloaders
         keep: percentage of most uncertain points to keep
         plot: Whether to plot the distribution of the uncertainties
-        out_std_2: [optional] standard deviation from MC dropout from regressors 2 
-        idx_array_2: [optional] order of the datapoints from data loader 
 
     Outputs:
         data_copy: a dataset object containing only the most uncertain points
@@ -450,28 +451,32 @@ def get_most_uncertain(
 
     '''
     data_copy = copy.deepcopy(dataset)
-    n_out_std = out_std_1.shape[0]
-    if out_std_2 != None: 
-        assert idx_array_2 != None, "Missing index order of second std entry "
-
-        # sort out the standard deviations so that match
-        reorder = np.array([np.where(idx_array_2 == i) for i in idx_array_1]).flatten()
-        out_std_2 = out_std_2[reorder]
-
-        # add the uncertainties from the two regressors
-        total_std = out_std_1 + out_std_2
+    n_candidates = out_stds[0].shape[0]
+    
+    
+    if len(out_stds) > 1: 
+        assert len(idx_arrays) == len(out_stds), "N indices doesn't match N stds"
+        total_std = None
+        for i in range():
+            if i == 0: 
+                total_std = out_stds[0]
+            else:
+                reorder = np.array([np.where(idx_arrays[i] == j) for j in idx_arrays[0]]).flatten()
+                out_stds[i] = out_stds[i][reorder]
+                # add the uncertainties from the two regressors
+                total_std += out_stds[i]
         
 
-        uncertain_list_indices = np.argsort(total_std)[-int(n_out_std * keep) :]
-        certain_list_indices = np.argsort(total_std)[: n_out_std - int(n_out_std * keep)]
+        uncertain_list_indices = np.argsort(total_std)[-int(n_candidates * keep) :]
+        certain_list_indices = np.argsort(total_std)[: n_candidates - int(n_candidates * keep)]
 
     else: 
-        total_std = out_std_1
-        uncertain_list_indices = np.argsort(out_std_1)[-int(n_out_std * keep) :]
-        certain_list_indices = np.argsort(out_std_1)[: n_out_std - int(n_out_std * keep)]
+        total_std = out_stds[0]
+        uncertain_list_indices = np.argsort(total_std)[-int(n_candidates * keep) :]
+        certain_list_indices = np.argsort(total_std)[: n_candidates - int(n_candidates * keep)]
 
-    certain_data_idx = idx_array_1[certain_list_indices]
-    uncertain_data_idx = idx_array_1[uncertain_list_indices]
+    certain_data_idx = idx_arrays[0][certain_list_indices]
+    uncertain_data_idx = idx_arrays[0][uncertain_list_indices]
 
     # Take the points that are not in the most uncertain points and add back into the validation set
     temp_dataset = copy.deepcopy(dataset)  
@@ -486,7 +491,7 @@ def get_most_uncertain(
     data_copy.remove(certain_data_idx)
 
         
-    return data_copy, total_std[uncertain_list_indices], idx_array_1, unlabelled_pool
+    return data_copy, total_std[uncertain_list_indices], idx_arrays[0], unlabelled_pool
 
 
 def regressor_uncertainty(
