@@ -50,6 +50,8 @@ class CLTaskManager:
         test_data = {}
         forgetting = {}
         for j,cfg in enumerate(self.config_tasks):
+            if self.cl_mode!= 'shrink_perturb':
+                self.config_tasks[j]['lambda'] = 1
             if j==0:
                 train, val, test, scaler = self.get_data(self.config_tasks[0])  
             else:
@@ -70,12 +72,12 @@ class CLTaskManager:
                 pass
 
             test_data.update({f'task{j}':test})
-            if j!=0:
-                for k in test_data.keys():
-                    _, regr_test_loss = self.regressor.predict(test_data[k])
-                    _, class_test_loss = self.classifier.predict(test_data[k])
-                    forgetting.update({f'regression_task{k}_model{j}':regr_test_loss})
-                    forgetting.update({f'classification_task{k}_model{j}':class_test_loss})
+            
+            for k in test_data.keys():
+                _, regr_test_loss = self.regressor.predict(test_data[k])
+                _, class_test_loss = self.classifier.predict(test_data[k])
+                forgetting.update({f'regression_{k}_model{j}':regr_test_loss})
+                forgetting.update({f'classification_{k}_model{j}':class_test_loss})
 
         with open(self.save_path+f'/forgetting_{self.cl_mode}.pkl', "wb") as f:
             pickle.dump(forgetting, f)

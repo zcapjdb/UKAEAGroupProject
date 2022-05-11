@@ -22,12 +22,7 @@ def main(required: str = 'LH'):
     df_labels = pd.read_hdf(f"{path}/qlk_jetexp_nn_training_database_labels.h5")
     df_labels = df_labels.rename(columns= {c:c.lower() for c in df_labels.columns })
     print('running...')
-    if required == 'all':
-        df_labels = df_labels[jet_keys]
-    elif required == 'CB':
-        df_labels = df_labels['wall_material_index']
-    elif required == 'LH':
-        df_labels = df_labels[['discharge_phase_index', 'is_hmode']]
+
     df_out = df_out[target_keys]    
 
     idx_in = df_in.index.values.tolist()

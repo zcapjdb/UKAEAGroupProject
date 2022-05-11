@@ -149,7 +149,7 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self,device,scaler):
+    def __init__(self,device,scaler=None):
         super().__init__()
         self.type = "regressor"
         self.device = device
@@ -174,7 +174,7 @@ class Regressor(nn.Module):
         return y_hat
 
     def unscale(self,y):
-        return y*self.scaler.scale_[1]+self.scaler.mean_[1]
+        return y*self.scaler.scale_[-1]+self.scaler.mean_[-1]
 
     def enable_dropout(self):
         """Function to enable the dropout layers during test-time"""
