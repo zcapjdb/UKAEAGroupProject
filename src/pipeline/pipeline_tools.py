@@ -18,14 +18,12 @@ import os
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 output_dict = {
-    "train_loss_init": [], # Regressor performance before pipeline
+    "train_loss_init": [],  # Regressor performance before pipeline
     "test_loss_init": [],
-
-    "retrain_losses": [], # regressor performance during retraining
+    "retrain_losses": [],  # regressor performance during retraining
     "retrain_test_losses": [],
-    "post_test_loss": [], # regressor performance after retraining
-    "post_test_loss_unscaled": [], # regressor performance after retraining, unscaled
-
+    "post_test_loss": [],  # regressor performance after retraining
+    "post_test_loss_unscaled": [],  # regressor performance after retraining, unscaled
     "n_train_points": [],
     "mse_before": [],
     "mse_after": [],
@@ -66,13 +64,13 @@ def prepare_data(
     test_data = pd.read_pickle(test_path)
 
     if train_size is not None:
-        train_data = train_data.sample(samplesize_debug*train_size)
+        train_data = train_data.sample(samplesize_debug * train_size)
 
     if valid_size is not None:
-        validation_data = validation_data.sample(samplesize_debug*valid_size)
-    
+        validation_data = validation_data.sample(samplesize_debug * valid_size)
+
     if test_size is not None:
-        test_data = test_data.sample(samplesize_debug*test_size)
+        test_data = test_data.sample(samplesize_debug * test_size)
 
     target_column = fluxes[0]
 
@@ -82,7 +80,7 @@ def prepare_data(
     # Remove NaN's and add appropripate class labels
     if len(fluxes) > 1:
         keep_keys = train_keys + fluxes
-    else: 
+    else:
         keep_keys = train_keys + [target_column]
 
     train_data = train_data[keep_keys]
@@ -97,9 +95,7 @@ def prepare_data(
     validation_data["stable_label"] = np.where(
         validation_data[target_column] != 0, 1, 0
     )
-    test_data["stable_label"] = np.where(
-        test_data[target_column] != 0, 1, 0
-    )
+    test_data["stable_label"] = np.where(test_data[target_column] != 0, 1, 0)
 
     scaler = StandardScaler()
     scaler.fit_transform(train_data.drop(["stable_label"], axis=1))
@@ -117,14 +113,17 @@ def prepare_data(
 
 # classifier tools
 def select_unstable_data(
-    dataset: ITGDatasetDF, batch_size: int, classifier: Classifier, device: torch.device = None,
+    dataset: ITGDatasetDF,
+    batch_size: int,
+    classifier: Classifier,
+    device: torch.device = None,
 ) -> ITGDatasetDF:
     """
-    Selects data classified as unstable by the classifier. 
+    Selects data classified as unstable by the classifier.
 
     returns:
         dataset: the dataset with the unstable data removed.
-        
+
     """
 
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
@@ -150,8 +149,8 @@ def select_unstable_data(
     logging.log(15, f"Unstable points: {len(unstable_points)}")
 
     # create new dataset with misclassified points
-    unstable_candidates = copy.deepcopy(dataset) 
-    unstable_candidates.data = unstable_candidates.data.loc[unstable_points] 
+    unstable_candidates = copy.deepcopy(dataset)
+    unstable_candidates.data = unstable_candidates.data.loc[unstable_points]
 
     return unstable_candidates
 
@@ -164,12 +163,13 @@ def check_for_misclassified_data(candidates: ITGDatasetDF) -> ITGDatasetDF:
         # if y == 0, then it is misclassified, keep only the misclassified points
         if y.item() == 0:
             missed_points.append(idx.item())
-    
+
     # create new dataset with misclassified points
     missed_candidates = copy.deepcopy(candidates)
     missed_candidates.data = missed_candidates.data.loc[missed_points]
 
-    return missed_candidates.data , len(missed_points)
+    return missed_candidates.data, len(missed_points)
+
 
 # Function to retrain the classifier on the misclassified points
 def retrain_classifier(
@@ -212,7 +212,9 @@ def retrain_classifier(
         patience = epochs
 
     # instantiate optimiser
-    opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate,weight_decay=1.e-4)
+    opt = torch.optim.Adam(
+        classifier.parameters(), lr=learning_rate, weight_decay=1.0e-4
+    )
     # create scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         opt,
@@ -232,7 +234,9 @@ def retrain_classifier(
 
         logging.debug(f"Train Step:  {epoch}")
 
-        loss, acc = classifier.train_step(train_loader, opt, epoch=epoch, disable_tqdm=disable_tqdm)
+        loss, acc = classifier.train_step(
+            train_loader, opt, epoch=epoch, disable_tqdm=disable_tqdm
+        )
         train_loss.append(loss.item())
         train_acc.append(acc)
 
@@ -261,14 +265,15 @@ def retrain_classifier(
 
 # Regressor tools
 def reorder_arrays(array, order1, order2):
-    '''
-    Inputs: 
+    """
+    Inputs:
         array: The array to be reordered
         order1: the desired index ordering
         order2: the current index ordering
-    '''
+    """
     reorder = np.array([np.where(order2 == i) for i in order1]).flatten()
     return array[reorder]
+
 
 def retrain_regressor(
     new_dataset: ITGDatasetDF,
@@ -292,10 +297,14 @@ def retrain_regressor(
 
     logging.info("Retraining regressor...\n")
     logging.log(15, f"Training on {len(new_dataset)} points")
-    # variable the regressor is trained on 
+    # variable the regressor is trained on
 
-    new_loader = pandas_to_numpy_data(new_dataset, model.flux, batch_size=batch_size, shuffle=True)
-    val_loader = pandas_to_numpy_data(val_dataset, model.flux,batch_size=batch_size, shuffle=False)
+    new_loader = pandas_to_numpy_data(
+        new_dataset, regressor_var=model.flux, batch_size=batch_size, shuffle=True
+    )
+    val_loader = pandas_to_numpy_data(
+        val_dataset, regressor_var=model.flux, batch_size=batch_size, shuffle=False
+    )
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
     model.shrink_perturb(lam, loc, scale)
@@ -310,7 +319,7 @@ def retrain_regressor(
     model.train()
 
     # instantiate optimiser
-    opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1.e-4)
+    opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1.0e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         opt,
         mode="min",
@@ -323,7 +332,7 @@ def retrain_regressor(
 
     for epoch in range(epochs):
         logging.log(15, f"Epoch: {epoch}")
-        loss = model.train_step(new_loader, opt, epoch = epoch, disable_tqdm=disable_tqdm)
+        loss = model.train_step(new_loader, opt, epoch=epoch, disable_tqdm=disable_tqdm)
         train_loss.append(loss.item())
 
         logging.log(15, f"Training Loss: {loss.item():.4f}")
@@ -341,6 +350,7 @@ def retrain_regressor(
 
     return train_loss, val_loss
 
+
 def get_uncertainty(
     dataset: ITGDatasetDF,
     regressor: Regressor,
@@ -348,7 +358,7 @@ def get_uncertainty(
     order_idx: Union[None, list, np.array] = None,
     train_data: bool = False,
     plot: bool = False,
-    device : torch.device = None,
+    device: torch.device = None,
 ) -> (np.array, np.array):
 
     """
@@ -367,7 +377,9 @@ def get_uncertainty(
         logging.info("Running MC Dropout on Novel Data....\n")
 
     batch_size = min(len(dataset), 512)
-    dataloader = pandas_to_numpy_data(data_copy,regressor_var=regressor.flux, batch_size=batch_size, shuffle=False)
+    dataloader = pandas_to_numpy_data(
+        data_copy, regressor_var=regressor.flux, batch_size=batch_size, shuffle=False
+    )
 
     regressor.eval()
     regressor.enable_dropout()
@@ -401,13 +413,13 @@ def get_uncertainty(
     idx_array = np.asarray(flat_list, dtype=object).flatten()
 
     if plot:
-        if order_idx == None: 
+        if order_idx == None:
             tag = "Initial"
-        else: 
+        else:
             tag = "Final"
         keep = 1.0
         plot_uncertainties(out_std, keep, tag)
-    
+
     if order_idx is not None:
         # matching the real indices to the array position
         reorder = np.array([np.where(idx_array == i) for i in order_idx]).flatten()
@@ -420,25 +432,28 @@ def get_uncertainty(
         assert list(np.unique(uncertain_data_idx)) == list(np.unique(order_idx))
 
         # Make sure they are in the same order
-        assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error("Ordering error")
+        assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error(
+            "Ordering error"
+        )
 
         return out_std[reorder], uncertain_data_idx
-    else: 
+    else:
         return out_std, idx_array
+
 
 def get_most_uncertain(
     dataset: ITGDatasetDF,
-    out_stds: Union[list, np.array], 
-    idx_arrays: Union[list, np.array], 
-    keep: float = 0.25, 
+    out_stds: Union[list, np.array],
+    idx_arrays: Union[list, np.array],
+    keep: float = 0.25,
     unlabelled_pool: Union[None, ITGDataset] = None,
-    plot: bool= True,
+    plot: bool = True,
 ):
 
-    '''
+    """
     Inputs:
 
-        dataset: dataset of points that MC drop out was ran on 
+        dataset: dataset of points that MC drop out was ran on
         out_stds: standard deviations from MC dropout from regressors
         idx_arrays: order of the datapoints from dataloaders
         keep: percentage of most uncertain points to keep
@@ -449,11 +464,11 @@ def get_most_uncertain(
         out_std: standard deviation of the most ucnertain points
         idx_array: idx_array used for ordering  (which one have we followed)
 
-    '''
+    """
     data_copy = copy.deepcopy(dataset)
     n_candidates = out_stds[0].shape[0]
-    
-    if len(out_stds) > 1: 
+
+    if len(out_stds) > 1:
         assert len(idx_arrays) == len(out_stds), "N indices doesn't match N stds"
 
         # total_std = 0
@@ -466,9 +481,11 @@ def get_most_uncertain(
 
         # reorder idx_arrays to match the order of idx_arrays[0]
         for i in range(len(idx_arrays[0])):
-            reorder = np.array([np.where(idx_arrays[0] == j) for j in idx_arrays[0]]).flatten()
+            reorder = np.array(
+                [np.where(idx_arrays[0] == j) for j in idx_arrays[0]]
+            ).flatten()
             out_stds[i] = out_stds[i][reorder]
-        
+
         out_stds = np.array(out_stds)
         # sum the uncertainties from both regressors
         total_std = np.sum(out_stds, axis=0)
@@ -477,13 +494,15 @@ def get_most_uncertain(
         total_std = out_stds[0]
 
     uncertain_list_indices = np.argsort(total_std)[-int(n_candidates * keep) :]
-    certain_list_indices = np.argsort(total_std)[: n_candidates - int(n_candidates * keep)]
+    certain_list_indices = np.argsort(total_std)[
+        : n_candidates - int(n_candidates * keep)
+    ]
 
     certain_data_idx = idx_arrays[0][certain_list_indices]
     uncertain_data_idx = idx_arrays[0][uncertain_list_indices]
 
     # Take the points that are not in the most uncertain points and add back into the validation set
-    temp_dataset = copy.deepcopy(dataset)  
+    temp_dataset = copy.deepcopy(dataset)
     temp_dataset.remove(indices=uncertain_data_idx)
     unlabelled_pool.add(temp_dataset)
 
@@ -494,7 +513,6 @@ def get_most_uncertain(
     # Remove them from the sample
     data_copy.remove(certain_data_idx)
 
-        
     return data_copy, total_std[uncertain_list_indices], idx_arrays[0], unlabelled_pool
 
 
@@ -507,7 +525,7 @@ def regressor_uncertainty(
     plot: bool = False,
     order_idx: Union[None, list, np.array] = None,
     unlabelled_pool: Union[None, ITGDataset] = None,
-    device : torch.device = None,
+    device: torch.device = None,
 ) -> (ITGDatasetDF, np.array, np.array):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
@@ -525,7 +543,9 @@ def regressor_uncertainty(
         logging.info("Running MC Dropout on Novel Data....\n")
 
     batch_size = min(len(dataset), 512)
-    dataloader = pandas_to_numpy_data(data_copy,regressor_var=regressor.flux, batch_size=batch_size, shuffle=False)
+    dataloader = pandas_to_numpy_data(
+        data_copy, regressor_var=regressor.flux, batch_size=batch_size, shuffle=False
+    )
 
     regressor.eval()
     regressor.enable_dropout()
@@ -572,7 +592,7 @@ def regressor_uncertainty(
         logging.log(15, f"no valid before : {len(unlabelled_pool)}")
 
         # Take the points that are not in the most uncertain points and add back into the validation set
-        temp_dataset = copy.deepcopy(dataset)  
+        temp_dataset = copy.deepcopy(dataset)
         temp_dataset.remove(indices=uncertain_data_idx)
         unlabelled_pool.add(temp_dataset)
 
@@ -591,7 +611,6 @@ def regressor_uncertainty(
 
         plot_uncertainties(out_std, keep, tag)
 
-
     if order_idx is not None:
         # matching the real indices to the array position
         reorder = np.array([np.where(idx_array == i) for i in order_idx]).flatten()
@@ -604,10 +623,17 @@ def regressor_uncertainty(
         assert list(np.unique(uncertain_data_idx)) == list(np.unique(order_idx))
 
         # Make sure they are in the same order
-        assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error("Ordering error")
+        assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error(
+            "Ordering error"
+        )
 
     if not train_data:
-        return data_copy, out_std[uncertain_list_indices], uncertain_data_idx, unlabelled_pool
+        return (
+            data_copy,
+            out_std[uncertain_list_indices],
+            uncertain_data_idx,
+            unlabelled_pool,
+        )
 
     else:
         return data_copy, out_std, idx_array
@@ -618,7 +644,7 @@ def pandas_to_numpy_data(
     regressor_var: str = None,
     batch_size: int = None,
     shuffle: bool = True,
-      ) -> DataLoader:
+) -> DataLoader:
     """
     Helper function to convert pandas dataframe to numpy array and create a dataloader.
     Dataloaders created from numpy arrays are much faster than pandas dataframes.
@@ -626,7 +652,7 @@ def pandas_to_numpy_data(
     if regressor_var == None:
         regressor_var = dataset.target
         logging.INFO("No regressor value chosen, setting z to {regressor_var}")
-    
+
     x_array = dataset.data[train_keys].values
     y_array = dataset.data[dataset.label].values
     z_array = dataset.data[regressor_var].values
@@ -657,15 +683,15 @@ def mse_change(
     plot: bool = True,
     data: str = "novel",
     save_plots: bool = True,
-    save_path:str = None, 
-    iteration: int =None,
+    save_path: str = None,
+    iteration: int = None,
     lam: float = 1.0,
 ) -> (float, float, float):
     """
     Calculates the change in MSE between the before and after training.
     """
 
-    if data == 'train':
+    if data == "train":
         idxs = prediction_order.astype(int)
         ground_truth = uncertain_dataset.data.loc[idxs]
 
@@ -696,21 +722,21 @@ def mse_change(
             uncertainties,
             data=data,
             save_plots=save_plots,
-            save_path=save_path, 
-            iteration=iteration, 
+            save_path=save_path,
+            iteration=iteration,
             lam=lam,
-            target=uncertain_dataset.target
+            target=uncertain_dataset.target,
         )
 
     return mse_before, mse_after, perc_change
 
 
 def uncertainty_change(
-    x: Union[list, np.array], 
-    y: Union[np.array, list], 
-    plot: bool = True, 
-    plot_title: str = None, 
-    iteration:int = None,
+    x: Union[list, np.array],
+    y: Union[np.array, list],
+    plot: bool = True,
+    plot_title: str = None,
+    iteration: int = None,
     save_path: str = "./",
 ) -> float:
     """
@@ -749,7 +775,7 @@ def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None) -> None:
     plotting the most uncertain points in a separate plot.
     """
 
-    print('plotting...')
+    print("plotting...")
     plt.figure()
     plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=50)
 
@@ -769,12 +795,14 @@ def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None) -> None:
     plt.clf()
 
 
-def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray,title: str, it: int, save_dest: str) -> None:
+def plot_scatter(
+    initial_std: np.ndarray, final_std: np.ndarray, title: str, it: int, save_dest: str
+) -> None:
     """
     Plot the scatter plot of the initial and final standard deviations of the predictions.
     """
 
-    sns.jointplot(initial_std,final_std, kind='reg')
+    sns.jointplot(initial_std, final_std, kind="reg")
 
     plt.plot(
         [initial_std.min(), final_std.max()],
@@ -794,12 +822,12 @@ def plot_mse_change(
     intial_prediction: np.array,
     final_prediction: np.array,
     uncertainties: list,
-    target = "efiitg_gb",
+    target="efiitg_gb",
     data: str = "novel",
     save_plots: bool = False,
     save_path=None,
     iteration=None,
-    lam=1.0
+    lam=1.0,
 ) -> None:
     """
 
@@ -850,16 +878,18 @@ def plot_mse_change(
     plt.legend()
     if save_plots:
         filename = f"{save_prefix}_mse_before_it_{iteration}.png"
-        save_dest = os.path.join(save_path,target)
+        save_dest = os.path.join(save_path, target)
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
+        if not os.path.exists(save_dest):
+            os.mkdir(save_dest)
 
-        save_dest = os.path.join(save_dest,f"{lam}")
+        save_dest = os.path.join(save_dest, f"{lam}")
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
-        
-        save_dest = os.path.join(save_dest,filename)
-        
+        if not os.path.exists(save_dest):
+            os.mkdir(save_dest)
+
+        save_dest = os.path.join(save_dest, filename)
+
         plt.savefig(save_dest, dpi=300)
 
     plt.figure()
@@ -884,16 +914,18 @@ def plot_mse_change(
 
     if save_plots:
         filename = f"{save_prefix}_mse_after_it_{iteration}.png"
-        save_dest = os.path.join(save_path,target)
+        save_dest = os.path.join(save_path, target)
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
+        if not os.path.exists(save_dest):
+            os.mkdir(save_dest)
 
-        save_dest = os.path.join(save_dest,f"{lam}")
+        save_dest = os.path.join(save_dest, f"{lam}")
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
-        
-        save_dest = os.path.join(save_dest,filename)
-        
+        if not os.path.exists(save_dest):
+            os.mkdir(save_dest)
+
+        save_dest = os.path.join(save_dest, filename)
+
         plt.savefig(save_dest, dpi=300)
 
 

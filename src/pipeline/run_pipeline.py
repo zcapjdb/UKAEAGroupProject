@@ -288,7 +288,6 @@ for i in range(cfg["iterations"]):
         order_idx=data_idx,
     )  # --- uncertainty of newly added points TODO: Breakdown this calculation
 
-
     logging.info("Change in uncertainty for most uncertain data points:")
 
     output_dict["d_novel_uncert"].append(
