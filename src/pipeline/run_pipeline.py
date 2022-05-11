@@ -44,8 +44,6 @@ def ALpipeline(cfg):
     # Dictionary to store results of the classifier and regressor for later use
     output_dict = pt.output_dict
 
-    # To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test loss
-
 
     # --------------------------------------------- Load data ----------------------------------------------------------
     train_dataset, eval_dataset, test_dataset,scaler = pt.prepare_data(
@@ -123,9 +121,12 @@ def ALpipeline(cfg):
     for i in range(cfg["iterations"]):
         logging.info(f"Iteration: {i+1}\n")
 
+
         if i != 0:
             # reset the output dictionary for each iteration
-            output_dict = pt.output_dict
+            for value in output_dict.values():
+                del value[:]
+
 
         # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
         candidates = unlabelled_pool.sample(candidate_size)  
@@ -300,11 +301,12 @@ def ALpipeline(cfg):
                 prediction_idx_order,
                 train_uncert_idx,
                 train_sample,
-                uncertainties=[train_uncert_before, train_uncert_after],
-                data="novel",
-                save_path = SAVE_PATHS["plots"], 
-                iteration=i,
-                lam = lam
+                valid_dataset,
+                models["Classifier"],
+                batch_size=batch_size,
+                epochs=epochs,
+                lam=lam,
+                patience=cfg["patience"],
             )
         except:
             logging.debug("pt.mse_change failed, whatever")
