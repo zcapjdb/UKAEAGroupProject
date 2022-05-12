@@ -475,6 +475,7 @@ def get_most_uncertain(
     dataset: ITGDatasetDF,
     out_stds: Union[list, np.array],
     idx_arrays: Union[list, np.array],
+    model: Regressor
     keep: float = 0.25,
     unlabelled_pool: Union[None, ITGDataset] = None,
     plot: bool = True,
@@ -500,7 +501,7 @@ def get_most_uncertain(
 
     if len(out_stds) > 1:
         assert len(idx_arrays) == len(out_stds), "N indices doesn't match N stds"
-
+        pred_list = []
         # reorder idx_arrays to match the order of idx_arrays[0]
         for i in range(len(idx_arrays)):
             logging.debug(f"Index arrays received {len(idx_arrays)}")
@@ -509,16 +510,28 @@ def get_most_uncertain(
             ).flatten()
             out_stds[i] = out_stds[i][reorder]
 
+            # run predict method on dataset using idx_arrays ordering
+            data_copy.data = data_copy.data.loc[idx_arrays[i]]
+            preds, _ = model.predict(data_copy)
+            pred_list.append(preds)
+
         out_stds = np.array(out_stds)
         total_std = np.sum(out_stds, axis=0)
+        pred_array = np.stack(pred_list, axis=0)
 
     else:
         total_std = out_stds[0]
+        data_copy.data = data_copy.data.loc[idx_arrays[0]]
+        pred_array, _ = model.predict(data_copy)    
 
-    uncertain_list_indices = np.argsort(total_std)[-int(n_candidates * keep) :]
-    certain_list_indices = np.argsort(total_std)[
-        : n_candidates - int(n_candidates * keep)
-    ]
+    # TODO: subtract distance from nearest pred_array point from total_std
+    # from scipy.spatial.distance import cdist
+    # total_std = total_std - alpha * cdist(pred_array, pred_array, metric='euclidean')
+    # Need to tune alpha
+    #
+
+    uncertain_list_indices = np.argsort(total_std)[-int(n_candidates*keep):]
+    certain_list_indices = np.argsort(total_std)[:n_candidates-int(n_candidates*keep)]
 
     certain_data_idx = idx_arrays[0][certain_list_indices]
     uncertain_data_idx = idx_arrays[0][uncertain_list_indices]
