@@ -223,6 +223,8 @@ for i in range(cfg["iterations"]):
         out_stds=candidates_uncerts,
         idx_arrays=data_idxs,
     )
+
+    logging.debug(f"Number of most uncertain {len(data_idx)}")
     prediction_candidates_before = []
     for FLUX in FLUXES:
         prediction_candidates_before.append(
@@ -236,7 +238,11 @@ for i in range(cfg["iterations"]):
 
     # ToDo ===========>>>> Now we do have the labels because Qualikiz gave them to us!  Need to discard misclassified data from enriched_train_loader, and retrain the classifier if buffer_size is big enough
     # check for misclassified data in candidates and add them to the buffer
-    candidates, misclassified_data, num_misclassified = pt.check_for_misclassified_data(candidates)
+    candidates, misclassified_data, num_misclassified, data_idx, candidates_uncert_before = pt.check_for_misclassified_data(
+        candidates, 
+        uncertainty=candidates_uncert_before, 
+        indices=data_idx
+        )
     buffer_size += num_misclassified
     classifier_buffer.append(misclassified_data)
     logging.info(f"Misclassified data: {num_misclassified}")
@@ -330,9 +336,15 @@ for i in range(cfg["iterations"]):
         data_idx
         )
     
-    candidates_uncert_after = np.concatenate(candidates_uncert_after)
+    candidates_uncert_after = np.array(candidates_uncert_after)
+
+    logging.debug(f"Uncertainty shape after {candidates_uncert_after.shape}")
 
     candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
+
+    logging.debug(f"Uncertainty shape before {candidates_uncert_before.shape}")
+
+    logging.debug(f"Uncertainty shape after {candidates_uncert_after.shape}")
 
     logging.info("Change in uncertainty for most uncertain data points:")
 

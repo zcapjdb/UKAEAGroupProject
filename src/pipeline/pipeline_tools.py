@@ -154,7 +154,12 @@ def select_unstable_data(
     return unstable_candidates
 
 
-def check_for_misclassified_data(candidates: ITGDatasetDF) -> ITGDatasetDF:
+def check_for_misclassified_data(
+    candidates: ITGDatasetDF, 
+    uncertainty: Union[np.array, list], 
+    indices: Union[np.array, list]
+    ) -> ITGDatasetDF:
+    logging.debug(f"Number of candidates passed in check: {len(candidates)}")
     candidate_loader = DataLoader(candidates, batch_size=1, shuffle=False)
 
     missed_points = []
@@ -168,9 +173,23 @@ def check_for_misclassified_data(candidates: ITGDatasetDF) -> ITGDatasetDF:
     missed_candidates.data = missed_candidates.data.loc[missed_points]
 
     # remove the misclassified points from the original dataset
-    candidates = candidates.remove(missed_points)
+    logging.debug(f"Number of candidates {len(candidates)}")
+    logging.debug(f" Missed points {len(missed_points)}")
+    
+    candidates.remove(missed_points)
 
-    return candidates, missed_candidates.data, len(missed_points)
+    candidate_indices = np.array(list(candidates.data.index))
+    indices = np.array(indices)
+    # find the overlap of the two index lists
+    mask = np.isin(indices, candidate_indices)
+    indices = indices[mask]
+    uncertainty = np.array(uncertainty)[mask]
+
+    logging.debug(f"Number of candidates {len(candidates)}")
+    logging.debug(f"Number of indices {len(indices)}")
+
+    assert len(indices) == len(candidate_indices), "Something is going wrong"
+    return candidates, missed_candidates.data, len(missed_points), indices, uncertainty
 
 
 # Function to retrain the classifier on the misclassified points
@@ -277,10 +296,9 @@ def reorder_arrays(arrays:list, orders:list, arrangement:np.array):
     """
 
     for k in range(len(arrays)):
-        assert len(orders[k]) == len (arrangement), "Length of arrays to reorder doesn't match the reordering indices"
+        assert len(orders[k]) == len (arrangement), f"Length of arrays to reorder {len(orders[k])} doesn't match the reordering indices {len(arrangement)}"
         reorder = np.array([np.where(orders[k] == i) for i in arrangement]).flatten()
         # remember to comment the line below out
-        logging.debug(f"form of reorder{reorder}")
         arrays[k] = arrays[k][reorder]
     
     return arrays
@@ -517,7 +535,7 @@ def get_most_uncertain(
     # Remove them from the sample
     data_copy.remove(certain_data_idx)
 
-    return data_copy, total_std[uncertain_list_indices], idx_arrays[0], unlabelled_pool
+    return data_copy, total_std[uncertain_list_indices], idx_arrays[0][uncertain_list_indices], unlabelled_pool
 
 
 def regressor_uncertainty(
@@ -739,7 +757,7 @@ def mse_change(
 def uncertainty_change(
     x: Union[list, np.array],
     y: Union[np.array, list],
-    plot: bool = True,
+    plot: bool = False,
     plot_title: str = None,
     iteration: int = None,
     save_path: str = "./",
@@ -749,11 +767,15 @@ def uncertainty_change(
     with option to plot the results.
 
     """
+    logging.debug(f"shape of x: {x.shape}")
+    logging.debug(f"shape of y: {y.shape}")
+
     total = x.shape[0]
     increase = len(x[y > x]) * 100 / total
     decrease = len(x[y < x]) * 100 / total
     no_change = 100 - increase - decrease
 
+    #TODO: fix! strange this occuring with the shapes
     if plot:
         plot_scatter(x, y, plot_title, iteration, save_path)
 
@@ -806,7 +828,8 @@ def plot_scatter(
     """
     Plot the scatter plot of the initial and final standard deviations of the predictions.
     """
-
+    logging.debug(f" plot x shape: {initial_std.shape}")
+    logging.debug(f" plot y shape: {final_std.shape}")
     sns.jointplot(initial_std, final_std, kind="reg")
 
     plt.plot(
