@@ -1,4 +1,4 @@
-flux: [efiitg_gb, pfiitg_gb_div_efiitg_gb]
+flux: [efiitg_gb, efeitg_gb_div_efiitg_gb]
 
 data:
     train: /path/to/train_data.pkl

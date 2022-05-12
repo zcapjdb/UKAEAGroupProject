@@ -338,14 +338,7 @@ for i in range(cfg["iterations"]):
         )
     
     candidates_uncert_after = np.array(candidates_uncert_after)
-
-    logging.debug(f"Uncertainty shape after {candidates_uncert_after.shape}")
-
     candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
-
-    logging.debug(f"Uncertainty shape before {candidates_uncert_before.shape}")
-
-    logging.debug(f"Uncertainty shape after {candidates_uncert_after.shape}")
 
     logging.info("Change in uncertainty for most uncertain data points:")
 

@@ -76,7 +76,7 @@ def prepare_data(
     target_column = fluxes[0]
 
     if target_column not in target_keys:
-        raise ValueError("Flux variable to supported")
+        raise ValueError("Flux variable not supported")
 
     # Remove NaN's and add appropripate class labels
     keep_keys = train_keys + fluxes
@@ -162,7 +162,7 @@ def check_for_misclassified_data(
     uncertainty: Union[np.array, list], 
     indices: Union[np.array, list]
     ) -> ITGDatasetDF:
-    logging.debug(f"Number of candidates passed in check: {len(candidates)}")
+    
     candidate_loader = DataLoader(candidates, batch_size=1, shuffle=False)
 
     missed_points = []
@@ -174,10 +174,6 @@ def check_for_misclassified_data(
     # create new dataset with misclassified points
     missed_candidates = copy.deepcopy(candidates)
     missed_candidates.data = missed_candidates.data.loc[missed_points]
-
-    # remove the misclassified points from the original dataset
-    logging.debug(f"Number of candidates {len(candidates)}")
-    logging.debug(f" Missed points {len(missed_points)}")
     
     candidates.remove(missed_points)
 
@@ -188,12 +184,6 @@ def check_for_misclassified_data(
     indices = indices[mask]
     uncertainty = np.array(uncertainty)[mask]
 
-    logging.debug(f"Number of candidates {len(candidates)}")
-    logging.debug(f"Number of indices {len(indices)}")
-
-    logging.debug(f"{candidates.data['stable_label'].value_counts()}")
-
-    assert len(indices) == len(candidate_indices), "Something is going wrong"
     return candidates, missed_candidates.data, len(missed_points), indices, uncertainty
 
 
@@ -523,7 +513,6 @@ def get_most_uncertain(
         pred_list = []
         # reorder idx_arrays to match the order of idx_arrays[0]
         for i in range(len(idx_arrays)):
-            logging.debug(f"Index arrays received {len(idx_arrays)}")
             reorder = np.array(
                 [np.where(idx_arrays[i] == j) for j in idx_arrays[0]]
             ).flatten()
@@ -799,8 +788,6 @@ def uncertainty_change(
     with option to plot the results.
 
     """
-    logging.debug(f"shape of x: {x.shape}")
-    logging.debug(f"shape of y: {y.shape}")
 
     total = x.shape[0]
     increase = len(x[y > x]) * 100 / total
