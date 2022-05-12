@@ -264,7 +264,7 @@ for i in range(cfg["iterations"]):
                 misclassified_dataset,
                 train_sample,
                 valid_dataset,
-                models["Classifier"],
+                models[FLUXES[0]]["Classifier"],
                 batch_size=batch_size,
                 epochs=epochs,
                 lam=lam,
