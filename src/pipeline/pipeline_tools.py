@@ -78,10 +78,9 @@ def prepare_data(
         raise ValueError("Flux variable to supported")
 
     # Remove NaN's and add appropripate class labels
-    if len(fluxes) > 1:
-        keep_keys = train_keys + fluxes
-    else:
-        keep_keys = train_keys + [target_column]
+    keep_keys = train_keys + fluxes
+
+    logging.debug(f"keep keys: {keep_keys}")
 
     train_data = train_data[keep_keys]
     validation_data = validation_data[keep_keys]
@@ -656,8 +655,9 @@ def pandas_to_numpy_data(
     Dataloaders created from numpy arrays are much faster than pandas dataframes.
     """
     if regressor_var == None:
+        logging.debug(f"{dataset.target}")
         regressor_var = dataset.target
-        logging.INFO("No regressor value chosen, setting z to {regressor_var}")
+        logging.info(f"No regressor value chosen, setting z to {regressor_var}")
 
     x_array = dataset.data[train_keys].values
     y_array = dataset.data[dataset.label].values
