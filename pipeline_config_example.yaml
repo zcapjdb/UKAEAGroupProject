@@ -57,6 +57,7 @@ MC_dropout_runs: 50
 keep_prob: 0.25 
 patience: 20
 learning_rate: 0.001
+dropout_rate: 0.1
 
 sample_size_debug: 0.1
 

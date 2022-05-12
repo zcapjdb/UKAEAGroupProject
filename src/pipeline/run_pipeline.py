@@ -179,6 +179,7 @@ for i in range(cfg["iterations"]):
             n_runs=cfg["MC_dropout_runs"],
             keep=cfg["keep_prob"],
             device=device,
+            drop_rate=cfg["dropout_rate"],
         )
         candidates_uncerts.append(temp_uncert)
         data_idxs.append(temp_idx)
@@ -290,6 +291,7 @@ for i in range(cfg["iterations"]):
             n_runs=cfg["MC_dropout_runs"],
             keep=cfg["keep_prob"],
             device=device,
+            drop_rate=cfg["dropout_rate"]
         )
 
         candidates_uncerts_after.append(temp_uncert)
