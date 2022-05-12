@@ -190,9 +190,10 @@ class Regressor(nn.Module):
 
         return y * self.scaler.scale_[scaler_index] + self.scaler.mean_[scaler_index]
 
-    def enable_dropout(self):
+    def enable_dropout(self, drop_rate = 0.1):
         """Function to enable the dropout layers during test-time"""
         for m in self.model.modules():
+            m.p = drop_rate
             if m.__class__.__name__.startswith("Dropout"):
                 m.train()
 

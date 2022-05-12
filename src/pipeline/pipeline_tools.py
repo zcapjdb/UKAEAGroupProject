@@ -167,7 +167,10 @@ def check_for_misclassified_data(candidates: ITGDatasetDF) -> ITGDatasetDF:
     missed_candidates = copy.deepcopy(candidates)
     missed_candidates.data = missed_candidates.data.loc[missed_points]
 
-    return missed_candidates.data, len(missed_points)
+    # remove the misclassified points from the original dataset
+    candidates = candidates.remove(missed_points)
+
+    return candidates, missed_candidates.data, len(missed_points)
 
 
 # Function to retrain the classifier on the misclassified points
@@ -367,6 +370,7 @@ def get_uncertainty(
     train_data: bool = False,
     plot: bool = False,
     device: torch.device = None,
+    drop_rate: float = 0.1,
 ) -> (np.array, np.array):
 
     """
@@ -390,7 +394,7 @@ def get_uncertainty(
     )
 
     regressor.eval()
-    regressor.enable_dropout()
+    regressor.enable_dropout(drop_rate)
 
     # evaluate model on training data n_runs times and return points with largest uncertainty
     runs = []
