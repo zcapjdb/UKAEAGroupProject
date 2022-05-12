@@ -475,7 +475,7 @@ def get_most_uncertain(
     dataset: ITGDatasetDF,
     out_stds: Union[list, np.array],
     idx_arrays: Union[list, np.array],
-    model: Regressor
+    model: Regressor,
     keep: float = 0.25,
     unlabelled_pool: Union[None, ITGDataset] = None,
     plot: bool = True,
