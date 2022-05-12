@@ -336,11 +336,22 @@ def retrain_regressor(
     # are we training on any NaNs
     logging.debug(f"NaNs in training: {new_dataset.data[model.flux].isna().sum()}")
     logging.debug(f"NaNs in vald: {val_dataset.data[model.flux].isna().sum()}")
+    #TODO: this is a poor fix
+    
+    new_copy = copy.deepcopy(new_dataset)
+    val_copy = copy.deepcopy(val_dataset)
+
+    new_copy.data.dropna(subset=[model.flux], inplace=True)
+    val_copy.data.dropna(subset=[model.flux], inplace=True)
+
+    logging.debug(f"NaNs in training: {new_copy.data[model.flux].isna().sum()}")
+    logging.debug(f"NaNs in vald: {val_copy.data[model.flux].isna().sum()}")
+
     new_loader = pandas_to_numpy_data(
-        new_dataset, regressor_var=model.flux, batch_size=batch_size, shuffle=True
+        new_copy, regressor_var=model.flux, batch_size=batch_size, shuffle=True
     )
     val_loader = pandas_to_numpy_data(
-        val_dataset, regressor_var=model.flux, batch_size=batch_size, shuffle=False
+        val_copy, regressor_var=model.flux, batch_size=batch_size, shuffle=False
     )
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
