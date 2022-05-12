@@ -167,7 +167,10 @@ def check_for_misclassified_data(candidates: ITGDatasetDF) -> ITGDatasetDF:
     missed_candidates = copy.deepcopy(candidates)
     missed_candidates.data = missed_candidates.data.loc[missed_points]
 
-    return missed_candidates.data, len(missed_points)
+    # remove the misclassified points from the original dataset
+    candidates = candidates.remove(missed_points)
+
+    return candidates, missed_candidates.data, len(missed_points)
 
 
 # Function to retrain the classifier on the misclassified points

@@ -208,7 +208,7 @@ for i in range(cfg["iterations"]):
 
     # ToDo ===========>>>> Now we do have the labels because Qualikiz gave them to us!  Need to discard misclassified data from enriched_train_loader, and retrain the classifier if buffer_size is big enough
     # check for misclassified data in candidates and add them to the buffer
-    misclassified_data, num_misclassified = pt.check_for_misclassified_data(candidates)
+    candidates, misclassified_data, num_misclassified = pt.check_for_misclassified_data(candidates)
     buffer_size += num_misclassified
     classifier_buffer.append(misclassified_data)
     logging.info(f"Misclassified data: {num_misclassified}")
