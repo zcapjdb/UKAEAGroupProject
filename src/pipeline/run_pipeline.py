@@ -97,35 +97,64 @@ with open(os.path.join(save_dest, "config.yaml"), "w") as f:
 # ------------------------------------------- Load or train first models ------------------------------------------
 models = {}
 for model in PRETRAINED:
+    logging.debug(f"Size of training dataset {len(train_dataset)}")
     train_sample = train_dataset.sample(train_size)
-    for FLUX in FLUXES:
-        if PRETRAINED[model][FLUX]["trained"] == True:
-            trained_model = md.load_model(
-                model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX
-            )
-            models[FLUX] = {model: trained_model.to(device)}
+    if model == "Regressor":
+        for FLUX in FLUXES:
+            if PRETRAINED[model][FLUX]["trained"] == True:
+                trained_model = md.load_model(
+                    model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX
+                )
+                if FLUX not in models.keys():
+                    models[FLUX] = {model: trained_model.to(device)}
+                else:
+                    models[FLUX][model] = trained_model.to(device)
 
-        else:
-            logging.info(f"{FLUX} {model} not trained - training now")
-            models[FLUX][model] = (
-                Classifier(device)
-                if model == "Classifier"
-                else Regressor(device, scaler, FLUX)
-            )
+            else:
+                logging.info(f"{FLUX} {model} not trained - training now")
+                # models[FLUX][model] = (
+                #     Classifier(device)
+                #     if model == "Classifier"
+                #     else Regressor(device, scaler, FLUX)
+                # )
 
-            models[FLUX][model], losses = md.train_model(
-                models[FLUX][model],
-                train_sample,
-                valid_dataset,
-                save_path=PRETRAINED[model][FLUX]["save_path"],
-                epochs=cfg["train_epochs"],
-                patience=cfg["train_patience"],
-            )
-            if model == "Regressor":  # To Do ==== >> do the same for classifier
+                models[FLUX][model] = Regressor(device, scaler, FLUX)
+
+                models[FLUX][model], losses = md.train_model(
+                    models[FLUX][model],
+                    train_sample,
+                    valid_dataset,
+                    save_path=PRETRAINED[model][FLUX]["save_path"],
+                    epochs=cfg["train_epochs"],
+                    patience=cfg["train_patience"],
+                )
+                
                 train_loss, valid_loss = losses
                 output_dict["train_loss_init"].append(train_loss)
-            # if model == "Classifier":  --- not used currently
-            #    losses, train_accuracy, validation_losses, val_accuracy = losses
+
+                # if model == "Classifier":  --- not used currently
+                #    losses, train_accuracy, validation_losses, val_accuracy = losses
+    else:
+        if PRETRAINED[model][FLUXES[0]]["trained"] == True:
+            trained_model = md.load_model(
+                model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0]
+            )
+            models[FLUXES[0]] = {model: trained_model.to(device)} 
+        else: 
+            logging.info(f"{FLUX} {model} not trained - training now")
+            models[FLUXES[0]][model] = Classifier(device)
+
+            models[FLUXES[0]][model], losses = md.train_model(
+                    models[FLUXES[0]][model],
+                    train_sample,
+                    valid_dataset,
+                    save_path=PRETRAINED[model][FLUX[0]]["save_path"],
+                    epochs=cfg["train_epochs"],
+                    patience=cfg["train_patience"],
+                )
+
+for FLUX in FLUXES:
+    logging.debug(f"Models for {FLUX} : {models[FLUX].keys()}")
 
 # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
 for FLUX in FLUXES:
@@ -177,7 +206,6 @@ for i in range(cfg["iterations"]):
             candidates,
             models[FLUX]["Regressor"],
             n_runs=cfg["MC_dropout_runs"],
-            keep=cfg["keep_prob"],
             device=device,
         )
         candidates_uncerts.append(temp_uncert)
@@ -288,7 +316,6 @@ for i in range(cfg["iterations"]):
             candidates,
             models[FLUX]["Regressor"],
             n_runs=cfg["MC_dropout_runs"],
-            keep=cfg["keep_prob"],
             device=device,
         )
 

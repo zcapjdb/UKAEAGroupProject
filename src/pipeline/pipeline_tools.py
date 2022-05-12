@@ -86,9 +86,9 @@ def prepare_data(
     validation_data = validation_data[keep_keys]
     test_data = test_data[keep_keys]
 
-    train_data = train_data.dropna()
-    validation_data = validation_data.dropna()
-    test_data = test_data.dropna()
+    train_data = train_data.dropna(subset=[target_column]) 
+    validation_data = validation_data.dropna(subset =[target_column])
+    test_data = test_data.dropna(subset=[target_column])
 
     train_data["stable_label"] = np.where(train_data[target_column] != 0, 1, 0)
     validation_data["stable_label"] = np.where(
@@ -275,6 +275,8 @@ def reorder_arrays(arrays:list, orders:list, arrangement:np.array):
 
     for k in range(len(arrays)):
         reorder = np.array([np.where(orders[k] == i) for i in arrangement]).flatten()
+        # remember to comment the line below out
+        logging.debug(f"form of reorder{reorder}")
         arrays[k] = arrays[k][reorder]
     
     return arrays
@@ -476,23 +478,15 @@ def get_most_uncertain(
     if len(out_stds) > 1:
         assert len(idx_arrays) == len(out_stds), "N indices doesn't match N stds"
 
-        # total_std = 0
-        # for i in range(len(idx_arrays[0])):
-
-        #     reorder = np.array([np.where(idx_arrays[i] == j) for j in idx_arrays[0]]).flatten()
-        #     out_stds[i] = out_stds[i][reorder]
-        #     # add the uncertainties from the two regressors
-        #     total_std += out_stds[i]
-
         # reorder idx_arrays to match the order of idx_arrays[0]
-        for i in range(len(idx_arrays[0])):
+        for i in range(len(idx_arrays)):
+            logging.debug(f"Index arrays received {len(idx_arrays)}")
             reorder = np.array(
-                [np.where(idx_arrays[0] == j) for j in idx_arrays[0]]
+                [np.where(idx_arrays[i] == j) for j in idx_arrays[0]]
             ).flatten()
             out_stds[i] = out_stds[i][reorder]
 
         out_stds = np.array(out_stds)
-        # sum the uncertainties from both regressors
         total_std = np.sum(out_stds, axis=0)
 
     else:

@@ -51,6 +51,7 @@ if MODE =="random":
     n_data = len(train_dataset) 
 
     if n_data < PARAMS["rand_sample_size"]:
+        logging.info(f"Training on {n_data} data points")
         PARAMS["rand_sample_size"] = n_data
     
     train_dataset = train_dataset.sample(PARAMS["rand_sample_size"])
