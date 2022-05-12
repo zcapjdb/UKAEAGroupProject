@@ -274,6 +274,7 @@ def reorder_arrays(arrays:list, orders:list, arrangement:np.array):
     """
 
     for k in range(len(arrays)):
+        assert len(orders[k]) == len (arrangement), "Length of arrays to reorder doesn't match the reordering indices"
         reorder = np.array([np.where(orders[k] == i) for i in arrangement]).flatten()
         # remember to comment the line below out
         logging.debug(f"form of reorder{reorder}")
