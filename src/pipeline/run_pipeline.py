@@ -222,6 +222,7 @@ for i in range(cfg["iterations"]):
         unlabelled_pool=unlabelled_pool,
         out_stds=candidates_uncerts,
         idx_arrays=data_idxs,
+        model=models[FLUX]["Regressor"]
     )
     prediction_candidates_before = []
     for FLUX in FLUXES:
