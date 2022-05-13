@@ -54,6 +54,7 @@ valid_size = cfg["hyperparams"]["valid_size"]
 test_size = cfg["hyperparams"]["test_size"]
 batch_size = cfg["hyperparams"]["batch_size"]
 candidate_size = cfg["hyperparams"]["candidate_size"]
+dropout = cfg["hyperparams"]["dropout"]
 # Dictionary to store results of the classifier and regressor for later use
 output_dict = pt.output_dict
 
@@ -103,7 +104,7 @@ for model in PRETRAINED:
         for FLUX in FLUXES:
             if PRETRAINED[model][FLUX]["trained"] == True:
                 trained_model = md.load_model(
-                    model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX
+                    model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX, dropout
                 )
                 if FLUX not in models.keys():
                     models[FLUX] = {model: trained_model.to(device)}
@@ -118,7 +119,7 @@ for model in PRETRAINED:
                 #     else Regressor(device, scaler, FLUX)
                 # )
 
-                models[FLUX][model] = Regressor(device, scaler, FLUX)
+                models[FLUX][model] = Regressor(device, scaler, FLUX, dropout)
 
                 models[FLUX][model], losses = md.train_model(
                     models[FLUX][model],
@@ -327,7 +328,6 @@ for i in range(cfg["iterations"]):
             models[FLUX]["Regressor"],
             n_runs=cfg["MC_dropout_runs"],
             device=device,
-            drop_rate=cfg["dropout_rate"]
         )
 
         candidates_uncerts_after.append(temp_uncert)

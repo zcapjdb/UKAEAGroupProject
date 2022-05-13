@@ -398,7 +398,6 @@ def get_uncertainty(
     train_data: bool = False,
     plot: bool = False,
     device: torch.device = None,
-    drop_rate: float = 0.1,
 ) -> (np.array, np.array):
 
     """
@@ -422,7 +421,7 @@ def get_uncertainty(
     )
 
     regressor.eval()
-    regressor.enable_dropout(drop_rate)
+    regressor.enable_dropout()
 
     # evaluate model on training data n_runs times and return points with largest uncertainty
     runs = []

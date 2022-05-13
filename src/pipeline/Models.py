@@ -156,7 +156,7 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self, device, scaler, flux):
+    def __init__(self, device, scaler, flux, dropout=0.1):
         super().__init__()
         self.type = "regressor"
         self.device = device
@@ -165,16 +165,17 @@ class Regressor(nn.Module):
             reduction="sum"
         )  # LZ: ToDo this might be an input in the case the output is multitask
         self.flux = flux
+        self.dropout = dropout
 
         self.model = nn.Sequential(
             nn.Linear(15, 512),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
             nn.Linear(512, 256),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
             nn.Linear(256, 128),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
             nn.Linear(128, 1),
         ).to(self.device)
@@ -190,11 +191,10 @@ class Regressor(nn.Module):
 
         return y * self.scaler.scale_[scaler_index] + self.scaler.mean_[scaler_index]
 
-    def enable_dropout(self, drop_rate = 0.1):
+    def enable_dropout(self):
         """Function to enable the dropout layers during test-time"""
         for m in self.model.modules():
             if m.__class__.__name__.startswith("Dropout"):
-                m.p = drop_rate
                 m.train()
 
     def reset_weights(self):

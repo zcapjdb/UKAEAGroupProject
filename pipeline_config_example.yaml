@@ -48,6 +48,7 @@ hyperparams:
     batch_size: 256
     lambda: 1
     buffer_size: 500
+    dropout_rate: 0.1
 
 logging_level: DEBUG
 # Pipeline parameters
@@ -57,7 +58,6 @@ MC_dropout_runs: 50
 keep_prob: 0.25 
 patience: 20
 learning_rate: 0.001
-dropout_rate: 0.1
 acquisition: add_uncertainties #individual_uncertainty, random, distance_penalty
 
 sample_size_debug: 0.1
