@@ -544,8 +544,8 @@ def get_most_uncertain(
         pred_array, _ = model.predict(data_copy)    
 
     #TODO: how to best choose alpha?
-    if acquisition == "distance_penalty":
-        total_std = total_std - alpha * np.linalg.norm(pred_array - pred_array, axis=1)
+    if acquisition == "distance_penalty": 
+        total_std = total_std - alpha * np.min(cdist(pred_array, pred_array, metric = "euclidean"), axis=1)
 
     if acquisition == "random":
         # choose random indices
