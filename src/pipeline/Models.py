@@ -336,7 +336,7 @@ class ITGDataset(Dataset):
         self.X = np.append(self.X, x, axis=0)
         self.y = np.append(self.y, y, axis=0)
 
-        if z is not None:
+        if self.z is not None:
             self.z = np.append(self.z, z, axis=0)
 
         # update indices from max index
@@ -358,6 +358,7 @@ class ITGDataset(Dataset):
         self.y = np.delete(self.y, indices, axis=0)
         if self.z is not None:
             self.z = np.delete(self.z, indices, axis=0)
+        
 
     # method to sample a batch of rows from the dataset - not inplace!
     # TODO: carry over indices into sample dataset
@@ -374,16 +375,16 @@ class ITGDatasetDF(Dataset):
     def __init__(
         self,
         df: pd.DataFrame,
-        target_column: str,
+        target_columns: list,
         target_var: str = "stable_label",
         keep_index: bool = False,
     ):
         self.data = df
-        self.target = target_column
+        self.targets = target_columns
         self.label = target_var
 
         # make sure the dataframe contains the variable information we need
-        assert target_column and target_var in list(self.data.columns)
+        assert target_columns and target_var in list(self.data.columns)
 
         if not keep_index:
             self.data["index"] = self.data.index
@@ -406,7 +407,7 @@ class ITGDatasetDF(Dataset):
 
     def sample(self, batch_size):
         return ITGDatasetDF(
-            self.data.sample(batch_size), self.target, self.label, keep_index=True
+            self.data.sample(batch_size), self.targets, self.label, keep_index=True
         )
 
     def add(self, dataset):
@@ -432,7 +433,7 @@ class ITGDatasetDF(Dataset):
 
         x = self.data[train_keys].iloc[idx].values
         y = self.data[self.label].iloc[idx]
-        z = self.data[self.target].iloc[idx]
+        z = self.data[self.targets].iloc[idx]
         idx = self.data["index"].iloc[idx]
         return x, y, z, idx
 
