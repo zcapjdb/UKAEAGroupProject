@@ -48,7 +48,7 @@ hyperparams:
     batch_size: 256
     lambda: 1
     buffer_size: 500
-    dropout_rate: 0.1
+    dropout: 0.1
 
 logging_level: DEBUG
 # Pipeline parameters

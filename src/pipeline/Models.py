@@ -16,19 +16,20 @@ cuda0 = torch.device("cuda:0")
 
 # Class definitions
 class Classifier(nn.Module):
-    def __init__(self, device):
+    def __init__(self, device, dropout=0.1):
         super().__init__()
         self.type = "classifier"
         self.device = device
+        self.dropout = dropout
         self.model = self.model = nn.Sequential(
             nn.Linear(15, 512),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
             nn.Linear(512, 256),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
             nn.Linear(256, 128),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
             nn.Linear(128, 1),
             nn.Sigmoid(),
@@ -557,7 +558,7 @@ def train_model(
         return model, [losses, validation_losses]
 
 
-def load_model(model, save_path, device, scaler, flux):
+def load_model(model, save_path, device, scaler, flux, dropout):
     logging.info(f"Model Loaded: {model}")
     if model == "Classifier":
         classifier = Classifier(device=device)
@@ -565,6 +566,6 @@ def load_model(model, save_path, device, scaler, flux):
         return classifier
 
     elif model == "Regressor":
-        regressor = Regressor(device=device, scaler=scaler, flux=flux)
+        regressor = Regressor(device=device, scaler=scaler, flux=flux, dropout=dropout)
         regressor.load_state_dict(torch.load(save_path))
         return regressor

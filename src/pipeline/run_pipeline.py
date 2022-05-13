@@ -138,7 +138,7 @@ for model in PRETRAINED:
     else:
         if PRETRAINED[model][FLUXES[0]]["trained"] == True:
             trained_model = md.load_model(
-                model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0]
+                model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0], dropout
             )
             models[FLUXES[0]] = {model: trained_model.to(device)} 
         else: 
@@ -209,7 +209,6 @@ for i in range(cfg["iterations"]):
             models[FLUX]["Regressor"],
             n_runs=cfg["MC_dropout_runs"],
             device=device,
-            drop_rate=cfg["dropout_rate"],
         )
         candidates_uncerts.append(temp_uncert)
         data_idxs.append(temp_idx)
