@@ -326,7 +326,7 @@ def retrain_regressor(
 
     # are we training on any NaNs
     logging.debug(f"NaNs in training: {new_dataset.data[model.flux].isna().sum()}")
-    logging.debug(f"NaNs in vald: {val_dataset.data[model.flux].isna().sum()}")
+    logging.debug(f"NaNs in valid: {val_dataset.data[model.flux].isna().sum()}")
     #TODO: this is a poor fix
     
     new_copy = copy.deepcopy(new_dataset)
@@ -551,7 +551,7 @@ def get_most_uncertain(
         # choose random indices
         uncertain_list_indices = np.random.choice(n_candidates, int(keep * n_candidates), replace=False)
         #random_certain is all the indices not in random_idx
-        certain_list_indices = np.array(list(set(range(n_candidates)) - set(random_uncertain)))
+        certain_list_indices = np.array(list(set(range(n_candidates)) - set(uncertain_list_indices)))
         
     else:
         uncertain_list_indices = np.argsort(total_std)[-int(n_candidates*keep):]
