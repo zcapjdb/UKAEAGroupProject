@@ -193,8 +193,8 @@ class Regressor(nn.Module):
     def enable_dropout(self, drop_rate = 0.1):
         """Function to enable the dropout layers during test-time"""
         for m in self.model.modules():
-            m.p = drop_rate
             if m.__class__.__name__.startswith("Dropout"):
+                m.p = drop_rate
                 m.train()
 
     def reset_weights(self):

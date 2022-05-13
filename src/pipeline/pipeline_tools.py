@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from tqdm.auto import tqdm
+from scipy.spatial.distance import cdist
 
 import numpy as np
 import pandas as pd
@@ -488,6 +489,8 @@ def get_most_uncertain(
     keep: float = 0.25,
     unlabelled_pool: Union[None, ITGDataset] = None,
     plot: bool = True,
+    acquisition: str = "add_uncertainties",
+    alpha: float = 0.25,
 ):
 
     """
@@ -524,7 +527,16 @@ def get_most_uncertain(
             pred_list.append(preds)
 
         out_stds = np.array(out_stds)
-        total_std = np.sum(out_stds, axis=0)
+        logging.debug(f"out_stds shape: {out_stds.shape}")
+
+        if acquisition == "leading_flux_uncertainty":
+            total_std = out_stds[0, :]
+            logging.debug(f"total_std shape: {total_std.shape}")
+
+        else:
+            total_std = np.sum(out_stds, axis=0)
+            logging.debug(f"total_std shape: {total_std.shape}")
+
         pred_array = np.stack(pred_list, axis=0)
 
     else:
@@ -532,14 +544,20 @@ def get_most_uncertain(
         data_copy.data = data_copy.data.loc[idx_arrays[0]]
         pred_array, _ = model.predict(data_copy)    
 
-    # TODO: subtract distance from nearest pred_array point from total_std
-    # from scipy.spatial.distance import cdist
-    # total_std = total_std - alpha * cdist(pred_array, pred_array, metric='euclidean')
-    # Need to tune alpha
-    #
+    #TODO: how to best choose alpha?
+    if acquisition == "distance_penalty":
+        total_std = total_std - alpha * np.linalg.norm(pred_array - pred_array, axis=1)
 
-    uncertain_list_indices = np.argsort(total_std)[-int(n_candidates*keep):]
-    certain_list_indices = np.argsort(total_std)[:n_candidates-int(n_candidates*keep)]
+    if acquisition == "random":
+        # choose random indices
+        uncertain_list_indices = np.random.choice(n_candidates, int(keep * n_candidates), replace=False)
+        #random_certain is all the indices not in random_idx
+        certain_list_indices = np.array(list(set(range(n_candidates)) - set(random_uncertain)))
+        
+    else:
+        uncertain_list_indices = np.argsort(total_std)[-int(n_candidates*keep):]
+        certain_list_indices = np.argsort(total_std)[:n_candidates-int(n_candidates*keep)]
+
 
     certain_data_idx = idx_arrays[0][certain_list_indices]
     uncertain_data_idx = idx_arrays[0][uncertain_list_indices]

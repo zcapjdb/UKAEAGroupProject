@@ -158,6 +158,7 @@ for FLUX in FLUXES:
 
 # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
 for FLUX in FLUXES:
+    logging.info(f"Test loss for {FLUX} before pipeline:")
     _, holdout_loss = models[FLUX]["Regressor"].predict(holdout_loader)
     output_dict["test_loss_init"].append(holdout_loss)
 
@@ -222,7 +223,8 @@ for i in range(cfg["iterations"]):
         unlabelled_pool=unlabelled_pool,
         out_stds=candidates_uncerts,
         idx_arrays=data_idxs,
-        model=models[FLUX]["Regressor"]
+        model=models[FLUX]["Regressor"],
+        acquisition=cfg["acquisition"],
     )
 
     logging.debug(f"Number of most uncertain {len(data_idx)}")
