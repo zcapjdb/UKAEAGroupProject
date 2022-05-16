@@ -308,7 +308,181 @@ class Regressor(nn.Module):
             return pred, average_loss, unscaled_avg_loss
         return pred, average_loss
 
+class n_regressor(nn.Module):
+    def __init__(self, n):
+        super().__init__()
+        self.n_outputs = n 
+        self.shared_layer = nn.Sequential(
+            nn.Linear(15, 512),
+            nn.Dropout(p=0.1),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.Dropout(p=0.1),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.Dropout(p=0.1),
+            nn.ReLU()
+        )
+        
+        self.fluxes_out = [nn.Linear(128,1) for i in range(self.n_outputs)]
+    
+    def forward(self, x, z, idx=None):
+        
+        output_shared = self.shared_layer(x)
+        
+        outputs = []
+        masks = []
+        idxs = []
+        
+        for layer in range(self.n_outputs):
+            # get a boolean mask for where the output values for this flux are not nan
+            if z.shape[1] > 1:
+                mask = ~ torch.isnan(z[:,layer])
+            else: 
+                mask = ~ torch.isnan(z)
+            
+            masks.append(mask)
+            output_shared_nonan = output_shared[mask]
+            
+            out = self.fluxes_out[layer](output_shared_nonan)
+            
+            outputs.append(out)
+            
+            if idx is not None:
+                idxs.append(idx[mask])
+        
+        if idxs: 
+            return outputs, masks, idxs
+        else: 
+            return outputs, masks
+            
+    def train_step(self, dataloader, optimizer, epoch=None, disable_tqdm=False):
+        MSE = nn.MSELoss()
+        size = len(dataloader.dataset)
+        num_batches = len(dataloader)
 
+        losses = []
+        ind_losses = []
+        for batch, (X, y, z, idx) in enumerate(
+            tqdm(dataloader, desc=f"Epoch {epoch}", disable=disable_tqdm), 0
+        ):
+            batch_size = len(X)
+            z_hats, masks = self.forward(X.float(),z)
+            
+            loss = 0
+            ind_loss = []
+            for i, z_hat in enumerate(z_hats):
+                z_i = z[masks[i]]
+                z_loss = MSE(z_i[:,i].unsqueeze(-1).float(), z_hat)
+                loss += z_loss
+                ind_loss.append(z_loss.item())
+                
+
+            # Backpropagation
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            loss = loss.item()
+        
+            # logging.debug(f"Loss: {loss}")
+            losses.append(loss)
+            ind_losses.append(ind_loss)
+#             print(f"Ruuning Loss: {np.mean(losses)}")
+
+        average_loss = np.mean(losses)
+        average_ind_loss = np.mean(ind_losses, axis =0)
+        print(f"Loss: {average_loss:>7f}")
+        return average_loss, average_ind_loss
+    
+    def validation_step(self, dataloader):
+#         self.eval()
+        size = len(dataloader.dataset)
+
+        test_loss = []
+        ind_losses = []
+        MSE = nn.MSELoss()
+        with torch.no_grad():
+            for X, y, z, _ in dataloader:
+                
+                z_hats, masks = self.forward(X.float(), z)
+                
+                loss = 0
+                ind_loss = []
+                
+                for i, z_hat in enumerate(z_hats):
+                    
+                    z_i = z[masks[i]]
+                    
+                    z_loss = MSE(z_i[:,i].unsqueeze(-1).float(), z_hat)
+                    loss += z_loss
+                    ind_loss.append(z_loss.item())
+            
+                test_loss.append(loss.item())
+                ind_losses.append(ind_loss)
+
+        average_loss = np.mean(test_loss)
+        ave_ind_loss = np.mean(ind_losses, axis =0)
+        print(f"val MSE: {average_loss:>7f}")
+#         print(f"val ind: {ave_ind_loss}")
+        return average_loss, ave_ind_loss
+    
+    
+    def unpack_outputs(preds,idxs, batch_size=256, n_outputs =2):
+        assert len(preds) == len(idxs), "Length of inputs doesn't match"
+
+        predictions = [[] for i in range(n_outputs)]
+        indices = [[] for i in range(n_outputs)]
+
+        for batch_pred, batch_idx in zip(preds, idxs):
+            for i in range(n_outputs): 
+                predictions[i] += batch_pred[i]
+                indices[i] += batch_idx[i]
+        return predictions, indices
+
+    def predict(self, dataloader, unscale=False):
+
+        if not isinstance(dataloader, DataLoader):
+            batch_size = min(len(dataloader), 512)
+            dataloader = pt.pandas_to_numpy_data(
+                dataloader,
+                regressor_var=self.flux,
+                batch_size=batch_size,
+                shuffle=False,
+            )  # --- batch size doesnt matter here because it's just prediction
+
+        size = len(dataloader.dataset)
+        pred = []
+        indices = []
+        losses = []
+        losses_unscaled = []
+        
+        for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
+            
+            z_hats, masks, idxs = self.forward(x.float(), z, idx=idx)
+            
+            pred.append(z_hats)
+            MSE = nn.MSELoss()
+            loss = 0
+            for i, z_hat in enumerate(z_hats):
+                z_i = z[masks[i]]
+                z_loss = MSE(z_i[:,i].unsqueeze(-1).float(), z_hat)
+                loss += z_loss
+                
+            
+            if unscale: #TODO: Fix this for the new loss format?
+                losses_unscaled.append(loss[1].item())
+                loss = loss[0]
+            losses.append(loss.item())
+            indices.append(idxs)
+            
+        average_loss = np.mean(losses)
+        pred, indices = unpack_outputs(pred, indices)
+        if unscale:
+            unscaled_avg_loss = np.sum(losses_unscaled) / size
+            return pred, average_loss, unscaled_avg_loss, indices
+        return pred, average_loss,indices
+        
 class ITGDataset(Dataset):
     def __init__(self, X, y, z=None, indices=None):
         self.X = X
