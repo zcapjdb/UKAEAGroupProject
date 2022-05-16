@@ -489,7 +489,7 @@ def get_most_uncertain(
     unlabelled_pool: Union[None, ITGDataset] = None,
     plot: bool = True,
     acquisition: str = "add_uncertainties",
-    alpha: float = 0.25,
+    alpha: float = 0.1,
 ):
 
     """
@@ -521,8 +521,9 @@ def get_most_uncertain(
             out_stds[i] = out_stds[i][reorder]
 
             # run predict method on dataset using idx_arrays ordering
-            data_copy.data = data_copy.data.loc[idx_arrays[i]]
+            data_copy.data = data_copy.data.loc[idx_arrays[0]]
             preds, _ = model.predict(data_copy)
+            preds = np.hstack(preds)
             pred_list.append(preds)
 
         out_stds = np.array(out_stds)
@@ -544,8 +545,13 @@ def get_most_uncertain(
         pred_array, _ = model.predict(data_copy)    
 
     #TODO: how to best choose alpha?
-    if acquisition == "distance_penalty": 
-        total_std = total_std - alpha * np.min(cdist(pred_array, pred_array, metric = "euclidean"), axis=1)
+    if acquisition == "distance_penalty":
+        logging.info("Using distance penalty acquisition")
+        cdists = cdist(pred_array.T, pred_array.T, metric = "euclidean")
+        cdists.sort()
+        nearest = cdists[:, 1]
+
+        total_std = total_std - alpha * nearest
 
     if acquisition == "random":
         # choose random indices

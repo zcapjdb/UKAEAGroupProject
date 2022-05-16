@@ -21,6 +21,8 @@ import numpy as np
 # add argument to pass config file
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--config", help="config file", required=True)
+parser.add_argument("-o", "--output_dir", help="outputs directory", required=False)
+parser.add_argument("-p", "--plot_dir", help="plots directory", required=False)
 args = parser.parse_args()
 
 with open(args.config) as f:
@@ -44,7 +46,18 @@ device = torch.device("cpu")
 FLUXES = cfg["flux"]  # is now a list of the relevant fluxes
 PRETRAINED = cfg["pretrained"]
 PATHS = cfg["data"]
-SAVE_PATHS = cfg["save_paths"]
+
+SAVE_PATHS = {}
+if args.output_dir is not None:
+    SAVE_PATHS["outputs"] = args.output_dir
+else:
+    SAVE_PATHS["outputs"] = cfg["save_paths"]["outputs"]
+
+if args.plot_dir is not None:
+    SAVE_PATHS["plots"] = args.plot_dir
+else:
+    SAVE_PATHS["plots"] = cfg["save_paths"]["plots"]
+
 sample_size = cfg[
     "sample_size_debug"
 ]  # percentage of data to use - lower for debugging
@@ -58,8 +71,18 @@ dropout = cfg["hyperparams"]["dropout"]
 # Dictionary to store results of the classifier and regressor for later use
 output_dict = pt.output_dict
 
-# To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test loss
+# To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test 
 
+# --- Set up saving
+save_dest = os.path.join(SAVE_PATHS["outputs"], FLUXES[0])
+if not os.path.exists(save_dest):
+    os.makedirs(save_dest)
+
+logging.info("Saving to {}".format(save_dest))
+
+# save copy of yaml file used for reproducibility
+with open(os.path.join(save_dest, "config.yaml"), "w") as f:
+    out = yaml.dump(cfg, f, default_flow_style=False)
 
 # --------------------------------------------- Load data ----------------------------------------------------------
 train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
@@ -82,18 +105,8 @@ valid_dataset = eval_dataset.sample(valid_size)  # validation set
 eval_dataset.remove(valid_dataset.data.index)  #
 unlabelled_pool = eval_dataset
 
-# --- Set up saving
-save_dest = os.path.join(SAVE_PATHS["outputs"], FLUXES[0])
-if not os.path.exists(save_dest):
-    os.makedirs(save_dest)
-
 # Load pretrained models
 logging.info("Loaded the following models:\n")
-
-# save copy of yaml file used for reproducibility
-with open(os.path.join(save_dest, "config.yaml"), "w") as f:
-    out = yaml.dump(cfg, f, default_flow_style=False)
-
 
 # ------------------------------------------- Load or train first models ------------------------------------------
 models = {}
