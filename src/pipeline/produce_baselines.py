@@ -39,6 +39,7 @@ PARAMS = cfg["hyperparameters"]
 OUTPUT = cfg["save_paths"]
 MODE = cfg["data_mode"]
 TYPE = cfg["model_type"]
+Nboot = cfg["Nboot"]
 
 logging.info(f"Training a {TYPE} using {MODE} dataset for {FLUX}")
 # --------------------------------------------- Load data ----------------------------------------------------------
@@ -97,18 +98,18 @@ if MODE =='full':
     torch.save(model.state_dict(), model_out)
 
 elif MODE == 'random':
-    loss_name = f"{MODE}_{FLUX}_{TYPE}_losses_{PARAMS['rand_sample_size']}K.pkl"
+    loss_name = f"{MODE}_{FLUX}_{TYPE}_losses_{PARAMS['rand_sample_size']}_{Nboot}.pkl"
     output_path = os.path.join(OUTPUT["losses"], loss_name)
 
     with open(output_path, "wb") as f:
         pickle.dump(output_dict, f)
     
     #output training dataset used
-    data_name = f"{FLUX}_{TYPE}_train_data_{PARAMS['rand_sample_size']}.pkl"
+    data_name = f"{FLUX}_{TYPE}_train_data_{PARAMS['rand_sample_size']}_{Nboot}.pkl"
     output_path = os.path.join(OUTPUT["losses"], data_name)
     train_dataset.data.to_pickle(output_path)
 
-    model_name = f"{MODE}_{FLUX}_{PARAMS['rand_sample_size']}_{TYPE}.pt"
+    model_name = f"{MODE}_{FLUX}_{PARAMS['rand_sample_size']}_{TYPE}_{Nboot}.pt"
     model_out = os.path.join(OUTPUT["models"], model_name)
     torch.save(model.state_dict(), model_out)
 

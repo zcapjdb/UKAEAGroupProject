@@ -16,7 +16,7 @@ cuda0 = torch.device('cuda:0')
 
 # Class definitions
 class Classifier(nn.Module):
-    def __init__(self,device):
+    def __init__(self,device, model_size=None):
         super().__init__()
         self.type = "classifier"
         self.device = device
@@ -148,7 +148,7 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self,device,scaler,flux):
+    def __init__(self,device,model_size, scaler,flux):
         super().__init__()
         self.type = "regressor"
         self.device = device
@@ -469,7 +469,8 @@ def train_model(
     if model.type not in ["classifier", "regressor"]:
         raise ValueError("Model type not recognised")
 
-    for epoch in range(epochs):
+
+    for epoch in  range(epochs):
 
         logging.debug(f"Epoch: {epoch}")
 

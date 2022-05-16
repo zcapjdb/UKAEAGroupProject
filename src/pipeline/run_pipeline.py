@@ -128,10 +128,10 @@ def ALpipeline(cfg):
         logging.info(f"Iteration: {i+1}\n")
 
 
-        if i != 0:
+     #   if i != 0:
             # reset the output dictionary for each iteration
-            for value in output_dict.values():
-                del value[:]
+     #       for value in output_dict.values():
+     #           del value[:]
 
 
         # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
@@ -360,15 +360,18 @@ if __name__=='__main__':
     lam = cfg["hyperparams"]["lambda"]
     model_size = cfg['hyperparams']['model_size']
     
-    if Nbootstraps is not None:
-        cfg = np.repeat(cfg,Nbootstraps)
-        with Pool(Nbootstraps) as p:            
-            output = p.map(ALpipeline,cfg)
-        output = {'out':output}
-        with open(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/bootstrapped_AL_lam_{lam}_{model_size}.pkl","wb") as f:
-            pickle.dump(output,f)                        
-    else:        
-        ALpipeline(cfg)
+ #   if Nbootstraps>1:
+ #       cfg = np.repeat(cfg,Nbootstraps)
+ #       with Pool(Nbootstraps) as p:            
+ #           output = p.map(ALpipeline,cfg)
+ #       output = {'out':output}
+ #       with open(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/bootstrapped_AL_lam_{lam}_{model_size}.pkl","wb") as f:
+ #           pickle.dump(output,f)                        
+ #   else:        
+    output = ALpipeline(cfg)
+    output = {'out':output}
+    with open(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/bootstrapped_{Nbootstraps}_AL_lam_{lam}_{model_size}.pkl","wb") as f:
+        pickle.dump(output,f)           
 
 
     print('pipeline terminated')
