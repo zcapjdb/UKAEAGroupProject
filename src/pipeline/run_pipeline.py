@@ -21,6 +21,8 @@ import numpy as np
 # add argument to pass config file
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--config", help="config file", required=True)
+parser.add_argument("-o", "--output_dir", help="outputs directory", required=False)
+parser.add_argument("-p", "--plot_dir", help="plots directory", required=False)
 args = parser.parse_args()
 
 with open(args.config) as f:
@@ -44,7 +46,18 @@ device = torch.device("cpu")
 FLUXES = cfg["flux"]  # is now a list of the relevant fluxes
 PRETRAINED = cfg["pretrained"]
 PATHS = cfg["data"]
-SAVE_PATHS = cfg["save_paths"]
+
+SAVE_PATHS = {}
+if args.output_dir is not None:
+    SAVE_PATHS["outputs"] = args.output_dir
+else:
+    SAVE_PATHS["outputs"] = cfg["save_paths"]["outputs"]
+
+if args.plot_dir is not None:
+    SAVE_PATHS["plots"] = args.plot_dir
+else:
+    SAVE_PATHS["plots"] = cfg["save_paths"]["plots"]
+
 sample_size = cfg[
     "sample_size_debug"
 ]  # percentage of data to use - lower for debugging
@@ -54,11 +67,22 @@ valid_size = cfg["hyperparams"]["valid_size"]
 test_size = cfg["hyperparams"]["test_size"]
 batch_size = cfg["hyperparams"]["batch_size"]
 candidate_size = cfg["hyperparams"]["candidate_size"]
+dropout = cfg["hyperparams"]["dropout"]
 # Dictionary to store results of the classifier and regressor for later use
 output_dict = pt.output_dict
 
-# To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test loss
+# To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test 
 
+# --- Set up saving
+save_dest = os.path.join(SAVE_PATHS["outputs"], FLUXES[0])
+if not os.path.exists(save_dest):
+    os.makedirs(save_dest)
+
+logging.info("Saving to {}".format(save_dest))
+
+# save copy of yaml file used for reproducibility
+with open(os.path.join(save_dest, "config.yaml"), "w") as f:
+    out = yaml.dump(cfg, f, default_flow_style=False)
 
 # --------------------------------------------- Load data ----------------------------------------------------------
 train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
@@ -81,18 +105,8 @@ valid_dataset = eval_dataset.sample(valid_size)  # validation set
 eval_dataset.remove(valid_dataset.data.index)  #
 unlabelled_pool = eval_dataset
 
-# --- Set up saving
-save_dest = os.path.join(SAVE_PATHS["outputs"], FLUXES[0])
-if not os.path.exists(save_dest):
-    os.makedirs(save_dest)
-
 # Load pretrained models
 logging.info("Loaded the following models:\n")
-
-# save copy of yaml file used for reproducibility
-with open(os.path.join(save_dest, "config.yaml"), "w") as f:
-    out = yaml.dump(cfg, f, default_flow_style=False)
-
 
 # ------------------------------------------- Load or train first models ------------------------------------------
 models = {}
@@ -103,7 +117,7 @@ for model in PRETRAINED:
         for FLUX in FLUXES:
             if PRETRAINED[model][FLUX]["trained"] == True:
                 trained_model = md.load_model(
-                    model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX
+                    model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX, dropout
                 )
                 if FLUX not in models.keys():
                     models[FLUX] = {model: trained_model.to(device)}
@@ -118,7 +132,7 @@ for model in PRETRAINED:
                 #     else Regressor(device, scaler, FLUX)
                 # )
 
-                models[FLUX][model] = Regressor(device, scaler, FLUX)
+                models[FLUX][model] = Regressor(device, scaler, FLUX, dropout)
 
                 models[FLUX][model], losses = md.train_model(
                     models[FLUX][model],
@@ -137,7 +151,7 @@ for model in PRETRAINED:
     else:
         if PRETRAINED[model][FLUXES[0]]["trained"] == True:
             trained_model = md.load_model(
-                model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0]
+                model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0], dropout
             )
             models[FLUXES[0]] = {model: trained_model.to(device)} 
         else: 
@@ -158,6 +172,7 @@ for FLUX in FLUXES:
 
 # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
 for FLUX in FLUXES:
+    logging.info(f"Test loss for {FLUX} before pipeline:")
     _, holdout_loss = models[FLUX]["Regressor"].predict(holdout_loader)
     output_dict["test_loss_init"].append(holdout_loss)
 
@@ -207,7 +222,6 @@ for i in range(cfg["iterations"]):
             models[FLUX]["Regressor"],
             n_runs=cfg["MC_dropout_runs"],
             device=device,
-            drop_rate=cfg["dropout_rate"],
         )
         candidates_uncerts.append(temp_uncert)
         data_idxs.append(temp_idx)
@@ -222,7 +236,8 @@ for i in range(cfg["iterations"]):
         unlabelled_pool=unlabelled_pool,
         out_stds=candidates_uncerts,
         idx_arrays=data_idxs,
-        model=models[FLUX]["Regressor"]
+        model=models[FLUX]["Regressor"],
+        acquisition=cfg["acquisition"],
     )
 
     logging.debug(f"Number of most uncertain {len(data_idx)}")
@@ -325,7 +340,6 @@ for i in range(cfg["iterations"]):
             models[FLUX]["Regressor"],
             n_runs=cfg["MC_dropout_runs"],
             device=device,
-            drop_rate=cfg["dropout_rate"]
         )
 
         candidates_uncerts_after.append(temp_uncert)
