@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from tqdm.auto import tqdm
+from scipy.spatial.distance import cdist
 
 import numpy as np
 import pandas as pd
@@ -325,7 +326,7 @@ def retrain_regressor(
 
     # are we training on any NaNs
     logging.debug(f"NaNs in training: {new_dataset.data[model.flux].isna().sum()}")
-    logging.debug(f"NaNs in vald: {val_dataset.data[model.flux].isna().sum()}")
+    logging.debug(f"NaNs in valid: {val_dataset.data[model.flux].isna().sum()}")
     #TODO: this is a poor fix
     
     new_copy = copy.deepcopy(new_dataset)
@@ -397,7 +398,6 @@ def get_uncertainty(
     train_data: bool = False,
     plot: bool = False,
     device: torch.device = None,
-    drop_rate: float = 0.1,
 ) -> (np.array, np.array):
 
     """
@@ -421,7 +421,7 @@ def get_uncertainty(
     )
 
     regressor.eval()
-    regressor.enable_dropout(drop_rate)
+    regressor.enable_dropout()
 
     # evaluate model on training data n_runs times and return points with largest uncertainty
     runs = []
@@ -488,6 +488,8 @@ def get_most_uncertain(
     keep: float = 0.25,
     unlabelled_pool: Union[None, ITGDataset] = None,
     plot: bool = True,
+    acquisition: str = "add_uncertainties",
+    alpha: float = 0.1,
 ):
 
     """
@@ -519,12 +521,22 @@ def get_most_uncertain(
             out_stds[i] = out_stds[i][reorder]
 
             # run predict method on dataset using idx_arrays ordering
-            data_copy.data = data_copy.data.loc[idx_arrays[i]]
+            data_copy.data = data_copy.data.loc[idx_arrays[0]]
             preds, _ = model.predict(data_copy)
+            preds = np.hstack(preds)
             pred_list.append(preds)
 
         out_stds = np.array(out_stds)
-        total_std = np.sum(out_stds, axis=0)
+        logging.debug(f"out_stds shape: {out_stds.shape}")
+
+        if acquisition == "leading_flux_uncertainty":
+            total_std = out_stds[0, :]
+            logging.debug(f"total_std shape: {total_std.shape}")
+
+        else:
+            total_std = np.sum(out_stds, axis=0)
+            logging.debug(f"total_std shape: {total_std.shape}")
+
         pred_array = np.stack(pred_list, axis=0)
 
     else:
@@ -532,14 +544,25 @@ def get_most_uncertain(
         data_copy.data = data_copy.data.loc[idx_arrays[0]]
         pred_array, _ = model.predict(data_copy)    
 
-    # TODO: subtract distance from nearest pred_array point from total_std
-    # from scipy.spatial.distance import cdist
-    # total_std = total_std - alpha * cdist(pred_array, pred_array, metric='euclidean')
-    # Need to tune alpha
-    #
+    #TODO: how to best choose alpha?
+    if acquisition == "distance_penalty":
+        logging.info("Using distance penalty acquisition")
+        cdists = cdist(pred_array.T, pred_array.T, metric = "euclidean")
+        cdists.sort()
+        nearest = cdists[:, 1]
 
-    uncertain_list_indices = np.argsort(total_std)[-int(n_candidates*keep):]
-    certain_list_indices = np.argsort(total_std)[:n_candidates-int(n_candidates*keep)]
+        total_std = total_std - alpha * nearest
+
+    if acquisition == "random":
+        # choose random indices
+        uncertain_list_indices = np.random.choice(n_candidates, int(keep * n_candidates), replace=False)
+        #random_certain is all the indices not in random_idx
+        certain_list_indices = np.array(list(set(range(n_candidates)) - set(uncertain_list_indices)))
+        
+    else:
+        uncertain_list_indices = np.argsort(total_std)[-int(n_candidates*keep):]
+        certain_list_indices = np.argsort(total_std)[:n_candidates-int(n_candidates*keep)]
+
 
     certain_data_idx = idx_arrays[0][certain_list_indices]
     uncertain_data_idx = idx_arrays[0][uncertain_list_indices]
