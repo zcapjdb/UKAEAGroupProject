@@ -76,7 +76,7 @@ def prepare_data(
     target_column = fluxes[0]
 
     if target_column not in target_keys:
-        raise ValueError("Flux variable not supported")
+        raise ValueError(f"{target_column} variable not supported")
 
     # Remove NaN's and add appropripate class labels
     keep_keys = train_keys + fluxes

@@ -308,9 +308,10 @@ class Regressor(nn.Module):
             return pred, average_loss, unscaled_avg_loss
         return pred, average_loss
 
-class n_regressor(nn.Module):
+class NRegressor(nn.Module):
     def __init__(self, n):
         super().__init__()
+        self.type = "nregressor"
         self.n_outputs = n 
         self.shared_layer = nn.Sequential(
             nn.Linear(15, 512),
@@ -426,19 +427,6 @@ class n_regressor(nn.Module):
         print(f"val MSE: {average_loss:>7f}")
 #         print(f"val ind: {ave_ind_loss}")
         return average_loss, ave_ind_loss
-    
-    
-    def unpack_outputs(preds,idxs, batch_size=256, n_outputs =2):
-        assert len(preds) == len(idxs), "Length of inputs doesn't match"
-
-        predictions = [[] for i in range(n_outputs)]
-        indices = [[] for i in range(n_outputs)]
-
-        for batch_pred, batch_idx in zip(preds, idxs):
-            for i in range(n_outputs): 
-                predictions[i] += batch_pred[i]
-                indices[i] += batch_idx[i]
-        return predictions, indices
 
     def predict(self, dataloader, unscale=False):
 
@@ -613,6 +601,18 @@ class ITGDatasetDF(Dataset):
 
 
 # General Model functions
+def unpack_outputs(preds,idxs, batch_size=256, n_outputs =2):
+        assert len(preds) == len(idxs), "Length of inputs doesn't match"
+
+        predictions = [[] for i in range(n_outputs)]
+        indices = [[] for i in range(n_outputs)]
+
+        for batch_pred, batch_idx in zip(preds, idxs):
+            for i in range(n_outputs): 
+                predictions[i] += batch_pred[i]
+                indices[i] += batch_idx[i]
+        return predictions, indices
+
 def weight_reset(m):
     reset_parameters = getattr(m, "reset_parameters", None)
     if callable(reset_parameters):
@@ -633,6 +633,7 @@ def train_model(
     save_path=None,
     train_batch_size=None,
     val_batch_size=None,
+    regressor_var=None,
 ):
 
     if train_batch_size is None:
@@ -642,21 +643,21 @@ def train_model(
 
     # if pipeline:
     #     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
-
-    if model.type == "Regressor":
-        regressor_var = model.flux
-    else:
-        regressor_var = None
+    if regressor_var is None: 
+        if model.type == "regressor":
+            regressor_var = model.flux
+        else:
+            regressor_var = None
 
     train_loader = pt.pandas_to_numpy_data(
         train_dataset,
-        regressor_var=model.flux,
+        regressor_var=regressor_var,
         batch_size=train_batch_size,
         shuffle=True,
     )
 
     val_loader = pt.pandas_to_numpy_data(
-        val_dataset, batch_size=val_batch_size, shuffle=False
+        val_dataset,regressor_var=regressor_var, batch_size=val_batch_size, shuffle=False
     )
     # Initialise the optimiser
     if weight_decay:
@@ -672,7 +673,7 @@ def train_model(
     if not patience:
         patience = epochs
 
-    if model.type not in ["classifier", "regressor"]:
+    if model.type not in ["classifier", "regressor", "nregressor"]:
         raise ValueError("Model type not recognised")
 
     for epoch in range(epochs):
@@ -691,7 +692,7 @@ def train_model(
             stopping_metric = -np.asarray(val_accuracy)
 
         elif model.type == "regressor":
-            logging.debug(f"Epoch: {epoch}")
+            # logging.debug(f"Epoch: {epoch}")
             loss = model.train_step(train_loader, opt, epoch=epoch)
             losses.append(loss)
 
@@ -700,6 +701,14 @@ def train_model(
 
             stopping_metric = np.asarray(validation_losses)
         # if validation metric is not better than the average of the last n losses then stop
+        elif model.type =="nregressor": 
+            loss, _ = model.train_step(train_loader, opt, epoch=epoch)
+            losses.append(loss)
+
+            val_loss, _ = model.validation_step(val_loader)
+            validation_losses.append(val_loss)
+            
+            stopping_metric = np.asarray(validation_losses)
         if len(stopping_metric) > patience:
             if np.mean(stopping_metric[-patience:]) < stopping_metric[-1]:
                 logging.debug("Early stopping criterion reached")
@@ -728,8 +737,9 @@ def train_model(
     if model.type == "classifier":
         return model, [losses, train_accuracy, validation_losses, val_accuracy]
 
-    elif model.type == "regressor":
+    elif model.type == "regressor" or model.type =="nregressor":
         return model, [losses, validation_losses]
+
 
 
 def load_model(model, save_path, device, scaler, flux):
@@ -741,5 +751,9 @@ def load_model(model, save_path, device, scaler, flux):
 
     elif model == "Regressor":
         regressor = Regressor(device=device, scaler=scaler, flux=flux)
+        regressor.load_state_dict(torch.load(save_path))
+        return regressor
+    elif model =="NRegressor": 
+        regressor = NRegressor(len(flux))
         regressor.load_state_dict(torch.load(save_path))
         return regressor
