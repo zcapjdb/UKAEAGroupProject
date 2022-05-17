@@ -5,7 +5,7 @@ import os
 import copy
 #import comet_ml import Experiment
 
-
+import random
 import pipeline.pipeline_tools as pt
 import pipeline.Models as md
 
@@ -20,6 +20,14 @@ import pandas as pd
 
 
 def ALpipeline(cfg):
+    #
+    if not isinstance(cfg,dict):
+        seed = cfg[0]
+        cfg = cfg[1]
+        torch.manual_seed(seed)
+        random.seed(seed)
+        np.random.seed(seed)
+
     # Create logger object for use in pipeline
     verboselogs.install()
     logger = logging.getLogger(__name__)
@@ -359,19 +367,31 @@ if __name__=='__main__':
     Nbootstraps = cfg['Nbootstraps']        
     lam = cfg["hyperparams"]["lambda"]
     model_size = cfg['hyperparams']['model_size']
-    
- #   if Nbootstraps>1:
- #       cfg = np.repeat(cfg,Nbootstraps)
- #       with Pool(Nbootstraps) as p:            
- #           output = p.map(ALpipeline,cfg)
- #       output = {'out':output}
- #       with open(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/bootstrapped_AL_lam_{lam}_{model_size}.pkl","wb") as f:
- #           pickle.dump(output,f)                        
+    Ntrain = cfg["hyperparams"]["train_size"]
+    Niter = cfg["iterations"]
+    Ncand = cfg["hyperparams"]["candidate_size"]
+    total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
+    retrain = cfg["retrain_classifier"]
+    if Nbootstraps>1:
+        #cfg = np.repeat(cfg,Nbootstraps)
+        seeds = np.arange(Nbootstraps).astype(int)
+        inp = []
+        for s in seeds:
+            inp.append([s,cfg])
+        with Pool(Nbootstraps) as p:            
+            output = p.map(ALpipeline,inp)
+        output = {'out':output}
+
+        out_folder = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}/"
+        if not os.path.exists(out_folder):
+            os.makedirs(out_folder)
+        with open(f"{out_folder}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
+            pickle.dump(output,f)                        
  #   else:        
-    output = ALpipeline(cfg)
-    output = {'out':output}
-    with open(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/bootstrapped_{Nbootstraps}_AL_lam_{lam}_{model_size}.pkl","wb") as f:
-        pickle.dump(output,f)           
+ #   output = ALpipeline(cfg)
+  #  output = {'out':output}
+  #  with open(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/bootstrapped_{Nbootstraps}_AL_lam_{lam}_{model_size}.pkl","wb") as f:
+  #      pickle.dump(output,f)           
 
 
     print('pipeline terminated')
