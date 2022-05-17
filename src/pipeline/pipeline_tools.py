@@ -527,15 +527,12 @@ def get_most_uncertain(
             pred_list.append(preds)
 
         out_stds = np.array(out_stds)
-        logging.debug(f"out_stds shape: {out_stds.shape}")
 
         if acquisition == "leading_flux_uncertainty":
             total_std = out_stds[0, :]
-            logging.debug(f"total_std shape: {total_std.shape}")
 
         else:
             total_std = np.sum(out_stds, axis=0)
-            logging.debug(f"total_std shape: {total_std.shape}")
 
         pred_array = np.stack(pred_list, axis=0)
 
@@ -547,11 +544,13 @@ def get_most_uncertain(
     #TODO: how to best choose alpha?
     if acquisition == "distance_penalty":
         logging.info("Using distance penalty acquisition")
+        # cdist returns a matrix of distances between each pair of points
         cdists = cdist(pred_array.T, pred_array.T, metric = "euclidean")
         cdists.sort()
-        nearest = cdists[:, 1]
+        median_dist = np.median(cdists, axis=1)
+        #nearest = cdists[:, 1] # get second nearest neighbour as first is itself
 
-        total_std = total_std - alpha * nearest
+        total_std = total_std - alpha * median_dist# nearest
 
     if acquisition == "random":
         # choose random indices
