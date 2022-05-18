@@ -389,9 +389,12 @@ class ITGDatasetDF(Dataset):
         if not keep_index:
             self.data["index"] = self.data.index
 
-    def scale(self, scaler):
+    def scale(self, scaler, unscale=False):
         # Scale features in the scaler object and leave the rest as is
-        scaled = scaler.transform(self.data.drop([self.label, "index"], axis=1))
+        if not unscale:
+            scaled = scaler.transform(self.data.drop([self.label, "index"], axis=1))
+        else:
+            scaled = scaler.inverse_transform(self.data.drop([self.label, "index"], axis=1))
 
         cols = [c for c in self.data if c != self.label and c != "index"]
         temp_df = pd.DataFrame(scaled, index=self.data.index, columns=cols)
@@ -404,6 +407,8 @@ class ITGDatasetDF(Dataset):
         self.data = temp_df
 
         del temp_df
+
+        
 
     def sample(self, batch_size):
         return ITGDatasetDF(

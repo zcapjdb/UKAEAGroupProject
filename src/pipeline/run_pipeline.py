@@ -1,6 +1,7 @@
 import coloredlogs, verboselogs, logging
 from multiprocessing import Pool
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 import os
 import copy
 
@@ -106,7 +107,8 @@ valid_dataset = eval_dataset.sample(valid_size)  # validation set
 # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
 eval_dataset.remove(valid_dataset.data.index)  #
 unlabelled_pool = eval_dataset
-
+buffer_size = 0
+classifier_buffer = []
 # Load pretrained models
 logging.info("Loaded the following models:\n")
 
@@ -307,9 +309,8 @@ if len(train_sample) > 100_000:
             classifier_buffer = []
             buffer_size = 0
 
-    # --- train data enriched by new unstable candidate points
-    train_sample.add(candidates)
-    n_train = len(train_sample)
+
+ 
 
     # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
     holdout_pred_before = []
@@ -399,7 +400,26 @@ if len(train_sample) > 100_000:
     except:
         pass
     
-    output_dict["n_train_points"].append(n_train)
+    n_train = len(train_sample)    
+    output_dict["n_train_points"].append(n_train)    
+
+
+    # --- unscale all datasets, 
+    candidates.unscale(scaler, unscale=True)
+    train_sample.unscale(scaler, unscale=True)
+    unlabelled_pool.unscale(scaler, unscale=True)
+    holdout_set.unscale(scaler, unscale=True)
+   # --- train data is enriched by new unstable candidate points
+    train_sample.add(candidates)
+    # --- get new scaler from enriched training set, rescale them with new scaler
+    scaler = StandardScaler()
+    scaler.fit_transform(train_sample.drop(["stable_label"], axis=1))
+    train_sample.scale(scaler)
+    unlabelled_pool.scale(scaler)
+    holdout_set.scale(scaler)
+    holdout_loader = DataLoader(
+        holdout_set, batch_size=batch_size, shuffle=False
+    )  # ToDo =====>> use helper function
 
     # --- Save at end of iteration
     output_path = os.path.join(
