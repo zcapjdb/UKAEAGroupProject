@@ -155,19 +155,30 @@ class Regressor(nn.Module):
         self.scaler = scaler
         self.loss = nn.MSELoss(reduction="sum") # LZ: ToDo this might be an input in the case the output is multitask
         self.flux = flux
-
-        self.model = nn.Sequential(
-            nn.Linear(15, 512),
-            nn.Dropout(p=0.1),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.Dropout(p=0.1),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.Dropout(p=0.1),
-            nn.ReLU(),
-            nn.Linear(128, 1),
-        ).to(self.device)
+        if model_size == 'shallow_wide':
+                        
+            self.model = nn.Sequential(
+                nn.Linear(15, 1024),
+                nn.Dropout(p=0.1),
+                nn.ReLU(),
+                nn.Linear(1024, 1024),
+                nn.Dropout(p=0.1),
+                nn.ReLU(),
+                nn.Linear(1024, 1),
+            ).to(self.device)
+        elif model_size == 'deep':
+             self.model = nn.Sequential(
+                nn.Linear(15, 512),
+                nn.Dropout(p=0.1),
+                nn.ReLU(),
+                nn.Linear(512, 256),
+                nn.Dropout(p=0.1),
+                nn.ReLU(),
+                nn.Linear(256, 128),
+                nn.Dropout(p=0.1),
+                nn.ReLU(),
+                nn.Linear(128, 1),
+            ).to(self.device)
 
     def forward(self, x):
         y_hat = self.model(x.float())

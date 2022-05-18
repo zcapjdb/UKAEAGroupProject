@@ -6,7 +6,6 @@ from multiprocessing import Pool
 #import comet_ml import Experiment
 from sklearn.preprocessing import StandardScaler
 
-
 import pipeline.pipeline_tools as pt
 import pipeline.Models as md
 
@@ -29,11 +28,11 @@ class CLTaskManager:
         self.cl_mode = CL_mode
         self.save_path = save_path
         
-    def get_data(self,cfg):
+    def get_data(self,cfg, scale=True):
         PATHS = cfg["data"]
         FLUX = cfg["flux"]
-        train_dataset, eval_dataset, test_dataset,scaler = pt.prepare_data(
-        PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=0.1
+        train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
+        PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=0.1, scale=scale
     ) 
         return train_dataset, eval_dataset, test_dataset,scaler
 
@@ -48,6 +47,7 @@ class CLTaskManager:
         raise ValueError('Not implemented')
 
     def run(self):
+        # --- ToDo ======>>>> THINK ABOUT SAMPLING
         models = {'Classifier':self.classifier,'Regressor':self.regressor}
         test_data = {}
         forgetting = {}
@@ -56,16 +56,22 @@ class CLTaskManager:
             if self.cl_mode!= 'shrink_perturb':
                 cfg['hyperparams']['lambda'] = 1
             if j==0:
-                train, val, test, scaler = self.get_data(cfg)  
+                train, val, test, scaler = self.get_data(cfg,scale=True)  
             else:
-                train, val, test, _ = self.get_data(cfg) 
-                # ---  in CL with AL, there is not train set, only the unlabelled pool. Some points will have been labelled, these are entirely the val and test set 
-                train.remove(train.data.index)  # --- initialise empty dataset, which will be augmented with candidates
+                train_new, val_new, test_new, _ = self.get_data(cfg,scale=False) 
+                # --- re-initialise scaler 
+
+                train.add(train_new)
+                val = val_new
+                test = test_new    
+
             self.regressor.flux = cfg['flux']
             self.regressor.scaler = scaler
+        
 
             # ToDo: =====>> think a bit better about the scaler!! still use the scaler for the first task??
-            test, output_dict = ALpipeline(cfg, models, j, self.device, self.cl_mode, scaler, train,val, test, ) 
+             # ---  train dataset is augmented each time, without removing old data
+            train, test, output_dict = ALpipeline(cfg, models, j, self.device, self.cl_mode, scaler, train,val, test, ) 
             outputs.update({f'task{j}':output_dict})
             # ToDo: ====>> instead, load each model from task 1 and retrain from same point on task 2 based on the various strategies
             if self.cl_mode == 'shrink_perturb':
@@ -143,10 +149,6 @@ def ALpipeline(cfg: dict, models: dict, j: str, device: torch.device, cl_mode: s
         os.makedirs(SAVE_PATHS["outputs"])
 
     # ------------------------------------------- Load or train first models ------------------------------------------
-    if j>0: # --- overwrite evaluation and test data
-        train_sample = train_dataset
-    else:
-        train_sample = train_dataset.sample(train_size) 
 
     for model in models.keys():
 
@@ -190,6 +192,12 @@ def ALpipeline(cfg: dict, models: dict, j: str, device: torch.device, cl_mode: s
 
     for i in range(cfg["iterations"]):
         logging.info(f"Iteration: {i+1}\n")
+        if j>0: # --- overwrite evaluation and test data
+            train_sample = train_dataset
+            scaler = StandardScaler()
+            scaler.fit_transform(train_sample.drop(["stable_label"], axis=1))  
+            eval_dataset.scale(scaler)                 
+            test_dataset.scale(scaler)
 
         if i != 0:
             # reset the output dictionary for each iteration
@@ -403,7 +411,15 @@ def ALpipeline(cfg: dict, models: dict, j: str, device: torch.device, cl_mode: s
         classifier_path = os.path.join(save_dest, f"classifier_lam_{cl_mode}_{lamb}_iteration_{i}.pkl")
         torch.save(models["Classifier"].state_dict(), classifier_path)
 
-    return  holdout_set, output_dict
+        if j>0: # --- overwrite evaluation and test data
+            train_sample = train_dataset
+        else:
+            train_sample = train_dataset.sample(train_size) 
+            scaler = StandardScaler()
+            scaler.fit_transform(train_sample.drop(["stable_label"], axis=1))  
+            valid_dataset.scale(scaler)                 
+            test.scale(scaler)
+    return  train_sample, holdout_set, output_dict
 
 
 

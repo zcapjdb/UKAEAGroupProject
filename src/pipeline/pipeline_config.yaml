@@ -50,7 +50,7 @@ hyperparams:
 
 logging_level: DEBUG
 # Pipeline parameters
-iterations: 20
+iterations: 50
 initial_epochs: 30
 MC_dropout_runs: 50
 keep_prob: 0.25 

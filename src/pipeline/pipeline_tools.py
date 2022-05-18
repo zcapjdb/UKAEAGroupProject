@@ -63,6 +63,7 @@ def prepare_data(
     valid_size: int = None,
     test_size: int = None,
     samplesize_debug: int = 1,
+    scale: bool = True
 ) -> (ITGDatasetDF, ITGDatasetDF, ITGDatasetDF, StandardScaler):
     """
     Loads the data from the given paths and prepares it for training.
@@ -105,18 +106,21 @@ def prepare_data(
         test_data[target_column] != 0, 1, 0
     )
 
-    scaler = StandardScaler()
-    scaler.fit_transform(train_data.drop(["stable_label"], axis=1))
+    if scale:
+        scaler = StandardScaler()
+        scaler.fit_transform(train_data.drop(["stable_label"], axis=1))
 
-    train_dataset = ITGDatasetDF(train_data, target_column=target_column)
-    valid_dataset = ITGDatasetDF(validation_data, target_column=target_column)
-    test_dataset = ITGDatasetDF(test_data, target_column=target_column)
+        train_dataset = ITGDatasetDF(train_data, target_column=target_column)
+        valid_dataset = ITGDatasetDF(validation_data, target_column=target_column)
+        test_dataset = ITGDatasetDF(test_data, target_column=target_column)
 
-    train_dataset.scale(scaler)
-    valid_dataset.scale(scaler)
-    test_dataset.scale(scaler)
+        train_dataset.scale(scaler)
+        valid_dataset.scale(scaler)
+        test_dataset.scale(scaler)
 
-    return train_dataset, valid_dataset, test_dataset, scaler
+        return train_dataset, valid_dataset, test_dataset, scaler
+    else:
+        return train_dataset, valid_dataset, test_dataset, 0
 
 
 # classifier tools
