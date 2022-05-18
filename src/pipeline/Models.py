@@ -12,23 +12,24 @@ import logging
 import time
 from tqdm.auto import tqdm
 
-cuda0 = torch.device('cuda:0')
+cuda0 = torch.device("cuda:0")
 
 # Class definitions
 class Classifier(nn.Module):
-    def __init__(self,device, model_size=None):
+    def __init__(self,device, model_size=None, dropout=0.1):
         super().__init__()
         self.type = "classifier"
         self.device = device
+        self.dropout = dropout
         self.model = self.model = nn.Sequential(
             nn.Linear(15, 512),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
             nn.Linear(512, 256),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
-            nn.Linear(256,128),
-            nn.Dropout(p=0.1),
+            nn.Linear(256, 128),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
             nn.Linear(128, 1),
             nn.Sigmoid(),
@@ -59,7 +60,9 @@ class Classifier(nn.Module):
 
         losses = []
         correct = 0
-        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}", disable=disable_tqdm)):
+        for batch, (X, y, z, idx) in enumerate(
+            tqdm(dataloader, desc=f"Epoch {epoch}", disable=disable_tqdm)
+        ):
 
             X = X.to(self.device)
             y = y.to(self.device)
@@ -74,15 +77,17 @@ class Classifier(nn.Module):
             losses.append(loss.item())
 
             # calculate train accuracy
-            pred_class = torch.round(y_hat.squeeze()) #torch.round(y_hat.squeeze())
-            correct += torch.sum(pred_class == y.float()).item() #torch.sum(pred_class == y.float()).item()
+            pred_class = torch.round(y_hat.squeeze())  # torch.round(y_hat.squeeze())
+            correct += torch.sum(
+                pred_class == y.float()
+            ).item()  # torch.sum(pred_class == y.float()).item()
 
         correct /= size
         average_loss = np.mean(losses)
         logging.debug(f"Train accuracy: {correct:>7f}, loss: {average_loss:>7f}")
         return average_loss, correct
 
-    def validation_step(self, dataloader, scheduler = None):
+    def validation_step(self, dataloader, scheduler=None):
         size = len(dataloader.dataset)
         # Initalise loss function
         BCE = nn.BCELoss()
@@ -93,13 +98,17 @@ class Classifier(nn.Module):
         with torch.no_grad():
             for X, y, z, _ in dataloader:
                 X = X.to(self.device)
-                y = y.to(self.device)                
+                y = y.to(self.device)
                 y_hat = self.forward(X.float())
                 test_loss.append(BCE(y_hat, y.unsqueeze(-1).float()).item())
 
                 # calculate test accuracy
-                pred_class = torch.round(y_hat.squeeze()) #torch.round(y_hat.squeeze())
-                correct += torch.sum(pred_class == y.float()).item() #torch.sum(pred_class == y.float()).item()
+                pred_class = torch.round(
+                    y_hat.squeeze()
+                )  # torch.round(y_hat.squeeze())
+                correct += torch.sum(
+                    pred_class == y.float()
+                ).item()  # torch.sum(pred_class == y.float()).item()
 
         correct /= size
         average_loss = np.mean(test_loss)
@@ -109,17 +118,17 @@ class Classifier(nn.Module):
             scheduler.step(average_loss)
 
         return average_loss, correct
-    
+
     def predict(self, dataloader):
 
         if not isinstance(dataloader, DataLoader):
             # dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
             dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=100)
-        
+
         size = len(dataloader.dataset)
         pred = []
         losses = []
-        accuracy = []
+        correct = 0
 
         BCE = nn.BCELoss()
 
@@ -128,43 +137,46 @@ class Classifier(nn.Module):
             y = y.to(self.device)
             y_hat = self.forward(x.float())
 
-            y_hat_rounded  = torch.where(y_hat > 0.5, 1, 0)
-            acc_num  = (y_hat_rounded == y).sum()
-            acc = acc_num/len(x)
-
-            accuracy.append(acc.detach().cpu().numpy())
             pred.append(y_hat.squeeze().detach().cpu().numpy())
             loss = BCE(y_hat, y.unsqueeze(-1).float()).item()
             losses.append(loss)
-        
+
+            # calculate test accuracy
+            pred_class = torch.round(y_hat.squeeze())  # torch.round(y_hat.squeeze())
+            correct += torch.sum(
+                pred_class == y.float()
+            ).item()  # torch.sum(pred_class == y.float()).item()
+
         average_loss = np.sum(losses) / size
 
-        ave_accuracy = np.mean(accuracy)
-        
+        correct /= size
+
         pred = np.asarray(pred, dtype=object).flatten()
 
-
-        return pred, [average_loss, ave_accuracy]
+        return pred, [average_loss, correct]
 
 
 class Regressor(nn.Module):
-    def __init__(self,device,model_size, scaler,flux):
+    def __init__(self,device, scaler,flux, model_size=None, dropout=0.1):
         super().__init__()
         self.type = "regressor"
         self.device = device
         self.scaler = scaler
-        self.loss = nn.MSELoss(reduction="sum") # LZ: ToDo this might be an input in the case the output is multitask
+        self.loss = nn.MSELoss(
+            reduction="sum"
+        )  # LZ: ToDo this might be an input in the case the output is multitask
         self.flux = flux
+        self.dropout = dropout
 
         self.model = nn.Sequential(
             nn.Linear(15, 512),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
             nn.Linear(512, 256),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
             nn.Linear(256, 128),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropout),
             nn.ReLU(),
             nn.Linear(128, 1),
         ).to(self.device)
@@ -178,7 +190,7 @@ class Regressor(nn.Module):
         scaler_features = self.scaler.feature_names_in_
         scaler_index = np.where(scaler_features == self.flux)[0][0]
 
-        return y*self.scaler.scale_[scaler_index]+self.scaler.mean_[scaler_index]
+        return y * self.scaler.scale_[scaler_index] + self.scaler.mean_[scaler_index]
 
     def enable_dropout(self):
         """Function to enable the dropout layers during test-time"""
@@ -201,7 +213,9 @@ class Regressor(nn.Module):
                     param_update = (param * lam) + noise
                     param.copy_(param_update)
 
-    def loss_function(self, y, y_hat, unscale=False):    # LZ : ToDo if given mode is predicted not to develop, set the outputs related to that mode to zero, and should not contribute to the loss
+    def loss_function(
+        self, y, y_hat, unscale=False
+    ):  # LZ : ToDo if given mode is predicted not to develop, set the outputs related to that mode to zero, and should not contribute to the loss
 
         loss = self.loss(y_hat, y.float())
         if unscale:
@@ -217,8 +231,10 @@ class Regressor(nn.Module):
         num_batches = len(dataloader)
 
         losses = []
-        for batch, (X, y, z, idx) in enumerate(tqdm(dataloader,desc=f"Epoch {epoch}", disable=disable_tqdm), 0):
-            
+        for batch, (X, y, z, idx) in enumerate(
+            tqdm(dataloader, desc=f"Epoch {epoch}", disable=disable_tqdm), 0
+        ):
+
             batch_size = len(X)
             # logging.debug(f"batch size recieved:{batch_size}")
             X = X.to(self.device)
@@ -246,7 +262,7 @@ class Regressor(nn.Module):
         with torch.no_grad():
             for X, y, z, _ in dataloader:
                 X = X.to(self.device)
-                z = z.to(self.device)                
+                z = z.to(self.device)
                 z_hat = self.forward(X.float())
                 test_loss.append(
                     self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
@@ -263,8 +279,12 @@ class Regressor(nn.Module):
 
         if not isinstance(dataloader, DataLoader):
             batch_size = min(len(dataloader), 512)
-            dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=batch_size, shuffle=False)# --- batch size doesnt matter here because it's just prediction
-
+            dataloader = pt.pandas_to_numpy_data(
+                dataloader,
+                regressor_var=self.flux,
+                batch_size=batch_size,
+                shuffle=False,
+            )  # --- batch size doesnt matter here because it's just prediction
 
         size = len(dataloader.dataset)
         pred = []
@@ -275,13 +295,13 @@ class Regressor(nn.Module):
             z = z.to(self.device)
             z_hat = self.forward(x.float())
             pred.append(z_hat.squeeze().detach().cpu().numpy())
-            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat,unscale=unscale)
+            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=unscale)
             if unscale:
                 losses_unscaled.append(loss[1].item())
                 loss = loss[0]
             losses.append(loss.item())
         average_loss = np.sum(losses) / size
-        
+
         pred = np.asarray(pred, dtype=object).flatten()
 
         if unscale:
@@ -373,7 +393,7 @@ class ITGDatasetDF(Dataset):
         # Scale features in the scaler object and leave the rest as is
         scaled = scaler.transform(self.data.drop([self.label, "index"], axis=1))
 
-        cols = [c for c in self.data if c!=self.label and c!="index"]
+        cols = [c for c in self.data if c != self.label and c != "index"]
         temp_df = pd.DataFrame(scaled, index=self.data.index, columns=cols)
 
         assert set(list(temp_df.index)) == set(list(self.data.index))
@@ -432,7 +452,7 @@ def train_model(
     epochs,
     learning_rate=0.001,
     weight_decay=True,
-    pipeline = True,
+    # pipeline = True,
     patience=None,
     checkpoint=None,
     checkpoint_path=None,
@@ -446,12 +466,24 @@ def train_model(
     if val_batch_size is None:
         val_batch_size = int(len(val_dataset) / 10)
 
-    if pipeline: 
-        train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
-    else: 
-        train_loader = pt.pandas_to_numpy_data(train_dataset, train_batch_size)
+    # if pipeline:
+    #     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
 
-    val_loader = pt.pandas_to_numpy_data(val_dataset, val_batch_size, shuffle=False)
+    if model.type == "Regressor":
+        regressor_var = model.flux
+    else:
+        regressor_var = None
+
+    train_loader = pt.pandas_to_numpy_data(
+        train_dataset,
+        regressor_var=model.flux,
+        batch_size=train_batch_size,
+        shuffle=True,
+    )
+
+    val_loader = pt.pandas_to_numpy_data(
+        val_dataset, batch_size=val_batch_size, shuffle=False
+    )
     # Initialise the optimiser
     if weight_decay:
         opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
@@ -475,7 +507,7 @@ def train_model(
         logging.debug(f"Epoch: {epoch}")
 
         if model.type == "classifier":
-            loss, train_acc = model.train_step(train_loader, opt,epoch=epoch)
+            loss, train_acc = model.train_step(train_loader, opt, epoch=epoch)
             losses.append(loss)
             train_accuracy.append(train_acc)
 
@@ -527,7 +559,7 @@ def train_model(
         return model, [losses, validation_losses]
 
 
-def load_model(model, save_path, device, scaler, flux):
+def load_model(model, save_path, device, scaler, flux, dropout):
     logging.info(f"Model Loaded: {model}")
     if model == "Classifier":
         classifier = Classifier(device=device)
@@ -535,6 +567,6 @@ def load_model(model, save_path, device, scaler, flux):
         return classifier
 
     elif model == "Regressor":
-        regressor = Regressor(device=device, scaler=scaler, flux=flux)
+        regressor = Regressor(device=device, scaler=scaler, flux=flux, dropout=dropout)
         regressor.load_state_dict(torch.load(save_path))
         return regressor

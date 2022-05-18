@@ -1,15 +1,12 @@
-
-
-flux: "efiitg_gb"
-Nbootstraps: 10 # if None, runs only one instance otherwise it spawns Nbootstraps instances
+flux: [efiitg_gb, efeitg_gb_div_efiitg_gb]
 
 data:
-  train: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/train_data_clipped.pkl"
-  validation: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/valid_data_clipped.pkl"
-  test: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/test_data_clipped.pkl"
+    train: /path/to/train_data.pkl
+    validation: /path/to/valid_data.pkl
+    test: /path/to/test_data.pkl
 save_paths:
-  plots: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/"
-  outputs: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/"
+    plots: /path/to/plots
+    outputs: /path/to/outputs
 
 retrain_classifier: False
 retrain_regressor: True
@@ -56,9 +53,6 @@ MC_dropout_runs: 5
 keep_prob: 0.25 
 patience: 20
 learning_rate: 0.001
+acquisition: add_uncertainties #individual_uncertainty, random, distance_penalty
 
 # if training models from scratch, the hyperparameters below are used
-train_epochs: 30
-train_patience: 10
-
-
