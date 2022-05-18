@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 coloredlogs.install(level="DEBUG")  # cfg["logging_level"])
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = torch.device("cpu")
+#device = torch.device("cpu")
 
 # comet_project_name = "AL-pipeline"
 # experiment = Experiment(project_name = comet_project_name)
@@ -173,8 +173,9 @@ for FLUX in FLUXES:
 # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
 for FLUX in FLUXES:
     logging.info(f"Test loss for {FLUX} before pipeline:")
-    _, holdout_loss = models[FLUX]["Regressor"].predict(holdout_loader)
+    _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_loader, unscale = True)
     output_dict["test_loss_init"].append(holdout_loss)
+    output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
 
 
 if len(train_sample) > 100_000:

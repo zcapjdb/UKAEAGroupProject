@@ -21,6 +21,7 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 output_dict = {
     "train_loss_init": [],  # Regressor performance before pipeline
     "test_loss_init": [],
+    "test_loss_init_unscaled": [],
     "retrain_losses": [],  # regressor performance during retraining
     "retrain_val_losses": [],
     "retrain_losses_unscaled": [],
@@ -393,7 +394,7 @@ def retrain_regressor(
             logging.log(15, f"Validation loss unscaled: {loss_unscaled:.4f}")
 
         if len(val_loss) > patience:
-            if np.mean(val_loss[-patience:]) < test_loss:
+            if np.mean(val_loss[-patience:]) < val_loss[-1]:
                 logging.log(15, "Early stopping criterion reached")
                 break
 
