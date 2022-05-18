@@ -303,13 +303,14 @@ for i in range(cfg["iterations"]):
 
     # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
     holdout_pred_before = []
-    train_losses, test_losses = [], []
+    train_losses, val_losses = [], []
+    train_losses_unscaled, val_losses_unscaled = [], []
     holdout_pred_after, holdout_loss, holdout_loss_unscaled = [], [], []
     for FLUX in FLUXES:
         preds, _ = models[FLUX]["Regressor"].predict(holdout_loader)
         holdout_pred_before.append(preds)
 
-        train_loss, test_loss = pt.retrain_regressor(
+        retrain_losses = pt.retrain_regressor(
             train_sample,
             valid_dataset,
             models[FLUX]["Regressor"],
@@ -321,8 +322,12 @@ for i in range(cfg["iterations"]):
             batch_size=batch_size,
         )
 
+        train_loss, val_loss, train_loss_unscaled, val_loss_unscaled = retrain_losses
+
         train_losses.append(train_loss)
-        test_losses.append(test_loss)
+        val_losses.append(val_loss)
+        train_losses_unscaled.append(train_loss_unscaled)
+        val_losses_unscaled.append(val_loss_unscaled)
         
         logging.info(f"Running prediction on validation data set")
         # --- validation on holdout set after regressor is retrained
@@ -376,7 +381,9 @@ for i in range(cfg["iterations"]):
     output_dict["holdout_pred_after"].append(holdout_pred_after)
     output_dict["holdout_ground_truth"].append(holdout_set.target)
     output_dict["retrain_losses"].append(train_losses)
-    output_dict["retrain_test_losses"].append(test_losses)
+    output_dict["retrain_val_losses"].append(val_losses)
+    output_dict["retrain_losses_unscaled"].append(train_losses_unscaled)
+    output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
     output_dict["post_test_loss"].append(holdout_loss)
     output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
 
