@@ -22,7 +22,9 @@ output_dict = {
     "train_loss_init": [],  # Regressor performance before pipeline
     "test_loss_init": [],
     "retrain_losses": [],  # regressor performance during retraining
-    "retrain_test_losses": [],
+    "retrain_val_losses": [],
+    "retrain_losses_unscaled": [],
+    "retrain_val_losses_unscaled": [],
     "post_test_loss": [],  # regressor performance after retraining
     "post_test_loss_unscaled": [],  # regressor performance after retraining, unscaled
     "n_train_points": [],
@@ -349,8 +351,9 @@ def retrain_regressor(
     model.shrink_perturb(lam, loc, scale)
 
     if validation_step:
-        test_loss = model.validation_step(val_loader)
-        logging.log(15, f"Initial validation loss: {test_loss.item():.4f}")
+        val_loss, val_loss_unscaled = model.validation_step(val_loader)
+        logging.log(15, f"Initial validation loss: {val_loss.item():.4f}")
+        logging.log(15, f"Initial validation loss (unscaled): {val_loss_unscaled.item():.4f}")
 
     if not patience:
         patience = epochs
@@ -367,27 +370,34 @@ def retrain_regressor(
         min_lr=(1 / 16) * learning_rate,
     )
     train_loss = []
+    train_loss_unscaled = []
     val_loss = []
+    val_loss_unscaled = []
 
     for epoch in range(epochs):
         logging.log(15, f"Epoch: {epoch}")
-        loss = model.train_step(new_loader, opt, epoch=epoch, disable_tqdm=disable_tqdm)
+        loss, unscaled_loss = model.train_step(new_loader, opt, epoch=epoch, disable_tqdm=disable_tqdm)
+
         train_loss.append(loss.item())
+        train_loss_unscaled.append(unscaled_loss.item())
 
         logging.log(15, f"Training Loss: {loss.item():.4f}")
+        logging.log(15, f"Training Loss Unscaled: {unscaled_loss.item():.4f}")
 
         if validation_step:
-            test_loss = model.validation_step(val_loader, scheduler).item()
-            val_loss.append(test_loss)
+            loss, loss_unscaled = model.validation_step(val_loader, scheduler)
+            val_loss.append(loss)
+            val_loss_unscaled.append(loss_unscaled)
 
-            logging.log(15, f"Test loss: {test_loss:.4f}")
+            logging.log(15, f"Validation loss: {loss:.4f}")
+            logging.log(15, f"Validation loss unscaled: {loss_unscaled:.4f}")
 
         if len(val_loss) > patience:
             if np.mean(val_loss[-patience:]) < test_loss:
                 logging.log(15, "Early stopping criterion reached")
                 break
 
-    return train_loss, val_loss
+    return train_loss, val_loss, train_loss_unscaled, val_loss_unscaled
 
 
 def get_uncertainty(

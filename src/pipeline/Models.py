@@ -231,6 +231,7 @@ class Regressor(nn.Module):
         num_batches = len(dataloader)
 
         losses = []
+        unscaled_losses = []
         for batch, (X, y, z, idx) in enumerate(
             tqdm(dataloader, desc=f"Epoch {epoch}", disable=disable_tqdm), 0
         ):
@@ -240,7 +241,8 @@ class Regressor(nn.Module):
             X = X.to(self.device)
             z = z.to(self.device)
             z_hat = self.forward(X.float())
-            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat)
+
+            loss, unscaled_loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=True)
 
             # Backpropagation
             optimizer.zero_grad()
@@ -248,32 +250,44 @@ class Regressor(nn.Module):
             optimizer.step()
 
             loss = loss.item()
-            # logging.debug(f"Loss: {loss}")
+            unscaled_loss = unscaled_loss.item()
+
             losses.append(loss)
+            unscaled_losses.append(unscaled_loss)
 
         average_loss = np.sum(losses) / size
         logging.debug(f"Loss: {average_loss:>7f}")
-        return average_loss
+
+        average_unscaled_loss = np.sum(unscaled_losses) / size
+        logging.debug(f"Unscaled Loss: {average_unscaled_loss:>7f}")
+
+        return average_loss, average_unscaled_loss
 
     def validation_step(self, dataloader, scheduler=None):
         size = len(dataloader.dataset)
 
-        test_loss = []
+        validation_loss = []
+        validation_loss_unscaled = []
         with torch.no_grad():
             for X, y, z, _ in dataloader:
                 X = X.to(self.device)
                 z = z.to(self.device)
                 z_hat = self.forward(X.float())
-                test_loss.append(
-                    self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
-                )
+                loss, unscaled_loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=True)
 
-        average_loss = np.sum(test_loss) / size
+                validation_loss.append(loss.item())
+                validation_loss_unscaled.append(unscaled_loss.item())
+
+        average_loss = np.sum(validation_loss) / size
+        average_unscaled_loss = np.sum(validation_loss_unscaled) / size
 
         if scheduler is not None:
             scheduler.step(average_loss)
-        logging.debug(f"Test MSE: {average_loss:>7f}")
-        return average_loss
+
+        logging.debug(f"Validation MSE: {average_loss:>7f}")
+        logging.debug(f"Validation MSE Unscaled: {average_unscaled_loss:>7f}")
+
+        return average_loss, average_unscaled_loss
 
     def predict(self, dataloader, unscale=False):
 
