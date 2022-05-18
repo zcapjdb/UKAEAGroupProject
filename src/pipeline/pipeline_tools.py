@@ -393,7 +393,7 @@ def retrain_regressor(
             logging.log(15, f"Validation loss unscaled: {loss_unscaled:.4f}")
 
         if len(val_loss) > patience:
-            if np.mean(val_loss[-patience:]) < test_loss:
+            if np.mean(val_loss[-patience:]) < val_loss[-1]:
                 logging.log(15, "Early stopping criterion reached")
                 break
 
