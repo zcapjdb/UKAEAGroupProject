@@ -1,0 +1,105 @@
+
+
+
+task1:
+    data:
+        train: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/carbonwall/train_data_clipped.pkl"
+        validation: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/carbonwall/valid_data_clipped.pkl"
+        test: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/carbonwall/test_data_clipped.pkl"
+    save_paths:
+        plots: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/CL/carbonwall"
+        outputs: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/carbonwall"
+
+    retrain_classifier: True
+    retrain_regressor: True
+
+
+    # Use pre-trained model or train from scratch
+    pretrained:
+        Classifier:
+            efiitg_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/CL/carbonwall/ITGclassifier.pt"
+                trained: False
+            efetem_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/CL/carbonwall/TEMclassifier.pt"
+                trained: False
+            efeetg_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/CL/carbonwall/ETGclassifier.pt"
+                trained: False
+        Regressor:
+            efiitg_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/CL/carbonwall/ITGregressor.pt"
+                trained: False
+            efetem_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/CL/carbonwall/TEMclassifier.pt"
+                trained: False
+            efeetg_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/carbonwall/ETGclassifier.pt"
+                trained: True
+
+task2:
+
+    data:
+        train: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/berilliumwall/train_data_clipped.pkl"
+        validation: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/berilliumwall/valid_data_clipped.pkl"
+        test: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/berilliumwall/test_data_clipped.pkl"
+    save_paths:
+        plots: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/CL/berilliumwall"
+        outputs: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/berilliumwall"
+
+    retrain_classifier: True
+    retrain_regressor: True
+
+
+    # Use pre-trained models
+    pretrained:
+        Classifier:
+            efiitg_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/CL/berilliumwall/ITGclassifier.pt"
+                trained: False
+            efetem_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/CL/berilliumwall/TEMclassifier.pt"
+                trained: True
+            efeetg_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/CL/berilliumwall/ETGclassifier.pt"
+                trained: True
+        Regressor:
+            efiitg_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/CL/berilliumwall/ITGregressor.pt"
+                trained: False
+            efetem_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/CL/berilliumwall/TEMclassifier.pt"
+                trained: True
+            efeetg_gb:
+                save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/CL/berilliumwall/ETGclassifier.pt"
+                trained: True
+
+CL_method:
+    "shrink_perturb" #EWC, OGD, TL, shrink_perturb
+
+common: 
+    flux: "efiitg_gb"
+
+    hyperparams:
+        train_size: 20_000
+        valid_size: 10_000
+        test_size:  10_000
+        candidate_size: 10_000 
+        batch_size: 256
+        lambda: 0.5
+        buffer_size: 500
+
+    logging_level: DEBUG
+    # Pipeline parameters
+    iterations: 10
+    initial_epochs: 30
+    MC_dropout_runs: 30
+    keep_prob: 0.25 
+    patience: 20
+    learning_rate: 0.001
+
+    # if training models from scratch, the hyperparameters below are used
+    train_epochs: 30
+    train_patience: 10
+
+
