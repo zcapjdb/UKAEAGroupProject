@@ -481,7 +481,7 @@ def train_model(
 
     train_loader = pt.pandas_to_numpy_data(
         train_dataset,
-        regressor_var=model.flux,
+        regressor_var=regressor_var,
         batch_size=train_batch_size,
         shuffle=True,
     )

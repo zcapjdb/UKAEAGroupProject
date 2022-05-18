@@ -27,7 +27,9 @@ output_dict = {
     "class_test_acc_init": [],
 
     "retrain_losses": [], # regressor performance during retraining
-    "retrain_test_losses": [],
+    "retrain_val_losses": [],
+    "retrain_losses_unscaled": [],
+    "retrain_val_losses_unscaled": [],
     "post_test_loss": [],  # regressor performance after retraining
     "post_test_loss_unscaled": [],  # regressor performance after retraining, unscaled
     "n_train_points": [],
