@@ -8,6 +8,7 @@ from sklearn.preprocessing import StandardScaler
 
 import pipeline.pipeline_tools as pt
 import pipeline.Models as md
+from pipeline.run_pipeline import ALpipeline 
 
 from torch.utils.data import DataLoader
 from scripts.utils import train_keys
@@ -32,7 +33,7 @@ class CLTaskManager:
         PATHS = cfg["data"]
         FLUX = cfg["flux"]
         train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
-        PATHS["train"], PATHS["validation"], PATHS["test"], target_column=FLUX, samplesize_debug=0.1, scale=scale
+        PATHS["train"], PATHS["validation"], PATHS["test"], fluxes=FLUX, samplesize_debug=0.1, scale=scale
     ) 
         return train_dataset, eval_dataset, test_dataset,scaler
 
@@ -47,31 +48,40 @@ class CLTaskManager:
         raise ValueError('Not implemented')
 
     def run(self):
-        # --- ToDo ======>>>> THINK ABOUT SAMPLING
-        models = {'Classifier':self.classifier,'Regressor':self.regressor}
+        models =  {'Classifier':self.classifier,'Regressor':self.regressor}
         test_data = {}
         forgetting = {}
         outputs = {}
+        # --- all of this is so ugly it makes me ashamed, but no time for polishing now
+        # AL pipeline should be a class that initialises the models by training them the first time, then can be updated with new data (data is a self.) and relative scaler (also a self)
         for j,cfg in enumerate(self.config_tasks):
+            self.regressor.flux = cfg['flux'] 
             if self.cl_mode!= 'shrink_perturb':
                 cfg['hyperparams']['lambda'] = 1
             if j==0:
                 train, val, test, scaler = self.get_data(cfg,scale=True)  
+                self.regressor.scaler = scaler
+                test_new = test.sample(cfg['hyperparams']['test_size'])
+                inp = cfg
             else:
-                train_new, val_new, test_new, _ = self.get_data(cfg,scale=False) 
-                # --- re-initialise scaler 
+                train_new, eval_new, test_new, _ = self.get_data(cfg,scale=False) 
 
-                train.add(train_new)
-                val = val_new
-                test = test_new    
+                eval_new.scale(scaler)   
+                test_new.scale(scaler)
+                val_new = eval_new.sample(cfg['hyperparams']['valid_size'])
+                eval_new.remove(val_new.data.index)
+                unlabelled_pool = eval_new
+                
+                val.add(val_new)   # val and test have been scaled in the AL pipeline already
+                test_new = test_new.sample(cfg['hyperparams']['test_size'])
+                test.add(test_new) #--- assuming we have validation and testing - this is not always true in practice. In fact, in a real case we have to keep updating them
 
-            self.regressor.flux = cfg['flux']
-            self.regressor.scaler = scaler
-        
+                inp = [0,cfg,j,{'scaler':scaler,'train':train,'val':val,'test':test,'unlabelled':unlabelled_pool}, models]
+
 
             # ToDo: =====>> think a bit better about the scaler!! still use the scaler for the first task??
              # ---  train dataset is augmented each time, without removing old data
-            train, test, output_dict = ALpipeline(cfg, models, j, self.device, self.cl_mode, scaler, train,val, test, ) 
+            train, val, test, output_dict, scaler, models = ALpipeline(inp)
             outputs.update({f'task{j}':output_dict})
             # ToDo: ====>> instead, load each model from task 1 and retrain from same point on task 2 based on the various strategies
             if self.cl_mode == 'shrink_perturb':
@@ -83,7 +93,7 @@ class CLTaskManager:
             else: # --- Few-shot transfer learning, we don't care about forgetting
                 pass
 
-            test_data.update({f'task{j}':test})
+            test_data.update({f'task{j}':test_new})
             
             for k in test_data.keys():
                 _, regr_test_loss = self.regressor.predict(test_data[k])
@@ -99,7 +109,7 @@ class CLTaskManager:
 
 
 
-def ALpipeline(cfg: dict, models: dict, j: str, device: torch.device, cl_mode: str, scaler: StandardScaler,
+def ALpipeline_old(cfg: dict, models: dict, j: str, device: torch.device, cl_mode: str, scaler: StandardScaler,
             train_dataset: ITGDatasetDF,
             eval_dataset: ITGDatasetDF,
             test_dataset: ITGDatasetDF) -> None:
@@ -448,9 +458,7 @@ if __name__=='__main__':
 
     PL = CLTaskManager(config_tasks, CL_mode)
 
-    outputs = []
-    with Pool(10) as p:
-        outputs = PL.run()
+    outputs = PL.run()
     with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/bootstrapped_CL_{CL_mode}_lam_{lam}.pkl', 'wb') as f:
         pkl.dump(outputs, f)
 
