@@ -560,7 +560,7 @@ def get_most_uncertain(
         median_dist = np.median(cdists, axis=1)
         #nearest = cdists[:, 1] # get second nearest neighbour as first is itself
 
-        total_std = total_std - alpha * median_dist# nearest
+        total_std = total_std + alpha * median_dist# nearest
 
     if acquisition == "random":
         # choose random indices
