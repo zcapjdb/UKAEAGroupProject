@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from tqdm.auto import tqdm
+from scipy.spatial.distance import cdist
 
 import numpy as np
 import pandas as pd
@@ -10,7 +11,7 @@ import matplotlib.pyplot as plt
 
 import copy
 import logging
-from scripts.utils import train_keys
+from scripts.utils import train_keys, target_keys
 from pipeline.Models import ITGDatasetDF, ITGDataset, Classifier, Regressor
 from typing import Union
 import os
@@ -18,7 +19,7 @@ import os
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 output_dict = {
-    "train_loss_init": [], # Regressor performance before pipeline
+    "train_loss_init": [],  # Regressor performance before pipeline
     "test_loss_init": [],
     "class_train_loss_init": [], # Regressor performance before pipeline
     "class_test_loss_init": [],
@@ -26,10 +27,11 @@ output_dict = {
     "class_test_acc_init": [],
 
     "retrain_losses": [], # regressor performance during retraining
-    "retrain_test_losses": [],
-    "post_test_loss": [], # regressor performance after retraining
-    "post_test_loss_unscaled": [], # regressor performance after retraining, unscaled
-
+    "retrain_val_losses": [],
+    "retrain_losses_unscaled": [],
+    "retrain_val_losses_unscaled": [],
+    "post_test_loss": [],  # regressor performance after retraining
+    "post_test_loss_unscaled": [],  # regressor performance after retraining, unscaled
     "n_train_points": [],
     "mse_before": [],
     "mse_after": [],
@@ -58,12 +60,12 @@ def prepare_data(
     train_path: str,
     valid_path: str,
     test_path: str,
-    target_column: str,
+    fluxes: list,
     train_size: int = None,
     valid_size: int = None,
     test_size: int = None,
     samplesize_debug: int = 1,
-    scale: bool = True
+    scale: bool = True,
 ) -> (ITGDatasetDF, ITGDatasetDF, ITGDatasetDF, StandardScaler):
     """
     Loads the data from the given paths and prepares it for training.
@@ -75,45 +77,48 @@ def prepare_data(
     test_data = pd.read_pickle(test_path)
 
     if train_size is not None:
-        train_data = train_data.sample(samplesize_debug*train_size)
+        train_data = train_data.sample(samplesize_debug * train_size)
 
     if valid_size is not None:
-        validation_data = validation_data.sample(samplesize_debug*valid_size)
-    
+        validation_data = validation_data.sample(samplesize_debug * valid_size)
+
     if test_size is not None:
-        test_data = test_data.sample(samplesize_debug*test_size)
+        test_data = test_data.sample(samplesize_debug * test_size)
 
+    target_column = fluxes[0]
 
-    if target_column not in ["efeetg_gb", "efetem_gb", "efiitg_gb"]:
-        raise ValueError("Currently only leading fluxes are supported")
+    if target_column not in target_keys:
+        raise ValueError("Flux variable not supported")
 
     # Remove NaN's and add appropripate class labels
-    keep_keys = train_keys + [target_column]
+    keep_keys = train_keys + fluxes
+
+    logging.debug(f"keep keys: {keep_keys}")
 
     train_data = train_data[keep_keys]
     validation_data = validation_data[keep_keys]
     test_data = test_data[keep_keys]
 
-    train_data = train_data.dropna()
-    validation_data = validation_data.dropna()
-    test_data = test_data.dropna()
+    train_data = train_data.dropna(subset=[target_column]) 
+    validation_data = validation_data.dropna(subset =[target_column])
+    test_data = test_data.dropna(subset=[target_column])
+
+
 
     train_data["stable_label"] = np.where(train_data[target_column] != 0, 1, 0)
     validation_data["stable_label"] = np.where(
         validation_data[target_column] != 0, 1, 0
     )
-    test_data["stable_label"] = np.where(
-        test_data[target_column] != 0, 1, 0
-    )
+    test_data["stable_label"] = np.where(test_data[target_column] != 0, 1, 0)
 
     if scale:
         scaler = StandardScaler()
         scaler.fit_transform(train_data.drop(["stable_label"], axis=1))
 
-        train_dataset = ITGDatasetDF(train_data, target_column=target_column)
-        valid_dataset = ITGDatasetDF(validation_data, target_column=target_column)
-        test_dataset = ITGDatasetDF(test_data, target_column=target_column)
-
+    train_dataset = ITGDatasetDF(train_data, target_column=target_column)
+    valid_dataset = ITGDatasetDF(validation_data, target_column=target_column)
+    test_dataset = ITGDatasetDF(test_data, target_column=target_column)
+    if scale: 
         train_dataset.scale(scaler)
         valid_dataset.scale(scaler)
         test_dataset.scale(scaler)
@@ -125,14 +130,17 @@ def prepare_data(
 
 # classifier tools
 def select_unstable_data(
-    dataset: ITGDatasetDF, batch_size: int, classifier: Classifier, device: torch.device = None,
+    dataset: ITGDatasetDF,
+    batch_size: int,
+    classifier: Classifier,
+    device: torch.device = None,
 ) -> ITGDatasetDF:
     """
-    Selects data classified as unstable by the classifier. 
+    Selects data classified as unstable by the classifier.
 
     returns:
         dataset: the dataset with the unstable data removed.
-        
+
     """
 
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
@@ -158,13 +166,18 @@ def select_unstable_data(
     logging.log(15, f"Unstable points: {len(unstable_points)}")
 
     # create new dataset with misclassified points
-    unstable_candidates = copy.deepcopy(dataset) 
-    unstable_candidates.data = unstable_candidates.data.loc[unstable_points] 
+    unstable_candidates = copy.deepcopy(dataset)
+    unstable_candidates.data = unstable_candidates.data.loc[unstable_points]
 
     return unstable_candidates
 
 
-def check_for_misclassified_data(candidates: ITGDatasetDF) -> ITGDatasetDF:
+def check_for_misclassified_data(
+    candidates: ITGDatasetDF, 
+    uncertainty: Union[np.array, list], 
+    indices: Union[np.array, list]
+    ) -> ITGDatasetDF:
+    
     candidate_loader = DataLoader(candidates, batch_size=1, shuffle=False)
 
     missed_points = []
@@ -172,12 +185,22 @@ def check_for_misclassified_data(candidates: ITGDatasetDF) -> ITGDatasetDF:
         # if y == 0, then it is misclassified, keep only the misclassified points
         if y.item() == 0:
             missed_points.append(idx.item())
-    
+
     # create new dataset with misclassified points
     missed_candidates = copy.deepcopy(candidates)
     missed_candidates.data = missed_candidates.data.loc[missed_points]
+    
+    candidates.remove(missed_points)
 
-    return missed_candidates.data , len(missed_points)
+    candidate_indices = np.array(list(candidates.data.index))
+    indices = np.array(indices)
+    # find the overlap of the two index lists
+    mask = np.isin(indices, candidate_indices)
+    indices = indices[mask]
+    uncertainty = np.array(uncertainty)[mask]
+
+    return candidates, missed_candidates.data, len(missed_points), indices, uncertainty
+
 
 # Function to retrain the classifier on the misclassified points
 def retrain_classifier(
@@ -220,7 +243,9 @@ def retrain_classifier(
         patience = epochs
 
     # instantiate optimiser
-    opt = torch.optim.Adam(classifier.parameters(), lr=learning_rate,weight_decay=1.e-4)
+    opt = torch.optim.Adam(
+        classifier.parameters(), lr=learning_rate, weight_decay=1.0e-4
+    )
     # create scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         opt,
@@ -240,7 +265,9 @@ def retrain_classifier(
 
         logging.debug(f"Train Step:  {epoch}")
 
-        loss, acc = classifier.train_step(train_loader, opt, epoch=epoch, disable_tqdm=disable_tqdm)
+        loss, acc = classifier.train_step(
+            train_loader, opt, epoch=epoch, disable_tqdm=disable_tqdm
+        )
         train_loss.append(loss.item())
         train_acc.append(acc)
 
@@ -268,6 +295,25 @@ def retrain_classifier(
 
 
 # Regressor tools
+def reorder_arrays(arrays:list, orders:list, arrangement:np.array):
+    """
+    Inputs:
+        arrays: The arrays to be reordered
+        orders: The current ordering of the arrays
+        arrangements: The desired orderings
+    Outputs: 
+        arrays: a list of the original arrays ordering according to arrangement
+    """
+
+    for k in range(len(arrays)):
+        assert len(orders[k]) == len (arrangement), f"Length of arrays to reorder {len(orders[k])} doesn't match the reordering indices {len(arrangement)}"
+        reorder = np.array([np.where(orders[k] == i) for i in arrangement]).flatten()
+        # remember to comment the line below out
+        arrays[k] = arrays[k][reorder]
+    
+    return arrays
+
+
 def retrain_regressor(
     new_dataset: ITGDatasetDF,
     val_dataset: ITGDatasetDF,
@@ -288,11 +334,30 @@ def retrain_regressor(
     Returns the losses of the training and validation steps.
     """
 
-    logging.info("Retraining regressor...\n")
+    logging.info(f"Retraining {model.flux} regressor...\n")
     logging.log(15, f"Training on {len(new_dataset)} points")
+    # variable the regressor is trained on
 
-    new_loader = pandas_to_numpy_data(new_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = pandas_to_numpy_data(val_dataset, batch_size=batch_size, shuffle=False)
+    # are we training on any NaNs
+    logging.debug(f"NaNs in training: {new_dataset.data[model.flux].isna().sum()}")
+    logging.debug(f"NaNs in valid: {val_dataset.data[model.flux].isna().sum()}")
+    #TODO: this is a poor fix
+    
+    new_copy = copy.deepcopy(new_dataset)
+    val_copy = copy.deepcopy(val_dataset)
+
+    new_copy.data.dropna(subset=[model.flux], inplace=True)
+    val_copy.data.dropna(subset=[model.flux], inplace=True)
+
+    logging.debug(f"NaNs in training: {new_copy.data[model.flux].isna().sum()}")
+    logging.debug(f"NaNs in vald: {val_copy.data[model.flux].isna().sum()}")
+
+    new_loader = pandas_to_numpy_data(
+        new_copy, regressor_var=model.flux, batch_size=batch_size, shuffle=True
+    )
+    val_loader = pandas_to_numpy_data(
+        val_copy, regressor_var=model.flux, batch_size=batch_size, shuffle=False
+    )
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
     model.shrink_perturb(lam, loc, scale)
@@ -307,7 +372,7 @@ def retrain_regressor(
     model.train()
 
     # instantiate optimiser
-    opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1.e-4)
+    opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1.0e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         opt,
         mode="min",
@@ -320,7 +385,7 @@ def retrain_regressor(
 
     for epoch in range(epochs):
         logging.log(15, f"Epoch: {epoch}")
-        loss = model.train_step(new_loader, opt, epoch = epoch, disable_tqdm=disable_tqdm)
+        loss = model.train_step(new_loader, opt, epoch=epoch, disable_tqdm=disable_tqdm)
         train_loss.append(loss.item())
 
         logging.log(15, f"Training Loss: {loss.item():.4f}")
@@ -339,6 +404,198 @@ def retrain_regressor(
     return train_loss, val_loss
 
 
+def get_uncertainty(
+    dataset: ITGDatasetDF,
+    regressor: Regressor,
+    n_runs: int = 25,
+    order_idx: Union[None, list, np.array] = None,
+    train_data: bool = False,
+    plot: bool = False,
+    device: torch.device = None,
+) -> (np.array, np.array):
+
+    """
+    Calculates the uncertainty of the regressor on the points in the dataloader.
+    Returns the most uncertain points.
+    If order_idx is provided, the points are ordered according to the order_idx to allow
+    comparison before and after retraining.
+
+    """
+
+    data_copy = copy.deepcopy(dataset)
+
+    if train_data:
+        logging.info("Running MC Dropout on Training Data....\n")
+    else:
+        logging.info("Running MC Dropout on Novel Data....\n")
+
+    batch_size = min(len(dataset), 512)
+    dataloader = pandas_to_numpy_data(
+        data_copy, regressor_var=regressor.flux, batch_size=batch_size, shuffle=False
+    )
+
+    regressor.eval()
+    regressor.enable_dropout()
+
+    # evaluate model on training data n_runs times and return points with largest uncertainty
+    runs = []
+
+    for i in tqdm(range(n_runs)):
+        step_list = []
+        for step, (x, y, z, idx) in enumerate(dataloader):
+            x = x.to(device)
+            predictions = regressor(x.float()).detach().numpy()
+            step_list.append(predictions)
+
+        flat_list = [item for sublist in step_list for item in sublist]
+        flattened_predictions = np.array(flat_list).flatten()
+        runs.append(flattened_predictions)
+
+    out_std = np.std(np.array(runs), axis=0)
+    n_out_std = out_std.shape[0]
+
+    logging.log(15, f"Number of points passed for MC dropout: {n_out_std}")
+
+    # Get the list of indices of the dataframe
+    idx_list = []
+    for step, (x, y, z, idx) in enumerate(dataloader):
+        idx_list.append(idx.detach().numpy())
+
+    # flatten the list of indices
+    flat_list = [item for sublist in idx_list for item in sublist]
+    idx_array = np.asarray(flat_list, dtype=object).flatten()
+
+    if plot:
+        if order_idx == None:
+            tag = "Initial"
+        else:
+            tag = "Final"
+        keep = 1.0
+        plot_uncertainties(out_std, keep, tag)
+
+    if order_idx is not None:
+        # matching the real indices to the array position
+        reorder = np.array([np.where(idx_array == i) for i in order_idx]).flatten()
+        uncertain_data_idx = idx_array[reorder]
+
+        # selecting the corresposing std ordered according to order_idx
+        uncertain_list_indices = reorder
+
+        # Make sure the real indices match
+        assert list(np.unique(uncertain_data_idx)) == list(np.unique(order_idx))
+
+        # Make sure they are in the same order
+        assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error(
+            "Ordering error"
+        )
+
+        return out_std[reorder], uncertain_data_idx
+    else:
+        return out_std, idx_array
+
+
+def get_most_uncertain(
+    dataset: ITGDatasetDF,
+    out_stds: Union[list, np.array],
+    idx_arrays: Union[list, np.array],
+    model: Regressor,
+    keep: float = 0.25,
+    unlabelled_pool: Union[None, ITGDataset] = None,
+    plot: bool = True,
+    acquisition: str = "add_uncertainties",
+    alpha: float = 0.1,
+):
+
+    """
+    Inputs:
+
+        dataset: dataset of points that MC drop out was ran on
+        out_stds: standard deviations from MC dropout from regressors
+        idx_arrays: order of the datapoints from dataloaders
+        keep: percentage of most uncertain points to keep
+        plot: Whether to plot the distribution of the uncertainties
+
+    Outputs:
+        data_copy: a dataset object containing only the most uncertain points
+        out_std: standard deviation of the most ucnertain points
+        idx_array: idx_array used for ordering  (which one have we followed)
+
+    """
+    data_copy = copy.deepcopy(dataset)
+    n_candidates = out_stds[0].shape[0]
+
+    if len(out_stds) > 1:
+        assert len(idx_arrays) == len(out_stds), "N indices doesn't match N stds"
+        pred_list = []
+        # reorder idx_arrays to match the order of idx_arrays[0]
+        for i in range(len(idx_arrays)):
+            reorder = np.array(
+                [np.where(idx_arrays[i] == j) for j in idx_arrays[0]]
+            ).flatten()
+            out_stds[i] = out_stds[i][reorder]
+
+            # run predict method on dataset using idx_arrays ordering
+            data_copy.data = data_copy.data.loc[idx_arrays[0]]
+            preds, _ = model.predict(data_copy)
+            preds = np.hstack(preds)
+            pred_list.append(preds)
+
+        out_stds = np.array(out_stds)
+        logging.debug(f"out_stds shape: {out_stds.shape}")
+
+        if acquisition == "leading_flux_uncertainty":
+            total_std = out_stds[0, :]
+            logging.debug(f"total_std shape: {total_std.shape}")
+
+        else:
+            total_std = np.sum(out_stds, axis=0)
+            logging.debug(f"total_std shape: {total_std.shape}")
+
+        pred_array = np.stack(pred_list, axis=0)
+
+    else:
+        total_std = out_stds[0]
+        data_copy.data = data_copy.data.loc[idx_arrays[0]]
+        pred_array, _ = model.predict(data_copy)    
+
+    #TODO: how to best choose alpha?
+    if acquisition == "distance_penalty":
+        logging.info("Using distance penalty acquisition")
+        cdists = cdist(pred_array.T, pred_array.T, metric = "euclidean")
+        cdists.sort()
+        nearest = cdists[:, 1]
+
+        total_std = total_std - alpha * nearest
+
+    if acquisition == "random":
+        # choose random indices
+        uncertain_list_indices = np.random.choice(n_candidates, int(keep * n_candidates), replace=False)
+        #random_certain is all the indices not in random_idx
+        certain_list_indices = np.array(list(set(range(n_candidates)) - set(uncertain_list_indices)))
+        
+    else:
+        uncertain_list_indices = np.argsort(total_std)[-int(n_candidates*keep):]
+        certain_list_indices = np.argsort(total_std)[:n_candidates-int(n_candidates*keep)]
+
+
+    certain_data_idx = idx_arrays[0][certain_list_indices]
+    uncertain_data_idx = idx_arrays[0][uncertain_list_indices]
+
+    # Take the points that are not in the most uncertain points and add back into the validation set
+    temp_dataset = copy.deepcopy(dataset)
+    temp_dataset.remove(indices=uncertain_data_idx)
+    unlabelled_pool.add(temp_dataset)
+
+    logging.log(15, f"no valid after : {len(unlabelled_pool)}")
+
+    del temp_dataset
+
+    # Remove them from the sample
+    data_copy.remove(certain_data_idx)
+
+    return data_copy, total_std[uncertain_list_indices], idx_arrays[0][uncertain_list_indices], unlabelled_pool
+
+
 def regressor_uncertainty(
     dataset: ITGDatasetDF,
     regressor: Regressor,
@@ -348,7 +605,7 @@ def regressor_uncertainty(
     plot: bool = False,
     order_idx: Union[None, list, np.array] = None,
     unlabelled_pool: Union[None, ITGDataset] = None,
-    device : torch.device = None,
+    device: torch.device = None,
 ) -> (ITGDatasetDF, np.array, np.array):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
@@ -366,7 +623,9 @@ def regressor_uncertainty(
         logging.info("Running MC Dropout on Novel Data....\n")
 
     batch_size = min(len(dataset), 512)
-    dataloader = pandas_to_numpy_data(data_copy, batch_size=batch_size, shuffle=False)
+    dataloader = pandas_to_numpy_data(
+        data_copy, regressor_var=regressor.flux, batch_size=batch_size, shuffle=False
+    )
 
     regressor.eval()
     regressor.enable_dropout()
@@ -413,7 +672,7 @@ def regressor_uncertainty(
         logging.log(15, f"no valid before : {len(unlabelled_pool)}")
 
         # Take the points that are not in the most uncertain points and add back into the validation set
-        temp_dataset = copy.deepcopy(dataset)  
+        temp_dataset = copy.deepcopy(dataset)
         temp_dataset.remove(indices=uncertain_data_idx)
         unlabelled_pool.add(temp_dataset)
 
@@ -432,7 +691,6 @@ def regressor_uncertainty(
 
         plot_uncertainties(out_std, keep, tag)
 
-
     if order_idx is not None:
         # matching the real indices to the array position
         reorder = np.array([np.where(idx_array == i) for i in order_idx]).flatten()
@@ -445,24 +703,40 @@ def regressor_uncertainty(
         assert list(np.unique(uncertain_data_idx)) == list(np.unique(order_idx))
 
         # Make sure they are in the same order
-        assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error("Ordering error")
+        assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error(
+            "Ordering error"
+        )
 
     if not train_data:
-        return data_copy, out_std[uncertain_list_indices], uncertain_data_idx, unlabelled_pool
+        return (
+            data_copy,
+            out_std[uncertain_list_indices],
+            uncertain_data_idx,
+            unlabelled_pool,
+        )
 
     else:
         return data_copy, out_std, idx_array
 
 
-def pandas_to_numpy_data(dataset: ITGDatasetDF, batch_size: int = None, shuffle: bool = True) -> DataLoader:
+def pandas_to_numpy_data(
+    dataset: ITGDatasetDF,
+    regressor_var: str = None,
+    batch_size: int = None,
+    shuffle: bool = True,
+) -> DataLoader:
     """
     Helper function to convert pandas dataframe to numpy array and create a dataloader.
     Dataloaders created from numpy arrays are much faster than pandas dataframes.
     """
+    if regressor_var == None:
+        logging.debug(f"{dataset.target}")
+        regressor_var = dataset.target
+        logging.info(f"No regressor value chosen, setting z to {regressor_var}")
 
     x_array = dataset.data[train_keys].values
     y_array = dataset.data[dataset.label].values
-    z_array = dataset.data[dataset.target].values
+    z_array = dataset.data[regressor_var].values
     idx_array = dataset.data["index"].values
 
     numpy_dataset = ITGDataset(x_array, y_array, z_array, idx_array)
@@ -490,15 +764,15 @@ def mse_change(
     plot: bool = True,
     data: str = "novel",
     save_plots: bool = True,
-    save_path:str = None, 
-    iteration: int =None,
+    save_path: str = None,
+    iteration: int = None,
     lam: float = 1.0,
 ) -> (float, float, float):
     """
     Calculates the change in MSE between the before and after training.
     """
 
-    if data == 'train':
+    if data == "train":
         idxs = prediction_order.astype(int)
         ground_truth = uncertain_dataset.data.loc[idxs]
 
@@ -529,21 +803,21 @@ def mse_change(
             uncertainties,
             data=data,
             save_plots=save_plots,
-            save_path=save_path, 
-            iteration=iteration, 
+            save_path=save_path,
+            iteration=iteration,
             lam=lam,
-            target=uncertain_dataset.target
+            target=uncertain_dataset.target,
         )
 
     return mse_before, mse_after, perc_change
 
 
 def uncertainty_change(
-    x: Union[list, np.array], 
-    y: Union[np.array, list], 
-    plot: bool = True, 
-    plot_title: str = None, 
-    iteration:int = None,
+    x: Union[list, np.array],
+    y: Union[np.array, list],
+    plot: bool = False,
+    plot_title: str = None,
+    iteration: int = None,
     save_path: str = "./",
 ) -> float:
     """
@@ -551,11 +825,13 @@ def uncertainty_change(
     with option to plot the results.
 
     """
+
     total = x.shape[0]
     increase = len(x[y > x]) * 100 / total
     decrease = len(x[y < x]) * 100 / total
     no_change = 100 - increase - decrease
 
+    #TODO: fix! strange this occuring with the shapes
     if plot:
         plot_scatter(x, y, plot_title, iteration, save_path)
 
@@ -582,7 +858,7 @@ def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None) -> None:
     plotting the most uncertain points in a separate plot.
     """
 
-    print('plotting...')
+    print("plotting...")
     plt.figure()
     plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=50)
 
@@ -602,12 +878,15 @@ def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None) -> None:
     plt.clf()
 
 
-def plot_scatter(initial_std: np.ndarray, final_std: np.ndarray,title: str, it: int, save_dest: str) -> None:
+def plot_scatter(
+    initial_std: np.ndarray, final_std: np.ndarray, title: str, it: int, save_dest: str
+) -> None:
     """
     Plot the scatter plot of the initial and final standard deviations of the predictions.
     """
-
-    sns.jointplot(initial_std,final_std, kind='reg')
+    logging.debug(f" plot x shape: {initial_std.shape}")
+    logging.debug(f" plot y shape: {final_std.shape}")
+    sns.jointplot(initial_std, final_std, kind="reg")
 
     plt.plot(
         [initial_std.min(), final_std.max()],
@@ -627,12 +906,12 @@ def plot_mse_change(
     intial_prediction: np.array,
     final_prediction: np.array,
     uncertainties: list,
-    target = "efiitg_gb",
+    target="efiitg_gb",
     data: str = "novel",
     save_plots: bool = False,
     save_path=None,
     iteration=None,
-    lam=1.0
+    lam=1.0,
 ) -> None:
     """
 
@@ -683,16 +962,18 @@ def plot_mse_change(
     plt.legend()
     if save_plots:
         filename = f"{save_prefix}_mse_before_it_{iteration}.png"
-        save_dest = os.path.join(save_path,target)
+        save_dest = os.path.join(save_path, target)
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
+        if not os.path.exists(save_dest):
+            os.mkdir(save_dest)
 
-        save_dest = os.path.join(save_dest,f"{lam}")
+        save_dest = os.path.join(save_dest, f"{lam}")
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
-        
-        save_dest = os.path.join(save_dest,filename)
-        
+        if not os.path.exists(save_dest):
+            os.mkdir(save_dest)
+
+        save_dest = os.path.join(save_dest, filename)
+
         plt.savefig(save_dest, dpi=300)
 
     plt.figure()
@@ -717,16 +998,18 @@ def plot_mse_change(
 
     if save_plots:
         filename = f"{save_prefix}_mse_after_it_{iteration}.png"
-        save_dest = os.path.join(save_path,target)
+        save_dest = os.path.join(save_path, target)
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
+        if not os.path.exists(save_dest):
+            os.mkdir(save_dest)
 
-        save_dest = os.path.join(save_dest,f"{lam}")
+        save_dest = os.path.join(save_dest, f"{lam}")
 
-        if not os.path.exists(save_dest): os.mkdir(save_dest)
-        
-        save_dest = os.path.join(save_dest,filename)
-        
+        if not os.path.exists(save_dest):
+            os.mkdir(save_dest)
+
+        save_dest = os.path.join(save_dest, filename)
+
         plt.savefig(save_dest, dpi=300)
 
 
