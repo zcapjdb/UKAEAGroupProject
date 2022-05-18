@@ -34,8 +34,8 @@ verboselogs.install()
 logger = logging.getLogger(__name__)
 coloredlogs.install(level="DEBUG")  # cfg["logging_level"])
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#device = torch.device("cpu")
+#device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 
 # comet_project_name = "AL-pipeline"
 # experiment = Experiment(project_name = comet_project_name)
