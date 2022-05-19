@@ -500,7 +500,7 @@ def get_most_uncertain(
     unlabelled_pool: Union[None, ITGDataset] = None,
     plot: bool = True,
     acquisition: str = "add_uncertainties",
-    alpha: float = 0.1,
+    alpha: float = 1,
 ):
 
     """

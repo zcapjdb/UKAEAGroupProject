@@ -174,6 +174,8 @@ for FLUX in FLUXES:
 for FLUX in FLUXES:
     logging.info(f"Test loss for {FLUX} before pipeline:")
     _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_loader, unscale = True)
+    logging.info(f"Holdout Loss: {holdout_loss}")
+    logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
     output_dict["test_loss_init"].append(holdout_loss)
     output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
 
