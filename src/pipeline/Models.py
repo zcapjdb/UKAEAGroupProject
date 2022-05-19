@@ -490,7 +490,6 @@ def train_model(
         train_dataset.data = train_dataset.data.dropna(subset=[regressor_var])
         val_dataset.data = val_dataset.data.dropna(subset=[regressor_var])
 
-
     else:
         regressor_var = None
 

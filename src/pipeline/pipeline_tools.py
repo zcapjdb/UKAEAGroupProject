@@ -729,8 +729,7 @@ def pandas_to_numpy_data(
         logging.debug(f"{dataset.target}")
         regressor_var = dataset.target
         logging.info(f"No regressor value chosen, setting z to {regressor_var}")
-    else:
-        logging.info(f"Regressor value chosen: {regressor_var}")
+
 
     x_array = dataset.data[train_keys].values
     y_array = dataset.data[dataset.label].values
