@@ -180,10 +180,12 @@ def ALpipeline(cfg):
         _, holdout_loss = models[FLUX]["Regressor"].predict(holdout_loader)
         output_dict["test_loss_init"].append(holdout_loss)
 
-        # Create logger object for use in pipeline
-        verboselogs.install()
-        logger = logging.getLogger(__name__)
-        coloredlogs.install(level="DEBUG")#cfg["logging_level"])
+    _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_loader) 
+    output_dict['class_test_acc_init'].append(holdout_class_losses[1])
+    # Create logger object for use in pipeline
+    verboselogs.install()
+    logger = logging.getLogger(__name__)
+    coloredlogs.install(level="DEBUG")#cfg["logging_level"])
 
     if len(train_sample) > 100_000:
         logger.warning(
@@ -390,8 +392,8 @@ def ALpipeline(cfg):
         output_dict["holdout_ground_truth"].append(holdout_set.target)
         output_dict["retrain_losses"].append(train_losses)
         output_dict["retrain_val_losses"].append(val_losses)
-        output_dict["retrain_losses_unscaled"].append(train_losses_unscaled)
-        output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
+        #output_dict["retrain_losses_unscaled"].append(train_losses_unscaled)
+        #output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
         output_dict["post_test_loss"].append(holdout_loss)
         output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
 
@@ -408,6 +410,7 @@ def ALpipeline(cfg):
         candidates.scale(scaler, unscale=True)
         train_sample.scale(scaler, unscale=True)
         unlabelled_pool.scale(scaler, unscale=True)
+        valid_dataset.scale(scaler, unscale=True)
         holdout_set.scale(scaler, unscale=True)
     # --- train data is enriched by new unstable candidate points
         train_sample.add(candidates)
@@ -416,6 +419,7 @@ def ALpipeline(cfg):
         scaler.fit_transform(train_sample.data.drop(["stable_label","index"], axis=1))
         train_sample.scale(scaler)
         unlabelled_pool.scale(scaler)
+        valid_dataset.scale(scaler)
         holdout_set.scale(scaler)
         holdout_loader = DataLoader(
             holdout_set, batch_size=batch_size, shuffle=False
@@ -476,5 +480,5 @@ if __name__=='__main__':
             output_dir = args.output_dir
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
+        with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_norescale.pkl","wb") as f:
             pickle.dump(output,f)                                

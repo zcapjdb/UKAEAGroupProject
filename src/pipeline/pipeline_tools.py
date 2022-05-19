@@ -324,7 +324,7 @@ def retrain_regressor(
     patience: Union[None, int] = None,
     batch_size: int = 1024,
     disable_tqdm: bool = True,
-) -> (list, list):
+) -> (list, list, list, list):
     """
     Retrain the regressor on the most uncertain points.
     Data for retraining is taken from the combined training and uncertain datasets.
