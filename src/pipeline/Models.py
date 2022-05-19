@@ -532,10 +532,10 @@ def train_model(
 
         elif model.type == "regressor":
             logging.debug(f"Epoch: {epoch}")
-            loss = model.train_step(train_loader, opt, epoch=epoch)
+            loss, loss_unscaled = model.train_step(train_loader, opt, epoch=epoch)
             losses.append(loss)
 
-            val_loss = model.validation_step(val_loader)
+            val_loss, val_loss_unscaled = model.validation_step(val_loader)
             validation_losses.append(val_loss)
 
             stopping_metric = np.asarray(validation_losses)
