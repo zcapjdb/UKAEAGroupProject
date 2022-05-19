@@ -143,11 +143,11 @@ def select_unstable_data(
         x = x.to(device)
         y_hat = classifier(x.float())
 
-        pred_class = torch.round(y_hat.squeeze().detach()).numpy()
+        pred_class = torch.round(y_hat.squeeze().detach().cpu()).numpy()
         pred_class = pred_class.astype(int)
 
         unstable = idx[np.where(pred_class == 1)[0]]
-        unstable_points.append(unstable.detach().numpy())
+        unstable_points.append(unstable.detach().cpu().numpy())
 
     # turn list of stable and misclassified points into flat arrays
     unstable_points = np.concatenate(np.asarray(unstable_points, dtype=object), axis=0)
@@ -441,7 +441,7 @@ def get_uncertainty(
         step_list = []
         for step, (x, y, z, idx) in enumerate(dataloader):
             x = x.to(device)
-            predictions = regressor(x.float()).detach().numpy()
+            predictions = regressor(x.float()).detach().cpu().numpy()
             step_list.append(predictions)
 
         flat_list = [item for sublist in step_list for item in sublist]
@@ -456,7 +456,7 @@ def get_uncertainty(
     # Get the list of indices of the dataframe
     idx_list = []
     for step, (x, y, z, idx) in enumerate(dataloader):
-        idx_list.append(idx.detach().numpy())
+        idx_list.append(idx.detach().cpu().numpy())
 
     # flatten the list of indices
     flat_list = [item for sublist in idx_list for item in sublist]
@@ -500,7 +500,7 @@ def get_most_uncertain(
     unlabelled_pool: Union[None, ITGDataset] = None,
     plot: bool = True,
     acquisition: str = "add_uncertainties",
-    alpha: float = 0.1,
+    alpha: float = 1,
 ):
 
     """
@@ -633,7 +633,7 @@ def regressor_uncertainty(
         step_list = []
         for step, (x, y, z, idx) in enumerate(dataloader):
             x = x.to(device)
-            predictions = regressor(x.float()).detach().numpy()
+            predictions = regressor(x.float()).detach().cpu().numpy()
             step_list.append(predictions)
 
         flat_list = [item for sublist in step_list for item in sublist]
@@ -648,7 +648,7 @@ def regressor_uncertainty(
     # Get the list of indices of the dataframe
     idx_list = []
     for step, (x, y, z, idx) in enumerate(dataloader):
-        idx_list.append(idx.detach().numpy())
+        idx_list.append(idx.detach().cpu().numpy())
 
     # flatten the list of indices
     flat_list = [item for sublist in idx_list for item in sublist]
