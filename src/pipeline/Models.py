@@ -483,8 +483,14 @@ def train_model(
     # if pipeline:
     #     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
 
-    if model.type == "Regressor":
+    if model.type == "regressor":
         regressor_var = model.flux
+
+        #drop any NaNs from the regressor variable
+        train_dataset.data = train_dataset.data.dropna(subset=[regressor_var])
+        val_dataset.data = val_dataset.data.dropna(subset=[regressor_var])
+
+
     else:
         regressor_var = None
 
@@ -496,7 +502,7 @@ def train_model(
     )
 
     val_loader = pt.pandas_to_numpy_data(
-        val_dataset, batch_size=val_batch_size, shuffle=False
+        val_dataset, batch_size=val_batch_size, shuffle=False, regressor_var=regressor_var
     )
     # Initialise the optimiser
     if weight_decay:
