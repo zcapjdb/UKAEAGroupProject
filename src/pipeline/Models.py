@@ -190,10 +190,6 @@ class Regressor(nn.Module):
         scaler_features = self.scaler.feature_names_in_
         scaler_index = np.where(scaler_features == self.flux)[0][0]
 
-        # print(f"Scaler index: {scaler_index}")
-        # print(f"Scaler std: {self.scaler.scale_[scaler_index]}")
-        # print(f"Scaler mean: {self.scaler.mean_[scaler_index]}")
-
         return y * self.scaler.scale_[scaler_index] + self.scaler.mean_[scaler_index]
 
     def enable_dropout(self):
