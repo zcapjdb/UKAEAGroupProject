@@ -11,6 +11,7 @@ from tqdm.auto import tqdm
 import logging
 import time
 from tqdm.auto import tqdm
+import copy
 
 cuda0 = torch.device("cuda:0")
 
