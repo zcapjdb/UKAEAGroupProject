@@ -483,6 +483,9 @@ def train_model(
     # if pipeline:
     #     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
 
+    train_dataset = copy.deepcopy(train_dataset)
+    val_dataset = copy.deepcopy(val_dataset)
+
     if model.type == "regressor":
         regressor_var = model.flux
 
