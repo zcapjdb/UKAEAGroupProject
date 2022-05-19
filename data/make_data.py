@@ -51,16 +51,29 @@ def main(required: str = 'LH'):
         valid.to_pickle(f"{path}/valid_data_clipped.pkl")
         test.to_pickle(f"{path}/test_data_clipped.pkl")
     elif required == 'CB':
-        train_C, tmp = train_test_split(df.query('wall_material_index==0'), test_size = 0.2, random_state = 42)
-        valid_C, test_C = train_test_split(tmp, test_size = 0.5, random_state = 42)    
-        train_B, tmp = train_test_split(df.query('wall_material_index==1'), test_size = 0.2, random_state = 42)
-        valid_B, test_B = train_test_split(tmp, test_size = 0.5, random_state = 42)    
-        train_C.to_pickle(f"{path}/carbonwall/train_data_clipped.pkl")
-        valid_C.to_pickle(f"{path}/carbonwall/valid_data_clipped.pkl")
-        test_C.to_pickle(f"{path}/carbonwall/test_data_clipped.pkl")
-        train_B.to_pickle(f"{path}/berilliumwall/train_data_clipped.pkl")
-        valid_B.to_pickle(f"{path}/berilliumwall/valid_data_clipped.pkl")
-        test_B.to_pickle(f"{path}/berilliumwall/test_data_clipped.pkl")
+        train, tmp = train_test_split(df.query('wall_material_index==0 & is_hmode==0 & discharge_phase_index==0'), test_size = 0.2, random_state = 42)
+        valid, test = train_test_split(tmp, test_size = 0.5, random_state = 42)    
+        train.to_pickle(f"{path}/carbonwall/Lmode/train_data_clipped.pkl")
+        valid.to_pickle(f"{path}/carbonwall/Lmode/valid_data_clipped.pkl")
+        test.to_pickle(f"{path}/carbonwall/Lmode/test_data_clipped.pkl")        
+        train, tmp = train_test_split(df.query('wall_material_index==1 & is_hmode==0 & discharge_phase_index==0'), test_size = 0.2, random_state = 42)
+        valid, test = train_test_split(tmp, test_size = 0.5, random_state = 42)    
+        train.to_pickle(f"{path}/berilliumwall/Lmode/train_data_clipped.pkl")
+        valid.to_pickle(f"{path}/berilliumwall/Lmode/valid_data_clipped.pkl")
+        test.to_pickle(f"{path}/berilliumwall/Lmode/test_data_clipped.pkl")
+
+        train, tmp = train_test_split(df.query('wall_material_index==0 & is_hmode==1 & discharge_phase_index==0'), test_size = 0.2, random_state = 42)
+        valid, test = train_test_split(tmp, test_size = 0.5, random_state = 42)    
+        train.to_pickle(f"{path}/carbonwall/Hmode/train_data_clipped.pkl")
+        valid.to_pickle(f"{path}/carbonwall/Hmode/valid_data_clipped.pkl")
+        test.to_pickle(f"{path}/carbonwall/Hmode/test_data_clipped.pkl")        
+
+        train, tmp = train_test_split(df.query('wall_material_index==1 & is_hmode==1 & discharge_phase_index==0'), test_size = 0.2, random_state = 42)
+        valid, test = train_test_split(tmp, test_size = 0.5, random_state = 42)   
+        train.to_pickle(f"{path}/berilliumwall/Hmode/train_data_clipped.pkl")
+        valid.to_pickle(f"{path}/berilliumwall/Hmode/valid_data_clipped.pkl")
+        test.to_pickle(f"{path}/berilliumwall/Hmode/test_data_clipped.pkl")                 
+
     elif required == 'LH':
         train_L, tmp = train_test_split(df.query('is_hmode==0 & discharge_phase_index==0'), test_size = 0.2, random_state = 42)
         valid_L, test_L = train_test_split(tmp, test_size = 0.5, random_state = 42)    
@@ -74,4 +87,4 @@ def main(required: str = 'LH'):
         test_H.to_pickle(f"{path}/Hmode/test_data_clipped.pkl")
 
 if __name__=='__main__':
-    main('LH')
+    main('CB')

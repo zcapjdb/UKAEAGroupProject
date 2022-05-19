@@ -21,7 +21,7 @@ import pandas as pd
 
 class CLTaskManager:
     def __init__(self, config_tasks: list = None,  CL_mode: str = 'shrink_perturb', 
-     save_path: str = "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL" ):
+     save_path: str = "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/" ):
         self.config_tasks = config_tasks # --- List of config files for the different tasks
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.classifier = Classifier(self.device)
@@ -65,7 +65,7 @@ class CLTaskManager:
                 inp = cfg
             else:
                 train_new, eval_new, test_new, _ = self.get_data(cfg,scale=False) 
-
+                       
                 eval_new.scale(scaler)   
                 test_new.scale(scaler)
                 val_new = eval_new.sample(cfg['hyperparams']['valid_size'])
@@ -96,8 +96,8 @@ class CLTaskManager:
             test_data.update({f'task{j}':test_new})
             
             for k in test_data.keys():
-                _, regr_test_loss = self.regressor.predict(test_data[k])
-                _, class_test_loss = self.classifier.predict(test_data[k])
+                _, regr_test_loss = models[cfg['flux'][0]]['Regressor'].predict(test_data[k])
+                _, class_test_loss = models[cfg['flux'][0]]['Classifier'].predict(test_data[k])
                 forgetting.update({f'regression_{k}_model{j}':regr_test_loss})
                 forgetting.update({f'classification_{k}_model{j}':class_test_loss})
 
