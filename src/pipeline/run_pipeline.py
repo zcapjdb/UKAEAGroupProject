@@ -34,8 +34,8 @@ verboselogs.install()
 logger = logging.getLogger(__name__)
 coloredlogs.install(level="DEBUG")  # cfg["logging_level"])
 
-#device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = torch.device("cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+logging.info(f"Using device: {device}")
 
 # comet_project_name = "AL-pipeline"
 # experiment = Experiment(project_name = comet_project_name)
@@ -109,7 +109,7 @@ unlabelled_pool = eval_dataset
 logging.info("Loaded the following models:\n")
 
 # ------------------------------------------- Load or train first models ------------------------------------------
-models = {}
+models = {f:{} for f in FLUXES}
 for model in PRETRAINED:
     logging.debug(f"Size of training dataset {len(train_dataset)}")
     train_sample = train_dataset.sample(train_size)
@@ -155,14 +155,14 @@ for model in PRETRAINED:
             )
             models[FLUXES[0]] = {model: trained_model.to(device)} 
         else: 
-            logging.info(f"{FLUX} {model} not trained - training now")
+            logging.info(f"{FLUXES[0]} {model} not trained - training now")
             models[FLUXES[0]][model] = Classifier(device)
 
             models[FLUXES[0]][model], losses = md.train_model(
                     models[FLUXES[0]][model],
                     train_sample,
                     valid_dataset,
-                    save_path=PRETRAINED[model][FLUX[0]]["save_path"],
+                    save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
                     epochs=cfg["train_epochs"],
                     patience=cfg["train_patience"],
                 )
@@ -338,6 +338,8 @@ for i in range(cfg["iterations"]):
         holdout_pred_after.append(hold_pred_after)
         holdout_loss.append(hold_loss)
         holdout_loss_unscaled.append(hold_loss_unscaled)
+        logging.info(f"{FLUX} test loss: {hold_loss}")
+        logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
 
 
     candidates_uncerts_after, data_idxs_after = [], []
