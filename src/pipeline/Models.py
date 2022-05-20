@@ -123,7 +123,6 @@ class Classifier(nn.Module):
     def predict(self, dataloader):
 
         if not isinstance(dataloader, DataLoader):
-            # dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
             dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=100)
 
         size = len(dataloader.dataset)
@@ -293,9 +292,13 @@ class Regressor(nn.Module):
     def predict(self, dataloader, unscale=False):
 
         if not isinstance(dataloader, DataLoader):
-            batch_size = min(len(dataloader), 512)
+
+            dataset = copy.deepcopy(dataloader)
+            dataset.data = dataset.data.dropna(subset=[self.flux])
+
+            batch_size = min(len(dataset), 512)
             dataloader = pt.pandas_to_numpy_data(
-                dataloader,
+                dataset,
                 regressor_var=self.flux,
                 batch_size=batch_size,
                 shuffle=False,
