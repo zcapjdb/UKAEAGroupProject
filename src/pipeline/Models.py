@@ -193,8 +193,7 @@ class Regressor(nn.Module):
                 nn.Linear(1024, 1024),
                 nn.Dropout(p=dropout),
                 nn.ReLU(),
-                nn.Linear(1024, 1),
-                nn.Sigmoid(),
+                nn.Linear(1024, 1)
             ).to(self.device)
         elif self.model_size == 'deep':
             self.model = nn.Sequential(
@@ -207,7 +206,7 @@ class Regressor(nn.Module):
                 nn.Linear(256, 128),
                 nn.Dropout(p=dropout),
                 nn.ReLU(),
-                nn.Linear(128, 1),
+                nn.Linear(128, 1)
             ).to(self.device)
         else:
             raise ValueError('Unknown model size')
