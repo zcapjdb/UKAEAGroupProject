@@ -17,24 +17,38 @@ cuda0 = torch.device("cuda:0")
 
 # Class definitions
 class Classifier(nn.Module):
-    def __init__(self, device, dropout=0.1):
+    def __init__(self,device: torch.device, model_size: str = 'deep', dropout: float = 0.1):
         super().__init__()
         self.type = "classifier"
         self.device = device
         self.dropout = dropout
-        self.model = self.model = nn.Sequential(
-            nn.Linear(15, 512),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(128, 1),
-            nn.Sigmoid(),
-        ).to(self.device)
+        if model_size == 'shallow_wide':
+            self.model = nn.Sequential(
+                nn.Linear(15, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1),
+                nn.Sigmoid(),
+            ).to(self.device)
+        elif model_size == 'deep':
+            self.model = nn.Sequential(
+                nn.Linear(15, 512),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(512, 256),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(256, 128),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(128, 1),
+                nn.Sigmoid(),
+            ).to(self.device)
+        else:
+            raise ValueError('Unknown model size')
 
     def shrink_perturb(self, lam, loc, scale):
         if lam != 1:
@@ -157,7 +171,7 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self, device, scaler, flux, dropout=0.1):
+    def __init__(self,device, scaler,flux, model_size='deep', dropout=0.1):
         super().__init__()
         self.type = "regressor"
         self.device = device
@@ -168,18 +182,33 @@ class Regressor(nn.Module):
         self.flux = flux
         self.dropout = dropout
 
-        self.model = nn.Sequential(
-            nn.Linear(15, 512),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(128, 1),
-        ).to(self.device)
+        if model_size == 'shallow_wide':
+            self.model = nn.Sequential(
+                nn.Linear(15, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1),
+                nn.Sigmoid(),
+            ).to(self.device)
+        elif model_size == 'deep':
+            self.model = nn.Sequential(
+                nn.Linear(15, 512),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(512, 256),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(256, 128),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(128, 1),
+                nn.Sigmoid(),
+            ).to(self.device)
+        else:
+            raise ValueError('Unknown model size')
 
     def forward(self, x):
         y_hat = self.model(x.float())
@@ -407,9 +436,12 @@ class ITGDatasetDF(Dataset):
         if not keep_index:
             self.data["index"] = self.data.index
 
-    def scale(self, scaler):
+    def scale(self, scaler, unscale=False):
         # Scale features in the scaler object and leave the rest as is
-        scaled = scaler.transform(self.data.drop([self.label, "index"], axis=1))
+        if not unscale:
+            scaled = scaler.transform(self.data.drop([self.label, "index"], axis=1))
+        else:
+            scaled = scaler.inverse_transform(self.data.drop([self.label, "index"], axis=1))
 
         cols = [c for c in self.data if c != self.label and c != "index"]
         temp_df = pd.DataFrame(scaled, index=self.data.index, columns=cols)
@@ -422,6 +454,8 @@ class ITGDatasetDF(Dataset):
         self.data = temp_df
 
         del temp_df
+
+        
 
     def sample(self, batch_size):
         return ITGDatasetDF(
@@ -527,7 +561,8 @@ def train_model(
     if model.type not in ["classifier", "regressor"]:
         raise ValueError("Model type not recognised")
 
-    for epoch in range(epochs):
+
+    for epoch in  range(epochs):
 
         logging.debug(f"Epoch: {epoch}")
 

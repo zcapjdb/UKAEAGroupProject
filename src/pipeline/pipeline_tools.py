@@ -21,8 +21,12 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 output_dict = {
     "train_loss_init": [],  # Regressor performance before pipeline
     "test_loss_init": [],
+    "class_train_loss_init": [], # Regressor performance before pipeline
+    "class_test_loss_init": [],
+    "class_train_acc_init": [], # Regressor performance before pipeline
+    "class_test_acc_init": [],
     "test_loss_init_unscaled": [],
-    "retrain_losses": [],  # regressor performance during retraining
+    "retrain_losses": [], # regressor performance during retraining
     "retrain_val_losses": [],
     "retrain_losses_unscaled": [],
     "retrain_val_losses_unscaled": [],
@@ -39,13 +43,17 @@ output_dict = {
     "holdout_pred_before": [],
     "holdout_pred_after": [],
     "holdout_ground_truth": [],
+
     "class_train_loss": [],
     "class_val_loss": [],
     "class_missed_loss": [],
     "class_train_acc": [],
     "class_val_acc": [],
     "class_missed_acc": [],
+    "holdout_class_acc": [],
+    "holdout_class_loss": []
 }
+
 
 # Data preparation functions
 def prepare_data(
@@ -316,7 +324,7 @@ def retrain_regressor(
     patience: Union[None, int] = None,
     batch_size: int = 1024,
     disable_tqdm: bool = True,
-) -> (list, list):
+) -> (list, list, list, list):
     """
     Retrain the regressor on the most uncertain points.
     Data for retraining is taken from the combined training and uncertain datasets.

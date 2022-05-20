@@ -1,4 +1,7 @@
-flux: [efiitg_gb] #, efeitg_gb_div_efiitg_gb]
+
+
+flux: "efiitg_gb"
+Nbootstraps: 13 # if None, runs only one instance otherwise it spawns Nbootstraps instances
 
 data:
   train: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/train_data_clipped.pkl"
@@ -8,8 +11,7 @@ save_paths:
   plots: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/"
   outputs: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/"
 
-Nbootstraps: 10
-retrain_classifier: False
+retrain_classifier: True
 retrain_regressor: True
 
 
@@ -37,15 +39,14 @@ pretrained:
           trained: True
 
 hyperparams:
-    train_size: 20_000
-    valid_size: 10_000
-    test_size:  10_000
+    train_size: 5_000
+    valid_size: 2_000
+    test_size:  2_000
     candidate_size: 10_000 
-    batch_size: 256
+    batch_size: 512
     lambda: 1
-    buffer_size: 500
-    dropout: 0.1
-    model_size: 'deep' # 'shallow_wide' #deep
+    buffer_size: 256
+    model_size: 'shallow_wide'    #deep
 
 logging_level: DEBUG
 # Pipeline parameters
@@ -53,13 +54,12 @@ iterations: 20
 initial_epochs: 30
 MC_dropout_runs: 50
 keep_prob: 0.25 
-patience: 20
+patience: 10
 learning_rate: 0.001
-acquisition: individual_uncertainty # add_uncertainties #, random, distance_penalty
-
-# if training models from scratch, the hyperparameters below are used
 sample_size_debug: 0.1
 
 # if training models from scratch, the hyperparameters below are used
 train_epochs: 30
-train_patience: 15
+train_patience: 10
+
+

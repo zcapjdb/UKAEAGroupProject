@@ -1,6 +1,8 @@
 import coloredlogs, verboselogs, logging
 import os
 import copy
+import pickle as pkl
+from multiprocessing import Pool
 #import comet_ml import Experiment
 from sklearn.preprocessing import StandardScaler
 
@@ -23,7 +25,7 @@ class CLTaskManager:
         self.config_tasks = config_tasks # --- List of config files for the different tasks
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.classifier = Classifier(self.device)
-        self.regressor = Regressor(self.device)
+        self.regressor = Regressor(self.device,scaler=None, flux=None)
         self.cl_mode = CL_mode
         self.save_path = save_path
         
@@ -49,16 +51,22 @@ class CLTaskManager:
         models = {'Classifier':self.classifier,'Regressor':self.regressor}
         test_data = {}
         forgetting = {}
+        outputs = {}
         for j,cfg in enumerate(self.config_tasks):
+            if self.cl_mode!= 'shrink_perturb':
+                cfg['hyperparams']['lambda'] = 1
             if j==0:
-                train, val, test, scaler = self.get_data(self.config_tasks[0])  
+                train, val, test, scaler = self.get_data(cfg)  
             else:
-                train, val, test, _ = self.get_data(self.config_tasks[j]) 
+                train, val, test, _ = self.get_data(cfg) 
                 # ---  in CL with AL, there is not train set, only the unlabelled pool. Some points will have been labelled, these are entirely the val and test set 
                 train.remove(train.data.index)  # --- initialise empty dataset, which will be augmented with candidates
+            self.regressor.flux = cfg['flux']
+            self.regressor.scaler = scaler
 
             # ToDo: =====>> think a bit better about the scaler!! still use the scaler for the first task??
-            test = ALpipeline(cfg, models, j, self.device, self.cl_mode, scaler, train,val, test, ) 
+            test, output_dict = ALpipeline(cfg, models, j, self.device, self.cl_mode, scaler, train,val, test, ) 
+            outputs.update({f'task{j}':output_dict})
             # ToDo: ====>> instead, load each model from task 1 and retrain from same point on task 2 based on the various strategies
             if self.cl_mode == 'shrink_perturb':
                 self.shrink_perturb(cfg['hyperparams']['lambda'])
@@ -70,15 +78,17 @@ class CLTaskManager:
                 pass
 
             test_data.update({f'task{j}':test})
-            if j!=0:
-                for k in test_data.keys():
-                    _, regr_test_loss = self.regressor.predict(test_data[k])
-                    _, class_test_loss = self.classifier.predict(test_data[k])
-                    forgetting.update({f'regression_task{k}_model{j}':regr_test_loss})
-                    forgetting.update({f'classification_task{k}_model{j}':class_test_loss})
+            
+            for k in test_data.keys():
+                _, regr_test_loss = self.regressor.predict(test_data[k])
+                _, class_test_loss = self.classifier.predict(test_data[k])
+                forgetting.update({f'regression_{k}_model{j}':regr_test_loss})
+                forgetting.update({f'classification_{k}_model{j}':class_test_loss})
 
         with open(self.save_path+f'/forgetting_{self.cl_mode}.pkl', "wb") as f:
             pickle.dump(forgetting, f)
+
+        return outputs
 
 
 
@@ -112,8 +122,7 @@ def ALpipeline(cfg: dict, models: dict, j: str, device: torch.device, cl_mode: s
     candidate_size = cfg["hyperparams"]["candidate_size"]
     # Dictionary to store results of the classifier and regressor for later use
     output_dict = pt.output_dict
-    if j>0:
-        print(output_dict)
+
 
     # To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test loss
     # --- holdout set is from the test set
@@ -154,13 +163,19 @@ def ALpipeline(cfg: dict, models: dict, j: str, device: torch.device, cl_mode: s
             if model == 'Regressor': #To Do ==== >> do the same for classifier
                 train_loss, valid_loss = losses
                 output_dict["train_loss_init"].append(train_loss)
-                #if model == "Classifier":  --- not used currently
-                #    losses, train_accuracy, validation_losses, val_accuracy = losses
-
-        # ---- Losses before the pipeline starts
-    
+            if model == "Classifier":  
+                train_loss, train_accuracy, validation_losses, val_accuracy = losses
+                output_dict['class_train_loss_init'].append(train_loss)
+                output_dict["class_train_acc"].append(train_accuracy)
+                
+    # ---- Losses before the pipeline starts
     _, holdout_loss = models["Regressor"].predict(holdout_set)
     output_dict["test_loss_init"].append(holdout_loss)
+    _, holdout_losses = models["Classifier"].predict(holdout_set)
+    holdout_class_loss, holdout_class_acc = holdout_losses
+    output_dict["class_test_loss_init"].append(holdout_class_loss)
+    output_dict["class_test_acc_init"].append(holdout_class_acc)
+
 
 
 #    if len(train_sample) > 100_000:
@@ -174,7 +189,6 @@ def ALpipeline(cfg: dict, models: dict, j: str, device: torch.device, cl_mode: s
     buffer_size = 0
 
     for i in range(cfg["iterations"]):
-        print('printing', i,cfg["iterations"])
         logging.info(f"Iteration: {i+1}\n")
 
         if i != 0:
@@ -291,7 +305,7 @@ def ALpipeline(cfg: dict, models: dict, j: str, device: torch.device, cl_mode: s
         enriched_train_prediction_after, _ = models["Regressor"].predict(train_sample)
         # --- validation on holdout set after regressor is retrained
         logging.info("Running prediction on validation data set")
-        holdout_pred_after,holdout_loss, holdout_loss_unscaled = models["Regressor"].predict(holdout_set,unscale=True)  
+        holdout_pred_after,holdout_loss, holdout_loss_unscaled = models["Regressor"].predict(holdout_set,unscale=True)   
 
         _, candidates_uncert_after, _, _ = pt.regressor_uncertainty(
             candidates,
@@ -389,7 +403,7 @@ def ALpipeline(cfg: dict, models: dict, j: str, device: torch.device, cl_mode: s
         classifier_path = os.path.join(save_dest, f"classifier_lam_{cl_mode}_{lamb}_iteration_{i}.pkl")
         torch.save(models["Classifier"].state_dict(), classifier_path)
 
-    return  holdout_set
+    return  holdout_set, output_dict
 
 
 
@@ -410,7 +424,17 @@ if __name__=='__main__':
 
     config_tasks = [task1,task2]
     CL_mode = cfg['CL_method']
+    lam = cfg['common']['hyperparams']['lambda']
+    if CL_mode != 'shrink_perturb':
+        lam = 1
     # ToDo =====> add following to cfg
     #save_path = /home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject 
+
     PL = CLTaskManager(config_tasks, CL_mode)
-    PL.run()
+
+    outputs = []
+    with Pool(10) as p:
+        outputs = PL.run()
+    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/bootstrapped_CL_{CL_mode}_lam_{lam}.pkl', 'wb') as f:
+        pkl.dump(outputs, f)
+
