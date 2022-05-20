@@ -177,9 +177,12 @@ def ALpipeline(cfg):
     # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
     for FLUX in FLUXES:
         logging.info(f"Test loss for {FLUX} before pipeline:")
-        _, holdout_loss = models[FLUX]["Regressor"].predict(holdout_loader)
+        _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale = True)
+        logging.info(f"Holdout Loss: {holdout_loss}")
+        logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
         output_dict["test_loss_init"].append(holdout_loss)
-
+        output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
+        
     _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_loader) 
     output_dict['class_test_acc_init'].append(holdout_class_losses[1])
     # Create logger object for use in pipeline
@@ -353,19 +356,22 @@ def ALpipeline(cfg):
                 batch_size=batch_size,
             )
 
-            train_loss, val_loss = retrain_losses  # -- need to add unscaled losses here
+            train_loss, val_loss, train_loss_unscaled, val_loss_unscaled = retrain_losses
 
             train_losses.append(train_loss)
             val_losses.append(val_loss)
-            #train_losses_unscaled.append(train_loss_unscaled)
-            #val_losses_unscaled.append(val_loss_unscaled)
+            train_losses_unscaled.append(train_loss_unscaled)
+            val_losses_unscaled.append(val_loss_unscaled)
             
             logging.info(f"Running prediction on validation data set")
             # --- validation on holdout set after regressor is retrained
-            hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_loader, unscale=True)
+            hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
             holdout_pred_after.append(hold_pred_after)
             holdout_loss.append(hold_loss)
             holdout_loss_unscaled.append(hold_loss_unscaled)
+            logging.info(f"{FLUX} test loss: {hold_loss}")
+            logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
+  
 
 
         candidates_uncerts_after, data_idxs_after = [], []

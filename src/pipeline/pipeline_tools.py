@@ -25,7 +25,7 @@ output_dict = {
     "class_test_loss_init": [],
     "class_train_acc_init": [], # Regressor performance before pipeline
     "class_test_acc_init": [],
-
+    "test_loss_init_unscaled": [],
     "retrain_losses": [], # regressor performance during retraining
     "retrain_val_losses": [],
     "retrain_losses_unscaled": [],
@@ -360,8 +360,9 @@ def retrain_regressor(
     model.shrink_perturb(lam, loc, scale)
 
     if validation_step:
-        test_loss = model.validation_step(val_loader)
-        logging.log(15, f"Initial validation loss: {test_loss.item():.4f}")
+        val_loss, val_loss_unscaled = model.validation_step(val_loader)
+        logging.log(15, f"Initial validation loss: {val_loss.item():.4f}")
+        logging.log(15, f"Initial validation loss (unscaled): {val_loss_unscaled.item():.4f}")
 
     if not patience:
         patience = epochs
@@ -378,27 +379,34 @@ def retrain_regressor(
         min_lr=(1 / 16) * learning_rate,
     )
     train_loss = []
+    train_loss_unscaled = []
     val_loss = []
+    val_loss_unscaled = []
 
     for epoch in range(epochs):
         logging.log(15, f"Epoch: {epoch}")
-        loss = model.train_step(new_loader, opt, epoch=epoch, disable_tqdm=disable_tqdm)
+        loss, unscaled_loss = model.train_step(new_loader, opt, epoch=epoch, disable_tqdm=disable_tqdm)
+
         train_loss.append(loss.item())
+        train_loss_unscaled.append(unscaled_loss.item())
 
         logging.log(15, f"Training Loss: {loss.item():.4f}")
+        logging.log(15, f"Training Loss Unscaled: {unscaled_loss.item():.4f}")
 
         if validation_step:
-            test_loss = model.validation_step(val_loader, scheduler).item()
-            val_loss.append(test_loss)
+            loss, loss_unscaled = model.validation_step(val_loader, scheduler)
+            val_loss.append(loss)
+            val_loss_unscaled.append(loss_unscaled)
 
-            logging.log(15, f"Test loss: {test_loss:.4f}")
+            logging.log(15, f"Validation loss: {loss:.4f}")
+            logging.log(15, f"Validation loss unscaled: {loss_unscaled:.4f}")
 
         if len(val_loss) > patience:
-            if np.mean(val_loss[-patience:]) < test_loss:
+            if np.mean(val_loss[-patience:]) < val_loss[-1]:
                 logging.log(15, "Early stopping criterion reached")
                 break
 
-    return train_loss, val_loss
+    return train_loss, val_loss, train_loss_unscaled, val_loss_unscaled
 
 
 def get_uncertainty(
@@ -441,7 +449,7 @@ def get_uncertainty(
         step_list = []
         for step, (x, y, z, idx) in enumerate(dataloader):
             x = x.to(device)
-            predictions = regressor(x.float()).detach().numpy()
+            predictions = regressor(x.float()).detach().cpu().numpy()
             step_list.append(predictions)
 
         flat_list = [item for sublist in step_list for item in sublist]
@@ -456,7 +464,7 @@ def get_uncertainty(
     # Get the list of indices of the dataframe
     idx_list = []
     for step, (x, y, z, idx) in enumerate(dataloader):
-        idx_list.append(idx.detach().numpy())
+        idx_list.append(idx.detach().cpu().numpy())
 
     # flatten the list of indices
     flat_list = [item for sublist in idx_list for item in sublist]
@@ -500,7 +508,7 @@ def get_most_uncertain(
     unlabelled_pool: Union[None, ITGDataset] = None,
     plot: bool = True,
     acquisition: str = "add_uncertainties",
-    alpha: float = 0.1,
+    alpha: float = 1,
 ):
 
     """
@@ -538,15 +546,12 @@ def get_most_uncertain(
             pred_list.append(preds)
 
         out_stds = np.array(out_stds)
-        logging.debug(f"out_stds shape: {out_stds.shape}")
 
         if acquisition == "leading_flux_uncertainty":
             total_std = out_stds[0, :]
-            logging.debug(f"total_std shape: {total_std.shape}")
 
         else:
             total_std = np.sum(out_stds, axis=0)
-            logging.debug(f"total_std shape: {total_std.shape}")
 
         pred_array = np.stack(pred_list, axis=0)
 
@@ -558,11 +563,13 @@ def get_most_uncertain(
     #TODO: how to best choose alpha?
     if acquisition == "distance_penalty":
         logging.info("Using distance penalty acquisition")
+        # cdist returns a matrix of distances between each pair of points
         cdists = cdist(pred_array.T, pred_array.T, metric = "euclidean")
         cdists.sort()
-        nearest = cdists[:, 1]
+        median_dist = np.median(cdists, axis=1)
+        #nearest = cdists[:, 1] # get second nearest neighbour as first is itself
 
-        total_std = total_std - alpha * nearest
+        total_std = total_std + alpha * median_dist# nearest
 
     if acquisition == "random":
         # choose random indices
@@ -649,7 +656,7 @@ def regressor_uncertainty(
     # Get the list of indices of the dataframe
     idx_list = []
     for step, (x, y, z, idx) in enumerate(dataloader):
-        idx_list.append(idx.detach().numpy())
+        idx_list.append(idx.detach().cpu().numpy())
 
     # flatten the list of indices
     flat_list = [item for sublist in idx_list for item in sublist]
@@ -730,6 +737,7 @@ def pandas_to_numpy_data(
         logging.debug(f"{dataset.target}")
         regressor_var = dataset.target
         logging.info(f"No regressor value chosen, setting z to {regressor_var}")
+
 
     x_array = dataset.data[train_keys].values
     y_array = dataset.data[dataset.label].values
