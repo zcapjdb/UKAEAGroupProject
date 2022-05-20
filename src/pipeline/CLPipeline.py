@@ -18,16 +18,16 @@ import torch
 from Models import Classifier, ITGDatasetDF, Regressor
 import argparse
 import pandas as pd
+import copy
 
 class CLTaskManager:
-    def __init__(self, config_tasks: list = None,  CL_mode: str = 'shrink_perturb', 
-     save_path: str = "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/" ):
+    def __init__(self, config_tasks: list = None,  CL_mode: str = 'shrink_perturb', forget: str = None):
         self.config_tasks = config_tasks # --- List of config files for the different tasks
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.classifier = Classifier(self.device)
         self.regressor = Regressor(self.device,scaler=None, flux=None)
         self.cl_mode = CL_mode
-        self.save_path = save_path
+        self.forget_path = forget
         
     def get_data(self,cfg, scale=True):
         PATHS = cfg["data"]
@@ -62,22 +62,33 @@ class CLTaskManager:
                 train, val, test, scaler = self.get_data(cfg,scale=True)  
                 self.regressor.scaler = scaler
                 test_new = test.sample(cfg['hyperparams']['test_size'])
+                save = copy.deepcopy(test_new)
+                save.scale(scaler, unscale=True)
+                test_data.update({f'task{j}': save})
+                print(test_data)
                 inp = cfg
             else:
-                train_new, eval_new, test_new, _ = self.get_data(cfg,scale=False) 
-                       
-                eval_new.scale(scaler)   
+                train_new, eval_new, test_new, _ = self.get_data(cfg,scale=False)                 
+                
+                
+                test_new = test_new.sample(cfg['hyperparams']['test_size'])
+                save = copy.deepcopy(test_new)
+                test_data.update({f'task{j}': save })
                 test_new.scale(scaler)
+
+                eval_new.scale(scaler)   
                 val_new = eval_new.sample(cfg['hyperparams']['valid_size'])
                 eval_new.remove(val_new.data.index)
                 unlabelled_pool = eval_new
                 
                 val.add(val_new)   # val and test have been scaled in the AL pipeline already
-                test_new = test_new.sample(cfg['hyperparams']['test_size'])
+                
+                
                 test.add(test_new) #--- assuming we have validation and testing - this is not always true in practice. In fact, in a real case we have to keep updating them
 
                 inp = [0,cfg,j,{'scaler':scaler,'train':train,'val':val,'test':test,'unlabelled':unlabelled_pool}, models]
 
+            
 
             # ToDo: =====>> think a bit better about the scaler!! still use the scaler for the first task??
              # ---  train dataset is augmented each time, without removing old data
@@ -93,15 +104,16 @@ class CLTaskManager:
             else: # --- Few-shot transfer learning, we don't care about forgetting
                 pass
 
-            test_data.update({f'task{j}':test_new})
             
             for k in test_data.keys():
+                test_data[k].scale(scaler)
                 _, regr_test_loss = models[cfg['flux'][0]]['Regressor'].predict(test_data[k])
                 _, class_test_loss = models[cfg['flux'][0]]['Classifier'].predict(test_data[k])
                 forgetting.update({f'regression_{k}_model{j}':regr_test_loss})
                 forgetting.update({f'classification_{k}_model{j}':class_test_loss})
+                test_data[k].scale(scaler, unscale=True)
 
-        with open(self.save_path+f'/forgetting_{self.cl_mode}.pkl', "wb") as f:
+        with open(self.forget_path, "wb") as f:
             pickle.dump(forgetting, f)
 
         return outputs
@@ -443,12 +455,18 @@ if __name__=='__main__':
 
     task1 = cfg['task1']            
     task2 = cfg['task2']
+    task3 = cfg['task3']
+    task4 = cfg['task4']
     common = cfg['common']
-     
+    acquisition = common['acquisition']
+    classretrain = common['retrain_classifier']
+
     task1.update(common)
     task2.update(common)
+    task3.update(common)
+    task4.update(common)
 
-    config_tasks = [task1,task2]
+    config_tasks = [task1,task2,task3,task4]
     CL_mode = cfg['CL_method']
     lam = cfg['common']['hyperparams']['lambda']
     if CL_mode != 'shrink_perturb':
@@ -456,9 +474,10 @@ if __name__=='__main__':
     # ToDo =====> add following to cfg
     #save_path = /home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject 
 
-    PL = CLTaskManager(config_tasks, CL_mode)
+    PL = CLTaskManager(config_tasks, CL_mode, forget=f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/forgetting_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl')
 
     outputs = PL.run()
-    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/bootstrapped_CL_{CL_mode}_lam_{lam}.pkl', 'wb') as f:
+    outputs = {'out':outputs}
+    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl', 'wb') as f:
         pkl.dump(outputs, f)
 
