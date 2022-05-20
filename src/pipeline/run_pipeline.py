@@ -28,9 +28,9 @@ def ALpipeline(cfg):
 
     if not isinstance(cfg,dict):
         seed = cfg[0]
-        cfg = cfg[1]
         SAVE_PATHS["outputs"] = cfg[2]
         SAVE_PATHS["plots"] = cfg[3]
+        cfg = cfg[1]
         torch.manual_seed(seed)
         random.seed(seed)
         np.random.seed(seed)
@@ -119,13 +119,14 @@ def ALpipeline(cfg):
 
                 else:
                     logging.info(f"{FLUX} {model} not trained - training now")
-                    # models[FLUX][model] = (
-                    #     Classifier(device)
-                    #     if model == "Classifier"
-                    #     else Regressor(device, scaler, FLUX)
-                    # )
 
-                    models[FLUX][model] = Regressor(device, scaler, FLUX, dropout)
+                    models[FLUX][model] = Regressor(
+                        device=device, 
+                        scaler=scaler, 
+                        flux=FLUX, 
+                        dropout=dropout,
+                        model_size=cfg['hyperparams']['model_size']
+                        )
 
                     models[FLUX][model], losses = md.train_model(
                         models[FLUX][model],
@@ -451,6 +452,8 @@ if __name__=='__main__':
 
     with open(args.config) as f:
         cfg = yaml.load(f, Loader=yaml.FullLoader)
+
+    SAVE_PATHS = {}
     if args.output_dir is not None:
         SAVE_PATHS["outputs"] = args.output_dir
     else:
