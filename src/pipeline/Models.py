@@ -22,7 +22,9 @@ class Classifier(nn.Module):
         self.type = "classifier"
         self.device = device
         self.dropout = dropout
-        if model_size == 'shallow_wide':
+        self.model_size = model_size
+
+        if self.model_size == 'shallow_wide':
             self.model = nn.Sequential(
                 nn.Linear(15, 1024),
                 nn.Dropout(p=dropout),
@@ -33,7 +35,7 @@ class Classifier(nn.Module):
                 nn.Linear(1024, 1),
                 nn.Sigmoid(),
             ).to(self.device)
-        elif model_size == 'deep':
+        elif self.model_size == 'deep':
             self.model = nn.Sequential(
                 nn.Linear(15, 512),
                 nn.Dropout(p=dropout),
@@ -171,7 +173,7 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self,device, scaler,flux, model_size='deep', dropout=0.1):
+    def __init__(self, device, scaler, flux, model_size='deep', dropout=0.1):
         super().__init__()
         self.type = "regressor"
         self.device = device
@@ -181,8 +183,9 @@ class Regressor(nn.Module):
         )  # LZ: ToDo this might be an input in the case the output is multitask
         self.flux = flux
         self.dropout = dropout
+        self.model_size = model_size
 
-        if model_size == 'shallow_wide':
+        if self.model_size == 'shallow_wide':
             self.model = nn.Sequential(
                 nn.Linear(15, 1024),
                 nn.Dropout(p=dropout),
@@ -190,10 +193,9 @@ class Regressor(nn.Module):
                 nn.Linear(1024, 1024),
                 nn.Dropout(p=dropout),
                 nn.ReLU(),
-                nn.Linear(1024, 1),
-                nn.Sigmoid(),
+                nn.Linear(1024, 1)
             ).to(self.device)
-        elif model_size == 'deep':
+        elif self.model_size == 'deep':
             self.model = nn.Sequential(
                 nn.Linear(15, 512),
                 nn.Dropout(p=dropout),
@@ -204,8 +206,7 @@ class Regressor(nn.Module):
                 nn.Linear(256, 128),
                 nn.Dropout(p=dropout),
                 nn.ReLU(),
-                nn.Linear(128, 1),
-                nn.Sigmoid(),
+                nn.Linear(128, 1)
             ).to(self.device)
         else:
             raise ValueError('Unknown model size')
