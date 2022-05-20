@@ -564,10 +564,10 @@ def get_most_uncertain(
     if acquisition == "distance_penalty":
         logging.info("Using distance penalty acquisition")
         # cdist returns a matrix of distances between each pair of points
-        cdists = cdist(pred_array.T, pred_array.T, metric = "euclidean")
+
+        cdists = cdist(data_copy.data[train_keys].values, data_copy.data[train_keys].values, metric = "euclidean")
         cdists.sort()
         median_dist = np.median(cdists, axis=1)
-        #nearest = cdists[:, 1] # get second nearest neighbour as first is itself
 
         total_std = total_std + alpha * median_dist# nearest
 
