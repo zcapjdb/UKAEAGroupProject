@@ -276,6 +276,27 @@ def ALpipeline(cfg):
         logging.info(f"Misclassified data: {num_misclassified}")
         logging.info(f"Total Buffer size: {buffer_size}")
 
+        # --- set up retraining by rescaling all points according to new training data --------------------
+
+       # --- unscale all datasets, 
+        candidates.scale(scaler, unscale=True)
+        train_sample.scale(scaler, unscale=True)
+        unlabelled_pool.scale(scaler, unscale=True)
+        valid_dataset.scale(scaler, unscale=True)
+        holdout_set.scale(scaler, unscale=True)
+    # --- train data is enriched by new unstable candidate points
+        train_sample.add(candidates)
+        # --- get new scaler from enriched training set, rescale them with new scaler
+        scaler = StandardScaler()
+        scaler.fit_transform(train_sample.data.drop(["stable_label","index"], axis=1))
+        train_sample.scale(scaler)
+        unlabelled_pool.scale(scaler)
+        valid_dataset.scale(scaler)
+        holdout_set.scale(scaler)
+        holdout_loader = DataLoader(
+            holdout_set, batch_size=batch_size, shuffle=False
+        )      
+
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
@@ -406,24 +427,7 @@ def ALpipeline(cfg):
         except:
             pass
         
-        # --- unscale all datasets, 
-        candidates.scale(scaler, unscale=True)
-        train_sample.scale(scaler, unscale=True)
-        unlabelled_pool.scale(scaler, unscale=True)
-        valid_dataset.scale(scaler, unscale=True)
-        holdout_set.scale(scaler, unscale=True)
-    # --- train data is enriched by new unstable candidate points
-        train_sample.add(candidates)
-        # --- get new scaler from enriched training set, rescale them with new scaler
-        scaler = StandardScaler()
-        scaler.fit_transform(train_sample.data.drop(["stable_label","index"], axis=1))
-        train_sample.scale(scaler)
-        unlabelled_pool.scale(scaler)
-        valid_dataset.scale(scaler)
-        holdout_set.scale(scaler)
-        holdout_loader = DataLoader(
-            holdout_set, batch_size=batch_size, shuffle=False
-        )  # ToDo =====>> use helper function
+ 
 
         n_train = len(train_sample)
         output_dict["n_train_points"].append(n_train)
