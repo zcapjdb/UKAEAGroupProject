@@ -95,10 +95,7 @@ train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
 # --- holdout set is from the test set
 plot_sample = test_dataset.sample(test_size)  # Holdout dataset
 holdout_set = plot_sample
-# holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
-holdout_loader = DataLoader(
-    holdout_set, batch_size=batch_size, shuffle=False
-)  # ToDo =====>> use helper function
+
 # --- validation set is fixed and from the evaluation
 valid_dataset = eval_dataset.sample(valid_size)  # validation set
 # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
@@ -173,7 +170,7 @@ for FLUX in FLUXES:
 # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
 for FLUX in FLUXES:
     logging.info(f"Test loss for {FLUX} before pipeline:")
-    _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_loader, unscale = True)
+    _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale = True)
     logging.info(f"Holdout Loss: {holdout_loss}")
     logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
     output_dict["test_loss_init"].append(holdout_loss)
@@ -310,7 +307,7 @@ for i in range(cfg["iterations"]):
     train_losses_unscaled, val_losses_unscaled = [], []
     holdout_pred_after, holdout_loss, holdout_loss_unscaled = [], [], []
     for FLUX in FLUXES:
-        preds, _ = models[FLUX]["Regressor"].predict(holdout_loader)
+        preds, _ = models[FLUX]["Regressor"].predict(holdout_set)
         holdout_pred_before.append(preds)
 
         retrain_losses = pt.retrain_regressor(
@@ -334,7 +331,7 @@ for i in range(cfg["iterations"]):
         
         logging.info(f"Running prediction on validation data set")
         # --- validation on holdout set after regressor is retrained
-        hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_loader, unscale=True)
+        hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
         holdout_pred_after.append(hold_pred_after)
         holdout_loss.append(hold_loss)
         holdout_loss_unscaled.append(hold_loss_unscaled)

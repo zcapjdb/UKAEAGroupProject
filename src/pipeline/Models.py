@@ -11,6 +11,7 @@ from tqdm.auto import tqdm
 import logging
 import time
 from tqdm.auto import tqdm
+import copy
 
 cuda0 = torch.device("cuda:0")
 
@@ -122,7 +123,6 @@ class Classifier(nn.Module):
     def predict(self, dataloader):
 
         if not isinstance(dataloader, DataLoader):
-            # dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
             dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=100)
 
         size = len(dataloader.dataset)
@@ -292,9 +292,13 @@ class Regressor(nn.Module):
     def predict(self, dataloader, unscale=False):
 
         if not isinstance(dataloader, DataLoader):
-            batch_size = min(len(dataloader), 512)
+
+            dataset = copy.deepcopy(dataloader)
+            dataset.data = dataset.data.dropna(subset=[self.flux])
+
+            batch_size = min(len(dataset), 512)
             dataloader = pt.pandas_to_numpy_data(
-                dataloader,
+                dataset,
                 regressor_var=self.flux,
                 batch_size=batch_size,
                 shuffle=False,
@@ -483,8 +487,16 @@ def train_model(
     # if pipeline:
     #     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
 
-    if model.type == "Regressor":
+    train_dataset = copy.deepcopy(train_dataset)
+    val_dataset = copy.deepcopy(val_dataset)
+
+    if model.type == "regressor":
         regressor_var = model.flux
+
+        #drop any NaNs from the regressor variable
+        train_dataset.data = train_dataset.data.dropna(subset=[regressor_var])
+        val_dataset.data = val_dataset.data.dropna(subset=[regressor_var])
+
     else:
         regressor_var = None
 
@@ -496,7 +508,7 @@ def train_model(
     )
 
     val_loader = pt.pandas_to_numpy_data(
-        val_dataset, batch_size=val_batch_size, shuffle=False
+        val_dataset, batch_size=val_batch_size, shuffle=False, regressor_var=regressor_var
     )
     # Initialise the optimiser
     if weight_decay:
