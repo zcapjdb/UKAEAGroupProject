@@ -29,6 +29,8 @@ def ALpipeline(cfg):
     if not isinstance(cfg,dict):
         seed = cfg[0]
         cfg = cfg[1]
+        SAVE_PATHS["outputs"] = cfg[2]
+        SAVE_PATHS["plots"] = cfg[3]
         torch.manual_seed(seed)
         random.seed(seed)
         np.random.seed(seed)
@@ -50,16 +52,6 @@ def ALpipeline(cfg):
     FLUXES = cfg["flux"]  # is now a list of the relevant fluxes
     PRETRAINED = cfg["pretrained"]
     PATHS = cfg["data"]
-    SAVE_PATHS = {}
-    if args.output_dir is not None:
-        SAVE_PATHS["outputs"] = args.output_dir
-    else:
-        SAVE_PATHS["outputs"] = cfg["save_paths"]["outputs"]
-
-    if args.plot_dir is not None:
-        SAVE_PATHS["plots"] = args.plot_dir
-    else:
-        SAVE_PATHS["plots"] = cfg["save_paths"]["plots"]
 
     sample_size = cfg[
         "sample_size_debug"
@@ -99,10 +91,7 @@ def ALpipeline(cfg):
     plot_sample = test_dataset.sample(test_size)  # Holdout dataset
     holdout_set = plot_sample
     # holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
-    holdout_loader = DataLoader(
-        holdout_set, batch_size=batch_size, shuffle=False
-    )  # ToDo =====>> use helper function
-    # --- validation set is fixed and from the evaluation
+
     valid_dataset = eval_dataset.sample(valid_size)  # validation set
     # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
     eval_dataset.remove(valid_dataset.data.index)  #
@@ -183,7 +172,7 @@ def ALpipeline(cfg):
         output_dict["test_loss_init"].append(holdout_loss)
         output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
         
-    _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_loader) 
+    _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
     output_dict['class_test_acc_init'].append(holdout_class_losses[1])
     # Create logger object for use in pipeline
     verboselogs.install()
@@ -296,9 +285,7 @@ def ALpipeline(cfg):
         unlabelled_pool.scale(scaler)
         valid_dataset.scale(scaler)
         holdout_set.scale(scaler)
-        holdout_loader = DataLoader(
-            holdout_set, batch_size=batch_size, shuffle=False
-        )      
+
 
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
@@ -341,7 +328,7 @@ def ALpipeline(cfg):
         train_losses_unscaled, val_losses_unscaled = [], []
         holdout_pred_after, holdout_loss, holdout_loss_unscaled = [], [], []
         for FLUX in FLUXES:
-            preds, _ = models[FLUX]["Regressor"].predict(holdout_loader)
+            preds, _ = models[FLUX]["Regressor"].predict(holdout_set)
             holdout_pred_before.append(preds)
 
             retrain_losses = pt.retrain_regressor(
@@ -419,8 +406,8 @@ def ALpipeline(cfg):
         output_dict["holdout_ground_truth"].append(holdout_set.target)
         output_dict["retrain_losses"].append(train_losses)
         output_dict["retrain_val_losses"].append(val_losses)
-        #output_dict["retrain_losses_unscaled"].append(train_losses_unscaled)
-        #output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
+        output_dict["retrain_losses_unscaled"].append(train_losses_unscaled)
+        output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
         output_dict["post_test_loss"].append(holdout_loss)
         output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
 
@@ -464,6 +451,15 @@ if __name__=='__main__':
 
     with open(args.config) as f:
         cfg = yaml.load(f, Loader=yaml.FullLoader)
+    if args.output_dir is not None:
+        SAVE_PATHS["outputs"] = args.output_dir
+    else:
+        SAVE_PATHS["outputs"] = cfg["save_paths"]["outputs"]
+
+    if args.plot_dir is not None:
+        SAVE_PATHS["plots"] = args.plot_dir
+    else:
+        SAVE_PATHS["plots"] = cfg["save_paths"]["plots"]
 
     Nbootstraps = cfg['Nbootstraps']        
     lam = cfg["hyperparams"]["lambda"]
@@ -478,7 +474,7 @@ if __name__=='__main__':
         seeds = np.arange(Nbootstraps).astype(int)
         inp = []
         for s in seeds:
-            inp.append([s,cfg])
+            inp.append([s,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]])
         with Pool(Nbootstraps) as p:            
             output = p.map(ALpipeline,inp)
         output = {'out':output}

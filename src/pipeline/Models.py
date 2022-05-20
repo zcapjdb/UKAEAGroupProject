@@ -17,24 +17,38 @@ cuda0 = torch.device("cuda:0")
 
 # Class definitions
 class Classifier(nn.Module):
-    def __init__(self,device, model_size=None, dropout=0.1):
+    def __init__(self,device: torch.device, model_size: str = 'deep', dropout: float = 0.1):
         super().__init__()
         self.type = "classifier"
         self.device = device
         self.dropout = dropout
-        self.model = self.model = nn.Sequential(
-            nn.Linear(15, 512),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(128, 1),
-            nn.Sigmoid(),
-        ).to(self.device)
+        if model_size == 'shallow_wide':
+            self.model = nn.Sequential(
+                nn.Linear(15, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1),
+                nn.Sigmoid(),
+            ).to(self.device)
+        elif model_size == 'deep':
+            self.model = nn.Sequential(
+                nn.Linear(15, 512),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(512, 256),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(256, 128),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(128, 1),
+                nn.Sigmoid(),
+            ).to(self.device)
+        else:
+            raise ValueError('Unknown model size')
 
     def shrink_perturb(self, lam, loc, scale):
         if lam != 1:
@@ -157,7 +171,7 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self,device, scaler,flux, model_size=None, dropout=0.1):
+    def __init__(self,device, scaler,flux, model_size='deep', dropout=0.1):
         super().__init__()
         self.type = "regressor"
         self.device = device
@@ -168,18 +182,33 @@ class Regressor(nn.Module):
         self.flux = flux
         self.dropout = dropout
 
-        self.model = nn.Sequential(
-            nn.Linear(15, 512),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(128, 1),
-        ).to(self.device)
+        if model_size == 'shallow_wide':
+            self.model = nn.Sequential(
+                nn.Linear(15, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1),
+                nn.Sigmoid(),
+            ).to(self.device)
+        elif model_size == 'deep':
+            self.model = nn.Sequential(
+                nn.Linear(15, 512),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(512, 256),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(256, 128),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(128, 1),
+                nn.Sigmoid(),
+            ).to(self.device)
+        else:
+            raise ValueError('Unknown model size')
 
     def forward(self, x):
         y_hat = self.model(x.float())
