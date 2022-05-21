@@ -94,7 +94,7 @@ def ALpipeline(cfg):
     # --- Set up saving
     save_dest = os.path.join(SAVE_PATHS["outputs"], FLUXES[0])
     if not os.path.exists(save_dest):
-        os.makedirs(save_dest)
+        os.makedirs(save_dest, exist_ok=True)
 
     logging.info("Saving to {}".format(save_dest))
 
@@ -304,6 +304,7 @@ def ALpipeline(cfg):
         valid_dataset.scale(scaler, unscale=True)
         holdout_set.scale(scaler, unscale=True)
     # --- train data is enriched by new unstable candidate points
+        logging.info(f"Enriching training data with {len(candidates)} new points")
         train_sample.add(candidates)
         # --- get new scaler from enriched training set, rescale them with new scaler
         scaler = StandardScaler()
@@ -456,6 +457,7 @@ def ALpipeline(cfg):
 
         n_train = len(train_sample)
         output_dict["n_train_points"].append(n_train)
+        logging.info(f"Number of training points at end of iteration {i + 1}: {n_train}")
 
         if run_mode == 'AL':   #we don't necessarily want this in CL for the moment
             # --- Save at end of iteration
@@ -518,9 +520,6 @@ if __name__=='__main__':
         with Pool(Nbootstraps) as p:            
             output = p.map(ALpipeline,cfg)
         output = {'out':output}
-        if args.output_dir is None:
-            total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
-            output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
 
         else:
             output_dir = args.output_dir
@@ -531,3 +530,18 @@ if __name__=='__main__':
     else:
         raise ValueError('one run is not supported')
         cfg = {'run_mode':'AL','cfg':cfg}                          
+#    else:
+#        seed = np.random.randint(0,2**32-1)
+#        output = ALpipeline([seed,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]])
+#        output = {'out':output}
+#    
+#    if args.output_dir is None:
+#        total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
+#        output_dir = f"../.../outputs/{total}_{Ntrain}/"###
+
+    #else:
+  #      output_dir = args.output_dir
+  #  if not os.path.exists(output_dir):
+  #      os.makedirs(output_dir, exist_ok=True)
+  #  with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
+  #      pickle.dump(output,f)                                
