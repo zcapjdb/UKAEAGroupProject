@@ -512,7 +512,7 @@ if __name__=='__main__':
     
     if Nbootstraps>1:
         #cfg = np.repeat(cfg,Nbootstraps)
-        seeds = np.arange(Nbootstraps).astype(int)
+        seeds = [np.random.randint(0,2**32-1) for i in range(Nbootstraps)]
         inp = []
         for s in seeds:
             inp.append([s,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]])
@@ -521,8 +521,7 @@ if __name__=='__main__':
             output = p.map(ALpipeline,cfg)
         output = {'out':output}
 
-        else:
-            output_dir = args.output_dir
+        output_dir = "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_norescale.pkl","wb") as f:
