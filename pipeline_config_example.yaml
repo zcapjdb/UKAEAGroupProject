@@ -1,0 +1,65 @@
+flux: [efiitg_gb] #, efeitg_gb_div_efiitg_gb]
+
+data:
+  train: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/train_data_clipped.pkl"
+  validation: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/valid_data_clipped.pkl"
+  test: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/test_data_clipped.pkl"
+save_paths:
+  plots: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/"
+  outputs: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/"
+
+Nbootstraps: 10
+retrain_classifier: False
+retrain_regressor: True
+
+
+# Use pre-trained model or train from scratch
+pretrained:
+  Classifier:
+      efiitg_gb:
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ITGclassifier.pt"
+          trained: False
+      efetem_gb:
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/TEMclassifier.pt"
+          trained: False
+      efeetg_gb:
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ETGclassifier.pt"
+          trained: False
+  Regressor:
+      efiitg_gb:
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ITGregressor.pt"
+          trained: False
+      efetem_gb:
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/TEMclassifier.pt"
+          trained: False
+      efeetg_gb:
+          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ETGclassifier.pt"
+          trained: True
+
+hyperparams:
+    train_size: 20_000
+    valid_size: 10_000
+    test_size:  10_000
+    candidate_size: 10_000 
+    batch_size: 256
+    lambda: 1
+    buffer_size: 500
+    dropout: 0.1
+    model_size: 'deep' # 'shallow_wide' #deep
+
+logging_level: DEBUG
+# Pipeline parameters
+iterations: 20
+initial_epochs: 30
+MC_dropout_runs: 50
+keep_prob: 0.25 
+patience: 20
+learning_rate: 0.001
+acquisition: individual_uncertainty # add_uncertainties #, random, distance_penalty
+
+# if training models from scratch, the hyperparameters below are used
+sample_size_debug: 0.1
+
+# if training models from scratch, the hyperparameters below are used
+train_epochs: 30
+train_patience: 15

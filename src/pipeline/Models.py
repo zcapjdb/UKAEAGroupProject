@@ -11,29 +11,46 @@ from tqdm.auto import tqdm
 import logging
 import time
 from tqdm.auto import tqdm
+import copy
 
 cuda0 = torch.device("cuda:0")
 
 # Class definitions
 class Classifier(nn.Module):
-    def __init__(self,device, model_size=None, dropout=0.1):
+    def __init__(self,device: torch.device, model_size: str = 'deep', dropout: float = 0.1):
         super().__init__()
         self.type = "classifier"
         self.device = device
         self.dropout = dropout
-        self.model = self.model = nn.Sequential(
-            nn.Linear(15, 512),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(128, 1),
-            nn.Sigmoid(),
-        ).to(self.device)
+        self.model_size = model_size
+
+        if self.model_size == 'shallow_wide':
+            self.model = nn.Sequential(
+                nn.Linear(15, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1),
+                nn.Sigmoid(),
+            ).to(self.device)
+        elif self.model_size == 'deep':
+            self.model = nn.Sequential(
+                nn.Linear(15, 512),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(512, 256),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(256, 128),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(128, 1),
+                nn.Sigmoid(),
+            ).to(self.device)
+        else:
+            raise ValueError('Unknown model size')
 
     def shrink_perturb(self, lam, loc, scale):
         if lam != 1:
@@ -122,7 +139,6 @@ class Classifier(nn.Module):
     def predict(self, dataloader):
 
         if not isinstance(dataloader, DataLoader):
-            # dataloader = DataLoader(dataloader, batch_size=100,shuffle=False) # --- batch size doesnt matter here because it's just prediction
             dataloader = pt.pandas_to_numpy_data(dataloader, batch_size=100)
 
         size = len(dataloader.dataset)
@@ -157,7 +173,7 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self,device, scaler,flux, model_size=None, dropout=0.1):
+    def __init__(self, device, scaler, flux, model_size='deep', dropout=0.1):
         super().__init__()
         self.type = "regressor"
         self.device = device
@@ -167,19 +183,33 @@ class Regressor(nn.Module):
         )  # LZ: ToDo this might be an input in the case the output is multitask
         self.flux = flux
         self.dropout = dropout
+        self.model_size = model_size
 
-        self.model = nn.Sequential(
-            nn.Linear(15, 512),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.Dropout(p=dropout),
-            nn.ReLU(),
-            nn.Linear(128, 1),
-        ).to(self.device)
+        if self.model_size == 'shallow_wide':
+            self.model = nn.Sequential(
+                nn.Linear(15, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1024),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(1024, 1)
+            ).to(self.device)
+        elif self.model_size == 'deep':
+            self.model = nn.Sequential(
+                nn.Linear(15, 512),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(512, 256),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(256, 128),
+                nn.Dropout(p=dropout),
+                nn.ReLU(),
+                nn.Linear(128, 1)
+            ).to(self.device)
+        else:
+            raise ValueError('Unknown model size')
 
     def forward(self, x):
         y_hat = self.model(x.float())
@@ -231,6 +261,7 @@ class Regressor(nn.Module):
         num_batches = len(dataloader)
 
         losses = []
+        unscaled_losses = []
         for batch, (X, y, z, idx) in enumerate(
             tqdm(dataloader, desc=f"Epoch {epoch}", disable=disable_tqdm), 0
         ):
@@ -240,7 +271,8 @@ class Regressor(nn.Module):
             X = X.to(self.device)
             z = z.to(self.device)
             z_hat = self.forward(X.float())
-            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat)
+
+            loss, unscaled_loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=True)
 
             # Backpropagation
             optimizer.zero_grad()
@@ -248,39 +280,55 @@ class Regressor(nn.Module):
             optimizer.step()
 
             loss = loss.item()
-            # logging.debug(f"Loss: {loss}")
+            unscaled_loss = unscaled_loss.item()
+
             losses.append(loss)
+            unscaled_losses.append(unscaled_loss)
 
         average_loss = np.sum(losses) / size
         logging.debug(f"Loss: {average_loss:>7f}")
-        return average_loss
+
+        average_unscaled_loss = np.sum(unscaled_losses) / size
+        logging.debug(f"Unscaled Loss: {average_unscaled_loss:>7f}")
+
+        return average_loss, average_unscaled_loss
 
     def validation_step(self, dataloader, scheduler=None):
         size = len(dataloader.dataset)
 
-        test_loss = []
+        validation_loss = []
+        validation_loss_unscaled = []
         with torch.no_grad():
             for X, y, z, _ in dataloader:
                 X = X.to(self.device)
                 z = z.to(self.device)
                 z_hat = self.forward(X.float())
-                test_loss.append(
-                    self.loss_function(z.unsqueeze(-1).float(), z_hat).item()
-                )
+                loss, unscaled_loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=True)
 
-        average_loss = np.sum(test_loss) / size
+                validation_loss.append(loss.item())
+                validation_loss_unscaled.append(unscaled_loss.item())
+
+        average_loss = np.sum(validation_loss) / size
+        average_unscaled_loss = np.sum(validation_loss_unscaled) / size
 
         if scheduler is not None:
             scheduler.step(average_loss)
-        logging.debug(f"Test MSE: {average_loss:>7f}")
-        return average_loss
+
+        logging.debug(f"Validation MSE: {average_loss:>7f}")
+        logging.debug(f"Validation MSE Unscaled: {average_unscaled_loss:>7f}")
+
+        return average_loss, average_unscaled_loss
 
     def predict(self, dataloader, unscale=False):
 
         if not isinstance(dataloader, DataLoader):
-            batch_size = min(len(dataloader), 512)
+
+            dataset = copy.deepcopy(dataloader)
+            dataset.data = dataset.data.dropna(subset=[self.flux])
+
+            batch_size = min(len(dataset), 512)
             dataloader = pt.pandas_to_numpy_data(
-                dataloader,
+                dataset,
                 regressor_var=self.flux,
                 batch_size=batch_size,
                 shuffle=False,
@@ -474,8 +522,16 @@ def train_model(
     # if pipeline:
     #     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
 
-    if model.type == "Regressor":
+    train_dataset = copy.deepcopy(train_dataset)
+    val_dataset = copy.deepcopy(val_dataset)
+
+    if model.type == "regressor":
         regressor_var = model.flux
+
+        #drop any NaNs from the regressor variable
+        train_dataset.data = train_dataset.data.dropna(subset=[regressor_var])
+        val_dataset.data = val_dataset.data.dropna(subset=[regressor_var])
+
     else:
         regressor_var = None
 
@@ -487,7 +543,7 @@ def train_model(
     )
 
     val_loader = pt.pandas_to_numpy_data(
-        val_dataset, batch_size=val_batch_size, shuffle=False
+        val_dataset, batch_size=val_batch_size, shuffle=False, regressor_var=regressor_var
     )
     # Initialise the optimiser
     if weight_decay:
@@ -524,10 +580,10 @@ def train_model(
 
         elif model.type == "regressor":
             logging.debug(f"Epoch: {epoch}")
-            loss = model.train_step(train_loader, opt, epoch=epoch)
+            loss, loss_unscaled = model.train_step(train_loader, opt, epoch=epoch)
             losses.append(loss)
 
-            val_loss = model.validation_step(val_loader)
+            val_loss, val_loss_unscaled = model.validation_step(val_loader)
             validation_losses.append(val_loss)
 
             stopping_metric = np.asarray(validation_losses)
