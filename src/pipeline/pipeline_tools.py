@@ -214,7 +214,7 @@ def retrain_classifier(
     validation_step: bool = True,
     lam: Union[float, int] = 1,
     loc: float = 0.0,
-    scale: float = 0.01,
+    scale: float = 0.05,
     patience: Union[None, int] = None,
     disable_tqdm: bool = True,
 ) -> (list, list, list, list, list, list):

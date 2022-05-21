@@ -474,10 +474,10 @@ if __name__=='__main__':
     # ToDo =====> add following to cfg
     #save_path = /home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject 
 
-    PL = CLTaskManager(config_tasks, CL_mode, forget=f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/forgetting_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl')
+    PL = CLTaskManager(config_tasks, CL_mode, forget=f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/forgetting_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}_sigma0.05.pkl')
 
     outputs = PL.run()
     outputs = {'out':outputs}
-    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl', 'wb') as f:
+    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}_sigma0.05.pkl', 'wb') as f:
         pkl.dump(outputs, f)
 

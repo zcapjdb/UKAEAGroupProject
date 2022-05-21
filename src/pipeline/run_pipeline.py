@@ -323,6 +323,7 @@ def ALpipeline(cfg):
                     epochs=epochs,
                     lam=lam,
                     patience=cfg["patience"],
+                    scale=0.05
                 )
 
                 output_dict["class_train_loss"].append(losses[0])
@@ -357,6 +358,7 @@ def ALpipeline(cfg):
                 lam=lam,
                 patience=cfg["patience"],
                 batch_size=batch_size,
+                scale=0.05
             )
 
             train_loss, val_loss = retrain_losses  # -- need to add unscaled losses here
