@@ -22,7 +22,7 @@ import pandas as pd
 import numpy as np 
 from multiprocessing import Pool
 
-def seeds(seed):
+def get_seeds(seed):
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)     
@@ -32,17 +32,20 @@ def ALpipeline(cfg):
 
     # how cfg should be declared in Clpipeline or AL pipeline: cfg = {'run_mode':run_mode,'cfg':config}, config will be a list for AL bootstrap, and a dict for AL not bootstrap; it's always a dict for CL
     if cfg['run_mode'] == 'AL':  #ToDo:=====> add to config
+        run_mode = 'AL'
         if not isinstance(cfg['cfg'],dict):
+            
             cfg = cfg['cfg']
             seed = cfg[0] 
             SAVE_PATHS["outputs"] = cfg[2]
             SAVE_PATHS["plots"] = cfg[3]
             cfg = cfg[1]        
-            seeds(seed)           
+            get_seeds(seed)           
        
         else:
             cfg = cfg['cfg']
     elif cfg['run_mode'] == 'CL': 
+        run_mode = 'CL'
         if not isinstance(cfg['cfg'],dict):
             seed = cfg[0]
             SAVE_PATHS["outputs"] = cfg[2]  # todo=====> figure out whether save paths should be like this
@@ -55,7 +58,7 @@ def ALpipeline(cfg):
             unlabelled_pool = cfg[5]['unlabelled']   
             models = cfg[6]
             cfg = cfg[1]
-            seeds(seed)
+            get_seeds(seed)
         else:
             raise ValueError('for CL a list is always expected')
 
@@ -101,7 +104,7 @@ def ALpipeline(cfg):
 
 
     # --------------------------------------------- Load data ----------------------------------------------------------
-    if cfg['run_mode'] == 'AL':
+    if run_mode == 'AL':
         train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
             PATHS["train"],
             PATHS["validation"],
@@ -121,14 +124,14 @@ def ALpipeline(cfg):
 
         # Load pretrained models
         logging.info("Loaded the following models:\n")
-    elif cfg['run_mode'] == 'CL':
+    elif run_mode == 'CL':
         pass # --- data is passed from CL pipeline, see start of the function
 
 
     buffer_size = 0
     classifier_buffer = []
     # ------------------------------------------- Load or train first models ------------------------------------------
-    if cfg['run_mode'] == 'AL':
+    if run_mode == 'AL':
         models = {f:{} for f in FLUXES}
     else:
         pass # --- models are passed from CL pipeline        
@@ -196,7 +199,7 @@ def ALpipeline(cfg):
     # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
     for FLUX in FLUXES:
         logging.info(f"Test loss for {FLUX} before pipeline:")
-        _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale = True)
+        _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set)
         logging.info(f"Holdout Loss: {holdout_loss}")
         logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
         output_dict["test_loss_init"].append(holdout_loss)
@@ -272,7 +275,7 @@ def ALpipeline(cfg):
         prediction_candidates_before = []
         for FLUX in FLUXES:
             prediction_candidates_before.append(
-                models[FLUX]["Regressor"].predict(candidates)
+                models[FLUX]["Regressor"].predict(candidates)[0]
             )
 
         # =================== >>>>>>>>>> Here goes the Qualikiz acquisition <<<<<<<<<<<<< ==================
@@ -376,7 +379,7 @@ def ALpipeline(cfg):
             
             logging.info(f"Running prediction on validation data set")
             # --- validation on holdout set after regressor is retrained
-            hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
+            hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set)
             holdout_pred_after.append(hold_pred_after)
             holdout_loss.append(hold_loss)
             holdout_loss_unscaled.append(hold_loss_unscaled)
@@ -454,7 +457,7 @@ def ALpipeline(cfg):
         n_train = len(train_sample)
         output_dict["n_train_points"].append(n_train)
 
-        if cfg['run_mode'] == 'AL':   #we don't necessarily want this in CL for the moment
+        if run_mode == 'AL':   #we don't necessarily want this in CL for the moment
             # --- Save at end of iteration
             output_path = os.path.join(
                 save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl"
@@ -511,9 +514,9 @@ if __name__=='__main__':
         inp = []
         for s in seeds:
             inp.append([s,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]])
-        cfg = {'run_mode':'AL','cfg':inp}        
+        cfg = [{'run_mode':'AL','cfg':inp[i]} for i in range(len(inp))]
         with Pool(Nbootstraps) as p:            
-            output = p.map(ALpipeline,inp)
+            output = p.map(ALpipeline,cfg)
         output = {'out':output}
         if args.output_dir is None:
             total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)

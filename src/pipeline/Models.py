@@ -319,7 +319,7 @@ class Regressor(nn.Module):
 
         return average_loss, average_unscaled_loss
 
-    def predict(self, dataloader, unscale=False):
+    def predict(self, dataloader):
 
         if not isinstance(dataloader, DataLoader):
 
@@ -352,17 +352,15 @@ class Regressor(nn.Module):
 
         pred = np.asarray(pred, dtype=object).flatten()
 
-        if unscale:
-            unscaled_avg_loss = np.sum(losses_unscaled) / size
-            return pred, average_loss, unscaled_avg_loss
-        return pred, average_loss
+        unscaled_avg_loss = np.sum(losses_unscaled) / size
+        return pred, average_loss, unscaled_avg_loss
 
 
 class ITGDataset(Dataset):
     def __init__(self, X, y, z=None, indices=None):
         self.X = X
         self.y = y
-        self.z = z
+        self.z = z                  
         self.indices = indices
 
         if self.indices is None:

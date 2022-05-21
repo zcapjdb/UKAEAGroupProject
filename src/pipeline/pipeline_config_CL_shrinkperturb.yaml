@@ -3,7 +3,7 @@ common:
   MC_dropout_runs: 50
   acquisition: individual
   flux:
-  - efiitg_gb
+    ['efiitg_gb']
   hyperparams:
     batch_size: 256
     buffer_size: 500
