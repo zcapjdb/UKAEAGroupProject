@@ -520,28 +520,23 @@ if __name__=='__main__':
         cfg = [{'run_mode':'AL','cfg':inp[i]} for i in range(len(inp))]
         with Pool(Nbootstraps) as p:            
             output = p.map(ALpipeline,cfg)
-        output = {'out':output}
-        total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
-        output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
-            pickle.dump(output,f)      
     else:
-        raise ValueError('one run is not supported')
-        cfg = {'run_mode':'AL','cfg':cfg}                          
-#    else:
-#        seed = np.random.randint(0,2**32-1)
-#        output = ALpipeline([seed,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]])
-#        output = {'out':output}
-#    
-#    if args.output_dir is None:
-#        total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
-#        output_dir = f"../.../outputs/{total}_{Ntrain}/"###
+        seed = np.random.randint(0,2**32-1)
+        output = ALpipeline({'run_mode':'AL','cfg':[seed,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]])
 
-    #else:
-  #      output_dir = args.output_dir
-  #  if not os.path.exists(output_dir):
-  #      os.makedirs(output_dir, exist_ok=True)
-  #  with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
-  #      pickle.dump(output,f)                                
+    output = {'out':output}
+    total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
+
+
+        
+   if args.output_dir is None:
+        total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
+        output_dir = f"../.../outputs/{total}_{Ntrain}/" # --- next time we should make sure we have consistent paths to avoid this
+
+    else:
+        output_dir = args.output_dir
+    #output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
+        pickle.dump(output,f)               
