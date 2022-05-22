@@ -319,7 +319,7 @@ class Regressor(nn.Module):
 
         return average_loss, average_unscaled_loss
 
-    def predict(self, dataloader):
+    def predict(self, dataloader, unscale=False):
 
         if not isinstance(dataloader, DataLoader):
 
@@ -343,16 +343,19 @@ class Regressor(nn.Module):
             z = z.to(self.device)
             z_hat = self.forward(x.float())
             pred.append(z_hat.squeeze().detach().cpu().numpy())
-            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat)
-            losses_unscaled.append(loss[1].item())
-            loss = loss[0]
+            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=unscale)
+            if unscale:  
+                losses_unscaled.append(loss[1].item())
+                loss = loss[0]
             losses.append(loss.item())
         average_loss = np.sum(losses) / size
 
         pred = np.asarray(pred, dtype=object).flatten()
 
-        unscaled_avg_loss = np.sum(losses_unscaled) / size
-        return pred, average_loss, unscaled_avg_loss
+        if unscale:
+            unscaled_avg_loss = np.sum(losses_unscaled) / size
+            return pred, average_loss, unscaled_avg_loss
+        return pred, average_loss
 
 
 class ITGDataset(Dataset):

@@ -16,7 +16,7 @@ from scripts.utils import train_keys
 import yaml
 import pickle
 import torch
-from Models import Classifier, Regressor
+from pipeline.Models import Classifier, Regressor
 import argparse
 import pandas as pd
 import numpy as np 
@@ -159,7 +159,7 @@ def ALpipeline(cfg):
                         dropout=dropout,
                         model_size=cfg['hyperparams']['model_size']
                         )
-
+       
                     models[FLUX][model], losses = md.train_model(
                         models[FLUX][model],
                         train_sample,
@@ -174,24 +174,24 @@ def ALpipeline(cfg):
 
                         # if model == "Classifier":  --- not used currently
                         #    losses, train_accuracy, validation_losses, val_accuracy = losses
-            else:
-                if PRETRAINED[model][FLUXES[0]]["trained"] == True:
-                    trained_model = md.load_model(
-                        model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0], dropout
-                    )
-                    models[FLUXES[0]] = {model: trained_model.to(device)} 
-                else: 
-                    logging.info(f"{FLUXES[0]} {model} not trained - training now")
-                    models[FLUXES[0]][model] = Classifier(device)
+        else:
+            if PRETRAINED[model][FLUXES[0]]["trained"] == True:
+                trained_model = md.load_model(
+                    model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0], dropout
+                )
+                models[FLUXES[0]] = {model: trained_model.to(device)} 
+            else: 
+                logging.info(f"{FLUXES[0]} {model} not trained - training now")
+                models[FLUXES[0]][model] = Classifier(device)
 
-                    models[FLUXES[0]][model], losses = md.train_model(
-                            models[FLUXES[0]][model],
-                            train_sample,
-                            valid_dataset,
-                            save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
-                            epochs=cfg["train_epochs"],
-                            patience=cfg["train_patience"],
-                        )
+                models[FLUXES[0]][model], losses = md.train_model(
+                        models[FLUXES[0]][model],
+                        train_sample,
+                        valid_dataset,
+                        save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
+                        epochs=cfg["train_epochs"],
+                        patience=cfg["train_patience"],
+                    )
 
         for FLUX in FLUXES:
             logging.debug(f"Models for {FLUX} : {models[FLUX].keys()}")
@@ -199,7 +199,8 @@ def ALpipeline(cfg):
     # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
     for FLUX in FLUXES:
         logging.info(f"Test loss for {FLUX} before pipeline:")
-        _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set)
+    
+        _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
         logging.info(f"Holdout Loss: {holdout_loss}")
         logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
         output_dict["test_loss_init"].append(holdout_loss)
@@ -275,7 +276,7 @@ def ALpipeline(cfg):
         prediction_candidates_before = []
         for FLUX in FLUXES:
             prediction_candidates_before.append(
-                models[FLUX]["Regressor"].predict(candidates)[0]
+                models[FLUX]["Regressor"].predict(candidates, unscale=False)
             )
 
         # =================== >>>>>>>>>> Here goes the Qualikiz acquisition <<<<<<<<<<<<< ==================
@@ -356,7 +357,7 @@ def ALpipeline(cfg):
         train_losses_unscaled, val_losses_unscaled = [], []
         holdout_pred_after, holdout_loss, holdout_loss_unscaled = [], [], []
         for FLUX in FLUXES:
-            preds, _ = models[FLUX]["Regressor"].predict(holdout_set)
+            preds, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale=False)
             holdout_pred_before.append(preds)
 
             retrain_losses = pt.retrain_regressor(
@@ -380,7 +381,7 @@ def ALpipeline(cfg):
             
             logging.info(f"Running prediction on validation data set")
             # --- validation on holdout set after regressor is retrained
-            hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set)
+            hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
             holdout_pred_after.append(hold_pred_after)
             holdout_loss.append(hold_loss)
             holdout_loss_unscaled.append(hold_loss_unscaled)
@@ -459,24 +460,24 @@ def ALpipeline(cfg):
         output_dict["n_train_points"].append(n_train)
         logging.info(f"Number of training points at end of iteration {i + 1}: {n_train}")
 
-        if run_mode == 'AL':   #we don't necessarily want this in CL for the moment
-            # --- Save at end of iteration
-            output_path = os.path.join(
-                save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl"
-            )
-            with open(output_path, "wb") as f:
-                pickle.dump(output_dict, f)
-            
-            for FLUX in FLUXES:
-                regressor_path = os.path.join(save_dest, f"{FLUX}_regressor_lam_{lam}_iteration_{i}.pkl")
-                torch.save(models[FLUX]["Regressor"].state_dict(), regressor_path)
-            
-            classifier_path = os.path.join(save_dest, f"{FLUXES[0]}_classifier_lam_{lam}_iteration_{i}.pkl")
-            torch.save(models[FLUXES[0]]["Classifier"].state_dict(), classifier_path)
-            return output_dict
+    if run_mode == 'AL':   #we don't necessarily want this in CL for the moment
+        # --- Save at end of iteration
+        output_path = os.path.join(
+            save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl"
+        )
+        with open(output_path, "wb") as f:
+            pickle.dump(output_dict, f)
+        
+        for FLUX in FLUXES:
+            regressor_path = os.path.join(save_dest, f"{FLUX}_regressor_lam_{lam}_iteration_{i}.pkl")
+            torch.save(models[FLUX]["Regressor"].state_dict(), regressor_path)
+        
+        classifier_path = os.path.join(save_dest, f"{FLUXES[0]}_classifier_lam_{lam}_iteration_{i}.pkl")
+        torch.save(models[FLUXES[0]]["Classifier"].state_dict(), classifier_path)
+        return output_dict
 
-        else:
-            return   train_sample, valid_dataset, holdout_set, output_dict, scaler, models # ugly
+    else:
+        return   train_sample, valid_dataset, holdout_set, output_dict, scaler, models # ugly
 
 
 if __name__=='__main__':
@@ -509,7 +510,7 @@ if __name__=='__main__':
     Ncand = cfg["hyperparams"]["candidate_size"]
 
     retrain = cfg["retrain_classifier"]
-    
+
     if Nbootstraps>1:
         #cfg = np.repeat(cfg,Nbootstraps)
         seeds = [np.random.randint(0,2**32-1) for i in range(Nbootstraps)]
@@ -520,11 +521,11 @@ if __name__=='__main__':
         with Pool(Nbootstraps) as p:            
             output = p.map(ALpipeline,cfg)
         output = {'out':output}
-
-        output_dir = "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
+        total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
+        output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_norescale.pkl","wb") as f:
+        with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
             pickle.dump(output,f)      
     else:
         raise ValueError('one run is not supported')
