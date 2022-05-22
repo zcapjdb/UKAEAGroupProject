@@ -449,7 +449,9 @@ def get_uncertainty(
         step_list = []
         for step, (x, y, z, idx) in enumerate(dataloader):
             x = x.to(device)
+            z = z.to(device)
             predictions = regressor(x.float()).detach().cpu().numpy()
+            
             step_list.append(predictions)
 
         flat_list = [item for sublist in step_list for item in sublist]
@@ -493,7 +495,7 @@ def get_uncertainty(
         assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error(
             "Ordering error"
         )
-
+        
         return out_std[reorder], uncertain_data_idx
     else:
         return out_std, idx_array
