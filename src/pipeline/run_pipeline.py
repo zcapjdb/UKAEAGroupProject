@@ -34,20 +34,22 @@ def ALpipeline(cfg):
     if cfg['run_mode'] == 'AL':  #ToDo:=====> add to config
         run_mode = 'AL'
         if not isinstance(cfg['cfg'],dict):
-            
+            SAVE_PATHS = {}
             cfg = cfg['cfg']
             seed = cfg[0] 
             SAVE_PATHS["outputs"] = cfg[2]
             SAVE_PATHS["plots"] = cfg[3]
             cfg = cfg[1]        
             get_seeds(seed)           
-       
+            first_CL_iter = False
         else:
             cfg = cfg['cfg']
     elif cfg['run_mode'] == 'CL': 
         run_mode = 'CL'
         if not isinstance(cfg['cfg'],dict):
+            cfg = cfg['cfg']
             seed = cfg[0]
+            SAVE_PATHS = {}
             SAVE_PATHS["outputs"] = cfg[2]  # todo=====> figure out whether save paths should be like this
             SAVE_PATHS["plots"] = cfg[3]            
             scaler = cfg[4]['scaler']
@@ -55,8 +57,9 @@ def ALpipeline(cfg):
             valid_dataset = cfg[4]['val']
             holdout_set = cfg[4]['test']     
             plot_sample = holdout_set
-            unlabelled_pool = cfg[5]['unlabelled']   
-            models = cfg[6]
+            unlabelled_pool = cfg[4]['unlabelled']   
+            models = cfg[5]
+            first_CL_iter = cfg[6]
             cfg = cfg[1]
             get_seeds(seed)
         else:
@@ -116,11 +119,12 @@ def ALpipeline(cfg):
         plot_sample = test_dataset.sample(test_size)  # Holdout dataset
         holdout_set = plot_sample
         # holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
+        train_sample = train_dataset.sample(train_size)
 
         valid_dataset = eval_dataset.sample(valid_size)  # validation set
         # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
-        eval_dataset.remove(valid_dataset.data.index)  #
-        unlabelled_pool = eval_dataset  # ToDo: move declaration of train sample here, unabelled pool should be rest of train sample!
+        train_dataset.remove(train_sample.data.index)  #
+        unlabelled_pool = train_dataset  # ToDo: move declaration of train sample here, unabelled pool should be rest of train sample!
 
         # Load pretrained models
         logging.info("Loaded the following models:\n")
@@ -131,87 +135,86 @@ def ALpipeline(cfg):
     buffer_size = 0
     classifier_buffer = []
     # ------------------------------------------- Load or train first models ------------------------------------------
-    if run_mode == 'AL':
+    if run_mode == 'AL'  or (run_mode=='CL' and first_CL_iter):
         models = {f:{} for f in FLUXES}
+        for model in PRETRAINED:
+            if model == "Regressor":
+                for FLUX in FLUXES:
+                    if PRETRAINED[model][FLUX]["trained"] == True:
+                        trained_model = md.load_model(
+                            model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX, dropout
+                        )
+                        if FLUX not in models.keys():
+                            models[FLUX] = {model: trained_model.to(device)}
+                        else:
+                            models[FLUX][model] = trained_model.to(device)
+
+                    else:
+                        logging.info(f"{FLUX} {model} not trained - training now")
+
+                        models[FLUX][model] = Regressor(
+                            device=device, 
+                            scaler=scaler, 
+                            flux=FLUX, 
+                            dropout=dropout,
+                            model_size=cfg['hyperparams']['model_size']
+                            )
+        
+                        models[FLUX][model], losses = md.train_model(
+                            models[FLUX][model],
+                            train_sample,
+                            valid_dataset,
+                            save_path=PRETRAINED[model][FLUX]["save_path"],
+                            epochs=cfg["train_epochs"],
+                            patience=cfg["train_patience"],
+                        )
+                        
+                        train_loss, valid_loss = losses
+                        output_dict["train_loss_init"].append(train_loss)
+
+                            # if model == "Classifier":  --- not used currently
+                            #    losses, train_accuracy, validation_losses, val_accuracy = losses
+            else:
+                if PRETRAINED[model][FLUXES[0]]["trained"] == True:
+                    trained_model = md.load_model(
+                        model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0], dropout
+                    )
+                    models[FLUXES[0]] = {model: trained_model.to(device)} 
+                else: 
+                    logging.info(f"{FLUXES[0]} {model} not trained - training now")
+                    models[FLUXES[0]][model] = Classifier(device)
+
+                    models[FLUXES[0]][model], losses = md.train_model(
+                            models[FLUXES[0]][model],
+                            train_sample,
+                            valid_dataset,
+                            save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
+                            epochs=cfg["train_epochs"],
+                            patience=cfg["train_patience"],
+                        )
+
+            for FLUX in FLUXES:
+                logging.debug(f"Models for {FLUX} : {models[FLUX].keys()}")
+
+        # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
+        for FLUX in FLUXES:
+            logging.info(f"Test loss for {FLUX} before pipeline:")
+        
+            _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
+            logging.info(f"Holdout Loss: {holdout_loss}")
+            logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
+            output_dict["test_loss_init"].append(holdout_loss)
+            output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
+            
+        _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
+        output_dict['class_test_acc_init'].append(holdout_class_losses[1])
+        # Create logger object for use in pipeline
+        verboselogs.install()
+        logger = logging.getLogger(__name__)
+        coloredlogs.install(level="DEBUG")#cfg["logging_level"])
     else:
         pass # --- models are passed from CL pipeline        
-    for model in PRETRAINED:
-        logging.debug(f"Size of training dataset {len(train_dataset)}")
-        train_sample = train_dataset.sample(train_size)
-        if model == "Regressor":
-            for FLUX in FLUXES:
-                if PRETRAINED[model][FLUX]["trained"] == True:
-                    trained_model = md.load_model(
-                        model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX, dropout
-                    )
-                    if FLUX not in models.keys():
-                        models[FLUX] = {model: trained_model.to(device)}
-                    else:
-                        models[FLUX][model] = trained_model.to(device)
 
-                else:
-                    logging.info(f"{FLUX} {model} not trained - training now")
-
-                    models[FLUX][model] = Regressor(
-                        device=device, 
-                        scaler=scaler, 
-                        flux=FLUX, 
-                        dropout=dropout,
-                        model_size=cfg['hyperparams']['model_size']
-                        )
-       
-                    models[FLUX][model], losses = md.train_model(
-                        models[FLUX][model],
-                        train_sample,
-                        valid_dataset,
-                        save_path=PRETRAINED[model][FLUX]["save_path"],
-                        epochs=cfg["train_epochs"],
-                        patience=cfg["train_patience"],
-                    )
-                    
-                    train_loss, valid_loss = losses
-                    output_dict["train_loss_init"].append(train_loss)
-
-                        # if model == "Classifier":  --- not used currently
-                        #    losses, train_accuracy, validation_losses, val_accuracy = losses
-        else:
-            if PRETRAINED[model][FLUXES[0]]["trained"] == True:
-                trained_model = md.load_model(
-                    model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0], dropout
-                )
-                models[FLUXES[0]] = {model: trained_model.to(device)} 
-            else: 
-                logging.info(f"{FLUXES[0]} {model} not trained - training now")
-                models[FLUXES[0]][model] = Classifier(device)
-
-                models[FLUXES[0]][model], losses = md.train_model(
-                        models[FLUXES[0]][model],
-                        train_sample,
-                        valid_dataset,
-                        save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
-                        epochs=cfg["train_epochs"],
-                        patience=cfg["train_patience"],
-                    )
-
-        for FLUX in FLUXES:
-            logging.debug(f"Models for {FLUX} : {models[FLUX].keys()}")
-
-    # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
-    for FLUX in FLUXES:
-        logging.info(f"Test loss for {FLUX} before pipeline:")
-    
-        _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
-        logging.info(f"Holdout Loss: {holdout_loss}")
-        logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
-        output_dict["test_loss_init"].append(holdout_loss)
-        output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
-        
-    _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
-    output_dict['class_test_acc_init'].append(holdout_class_losses[1])
-    # Create logger object for use in pipeline
-    verboselogs.install()
-    logger = logging.getLogger(__name__)
-    coloredlogs.install(level="DEBUG")#cfg["logging_level"])
 
     if len(train_sample) > 100_000:
         logger.warning(
@@ -527,7 +530,7 @@ if __name__=='__main__':
     output = {'out':output}
     total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
 
-   if args.output_dir is None:
+    if args.output_dir is None:
         total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
         output_dir = f"../.../outputs/{total}_{Ntrain}/" # --- next time we should make sure we have consistent paths to avoid this
 

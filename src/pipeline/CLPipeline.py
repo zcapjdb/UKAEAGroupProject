@@ -56,17 +56,22 @@ class CLTaskManager:
         outputs = {} # --- saves all output losses for each task
         # --- all of this is so ugly it makes me ashamed, but no time for polishing now
         # AL pipeline should be a class that initialises the models by training them the first time, then can be updated with new data (data is a self.) and relative scaler (also a self)
+        models = None
         for j,cfg in enumerate(self.config_tasks):
-            models = {f:{} for f in cfg['flux'] } 
             if self.cl_mode!= 'shrink_perturb':
                 cfg['hyperparams']['lambda'] = 1
             if j==0:
-                train, val, test, scaler = self.get_data(cfg,scale=True)  
+                train_, val, test, scaler = self.get_data(cfg,scale=True) 
+                train = train_.sample(cfg['hyperparams']['train_size'])
+                train_.remove(train.data.index)
+                unlabelled_pool = train_
+                val = val.sample(cfg['hyperparams']['valid_size'])
                 self.regressor.scaler = scaler
                 test_new = test.sample(cfg['hyperparams']['test_size']) 
                 save = copy.deepcopy(test_new)
                 save.scale(scaler, unscale=True)
                 test_data.update({f'task{j}': save})
+                first_iter = True
             else:
                 train_new, eval_new, test_new, _ = self.get_data(cfg,scale=False)                 
                 test_new = test_new.sample(cfg['hyperparams']['test_size'])
@@ -74,15 +79,14 @@ class CLTaskManager:
                 test_data.update({f'task{j}': save })
                 test_new.scale(scaler)
                 test.add(test_new) #--- assuming we have validation and testing - this is not always true in practice. In fact, in a real case we have to keep updating them
-
-
                 eval_new.scale(scaler)   
                 val_new = eval_new.sample(cfg['hyperparams']['valid_size'])
                 val.add(val_new)   # val and test have been scaled in the AL pipeline already
                 unlabelled_pool = train_new
+                first_iter = False
                 
-            seed = np.random.randint(0,20000)
-            inp = [seed,cfg,self.save_outputs_path,save_plots_path, {'scaler':scaler,'train':train,'val':val,'test':test,'unlabelled':unlabelled_pool}, models]
+            seed = np.random.randint(0,20000) # Todo ====> put in declaration, each process must have its seed
+            inp = [seed,cfg,self.save_outputs_path,self.save_plots_path, {'scaler':scaler,'train':train,'val':val,'test':test,'unlabelled':unlabelled_pool}, models, first_iter]
 
              # ---  train dataset is augmented each time in the pipeline, without removing old data
             inp = {'run_mode':'CL','cfg':inp}
@@ -90,7 +94,7 @@ class CLTaskManager:
             outputs.update({f'task{j}':output_dict})
             if self.cl_mode == 'shrink_perturb':
                 for flux in models.keys():
-                    for model in flux.keys():
+                    for model in models[flux].keys():
                         models[flux][model].shrink_perturb(lam=lam, scale=0.01, loc=0.0)
             elif self.cl_mode == 'EWC':
                 self.EWC()
