@@ -522,13 +522,11 @@ if __name__=='__main__':
             output = p.map(ALpipeline,cfg)
     else:
         seed = np.random.randint(0,2**32-1)
-        output = ALpipeline({'run_mode':'AL','cfg':[seed,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]])
+        output = ALpipeline({'run_mode':'AL','cfg':[seed,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]]})
 
     output = {'out':output}
     total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
 
-
-        
    if args.output_dir is None:
         total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
         output_dir = f"../.../outputs/{total}_{Ntrain}/" # --- next time we should make sure we have consistent paths to avoid this
