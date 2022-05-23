@@ -175,6 +175,11 @@ def ALpipeline(cfg):
         
     _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
     output_dict['class_test_acc_init'].append(holdout_class_losses[1])
+    output_dict['class_precision_init'].append(holdout_class_losses[2])
+    output_dict['class_recall_init'].append(holdout_class_losses[3])
+    output_dict['class_f1_init'].append(holdout_class_losses[4])
+    output_dict['class_auc_init'].append(holdout_class_losses[5])
+
     # Create logger object for use in pipeline
     verboselogs.install()
     logger = logging.getLogger(__name__)
@@ -320,6 +325,17 @@ def ALpipeline(cfg):
                 output_dict["class_train_acc"].append(accs[0])
                 output_dict["class_val_acc"].append(accs[1])
                 output_dict["class_missed_acc"].append(accs[2])
+
+                _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
+                output_dict['holdout_class_loss'].append(holdout_class_losses[0])
+                output_dict['holdout_class_acc'].append(holdout_class_losses[1])
+                output_dict['holdout_class_precision'].append(holdout_class_losses[2])
+                output_dict['holdout_class_recall'].append(holdout_class_losses[3])
+                output_dict['holdout_class_f1'].append(holdout_class_losses[4])
+                output_dict['holdout_class_auc'].append(holdout_class_losses[5])
+
+                # record which iterations the classifier was retrained on
+                output_dict['class_retrain_iterations'].append(i)
 
                 # reset buffer
                 classifier_buffer = []

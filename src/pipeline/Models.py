@@ -6,6 +6,7 @@ import pipeline.pipeline_tools as pt
 
 import numpy as np
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import roc_auc_score
 from scripts.utils import train_keys
 from tqdm.auto import tqdm
 import logging
@@ -143,8 +144,10 @@ class Classifier(nn.Module):
 
         size = len(dataloader.dataset)
         pred = []
+        y_true = []
         losses = []
         correct = 0
+        true_pos, true_neg, false_pos, false_neg = 0, 0, 0, 0
 
         BCE = nn.BCELoss()
 
@@ -154,22 +157,38 @@ class Classifier(nn.Module):
             y_hat = self.forward(x.float())
 
             pred.append(y_hat.squeeze().detach().cpu().numpy())
+            y_true.append(y.detach().cpu().numpy())
             loss = BCE(y_hat, y.unsqueeze(-1).float()).item()
             losses.append(loss)
 
             # calculate test accuracy
-            pred_class = torch.round(y_hat.squeeze())  # torch.round(y_hat.squeeze())
+            pred_class = torch.round(y_hat.squeeze())
             correct += torch.sum(
                 pred_class == y.float()
-            ).item()  # torch.sum(pred_class == y.float()).item()
+            ).item()
+
+            pred_true_idx = np.where(pred_class == 1)[0]
+            pred_false_idx = np.where(pred_class == 0)[0]
+
+            true_pos += torch.sum(pred_class[pred_true_idx] == y[pred_true_idx].float()).item()
+            true_neg += torch.sum(pred_class[pred_false_idx] == y[pred_false_idx].float()).item()
+
+            false_pos += torch.sum(pred_class[pred_true_idx] != y[pred_true_idx].float()).item()
+            false_neg += torch.sum(pred_class[pred_false_idx] != y[pred_false_idx].float()).item()
 
         average_loss = np.sum(losses) / size
 
         correct /= size
 
-        pred = np.asarray(pred, dtype=object).flatten()
+        precision = true_pos / (true_pos + false_pos)
+        recall = true_pos / (true_pos + false_neg)
+        f1 = 2 * precision * recall / (precision + recall)
 
-        return pred, [average_loss, correct]
+        pred = np.asarray(pred, dtype=object).flatten()
+        y_true = np.asarray(y_true, dtype=object).flatten()
+        roc_auc = roc_auc_score(y_true.astype(int), pred)
+
+        return pred, [average_loss, correct, precision, recall, f1, roc_auc]
 
 
 class Regressor(nn.Module):
