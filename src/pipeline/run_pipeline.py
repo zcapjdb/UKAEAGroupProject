@@ -318,7 +318,10 @@ def ALpipeline(cfg):
         valid_dataset.scale(scaler)
         holdout_set.scale(scaler)
              
-
+        # --- update scaler in the models
+        for FLUX in FLUXES:
+            for model in PRETRAINED:
+                models[FLUX][model].scaler = scaler
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
@@ -454,10 +457,7 @@ def ALpipeline(cfg):
         
 
 
-        # --- update scaler in the models
-        for FLUX in FLUXES:
-            for model in PRETRAINED:
-                models[FLUX][model].scaler = scaler
+
 
         n_train = len(train_sample)
         output_dict["n_train_points"].append(n_train)

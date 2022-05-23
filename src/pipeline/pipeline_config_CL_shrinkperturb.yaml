@@ -4,17 +4,19 @@ common:
   acquisition: individual
   flux:
     ['efiitg_gb']
+  Nbootstraps: 10
   hyperparams:
     batch_size: 256
     buffer_size: 500
     candidate_size: 10000
     dropout: 0.1
     lambda: 1
-    test_size: 10000
-    train_size: 20000
-    valid_size: 10000
-  initial_epochs: 30
-  iterations: 15
+    test_size: 1000
+    train_size: 2000
+    valid_size: 1000
+    model_size: 'deep'
+  initial_epochs: 3
+  iterations: 2
   keep_prob: 0.25
   learning_rate: 0.001
   logging_level: DEBUG
@@ -22,7 +24,7 @@ common:
   retrain_classifier: false
   retrain_regressor: true
   sample_size_debug: 1
-  train_epochs: 30
+  train_epochs: 3
   train_patience: 10
 task1:
   data:

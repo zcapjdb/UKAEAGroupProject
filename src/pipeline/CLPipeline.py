@@ -31,13 +31,19 @@ def get_data(self,cfg, scale=True):
 ) 
     return train_dataset, eval_dataset, test_dataset,scaler
 
-def CLPipeline(seed,config_tasks: list = None,  CL_mode: str = 'shrink_perturb', save_plots_path: str = None, save_outputs_path: str = None, name_append: str = None):
+def CLPipeline(arg):
+    seed = arg[0]
+    config_tasks = arg[1]
+    CL_mode = arg[2]
+    save_plots_path = arg[3]
+    save_outputs_path = arg[4]
     test_data = {}   # --- saves test data for each task
     forgetting = {}  # --- saves test MSE on previous tasks with updated model
     outputs = {} # --- saves all output losses for each task
     # --- all of this is so ugly it makes me ashamed, but no time for polishing now
     # AL pipeline should be a class that initialises the models by training them the first time, then can be updated with new data (data is a self.) and relative scaler (also a self)
     models = None
+    print(config_tasks)
     for j,cfg in enumerate(config_tasks):
         PATHS = cfg["data"]
         FLUX = cfg["flux"]        
@@ -45,7 +51,7 @@ def CLPipeline(seed,config_tasks: list = None,  CL_mode: str = 'shrink_perturb',
             cfg['hyperparams']['lambda'] = 1
         if j==0:
             train_, val, test, scaler = pt.prepare_data(
-    PATHS["train"], PATHS["validation"], PATHS["test"], fluxes=FLUX, samplesize_debug=0.1, scale=True
+    PATHS["train"], PATHS["validation"], PATHS["test"], fluxes=FLUX, samplesize_debug=1, scale=True
 ) 
             train = train_.sample(cfg['hyperparams']['train_size'])
             train_.remove(train.data.index)
@@ -58,7 +64,7 @@ def CLPipeline(seed,config_tasks: list = None,  CL_mode: str = 'shrink_perturb',
             first_iter = True
         else:
             train_new, eval_new, test_new, _ = pt.prepare_data(
-    PATHS["train"], PATHS["validation"], PATHS["test"], fluxes=FLUX, samplesize_debug=0.1, scale=True
+    PATHS["train"], PATHS["validation"], PATHS["test"], fluxes=FLUX, samplesize_debug=1, scale=False
 ) 
             test_new = test_new.sample(cfg['hyperparams']['test_size'])
             save = copy.deepcopy(test_new)
@@ -160,7 +166,7 @@ if __name__=='__main__':
         f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/'])
 
     with Pool(Nbootstraps) as p:
-    outputs = p.map(CLPipeline,inp)
+        outputs = p.map(CLPipeline,inp)
    
     with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl', 'wb') as f:
         pkl.dump(outputs, f)
