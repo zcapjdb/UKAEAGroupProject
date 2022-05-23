@@ -271,6 +271,11 @@ def ALpipeline(cfg):
             classifier_buffer.append(misclassified_data)
             logging.info(f"Misclassified data: {num_misclassified}")
             logging.info(f"Total Buffer size: {buffer_size}")
+        
+        elif len(FLUXES)>1:
+            # at this stage we know which of the inputs give a stable label or not so we can drop the stable values
+            #  
+            pass 
 
         # --- set up retraining by rescaling all points according to new training data --------------------
 
