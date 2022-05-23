@@ -344,7 +344,7 @@ class Regressor(nn.Module):
             z_hat = self.forward(x.float())
             pred.append(z_hat.squeeze().detach().cpu().numpy())
             loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=unscale)
-            if unscale:
+            if unscale:  
                 losses_unscaled.append(loss[1].item())
                 loss = loss[0]
             losses.append(loss.item())
@@ -362,7 +362,7 @@ class ITGDataset(Dataset):
     def __init__(self, X, y, z=None, indices=None):
         self.X = X
         self.y = y
-        self.z = z
+        self.z = z                  
         self.indices = indices
 
         if self.indices is None:

@@ -111,8 +111,9 @@ def prepare_data(
     )
     test_data["stable_label"] = np.where(test_data[target_column] != 0, 1, 0)
 
-    scaler = StandardScaler()
-    scaler.fit_transform(train_data.drop(["stable_label"], axis=1))
+    if scale:
+        scaler = StandardScaler()
+        scaler.fit_transform(train_data.drop(["stable_label"], axis=1))
 
     train_dataset = ITGDatasetDF(train_data, target_column=target_column)
     valid_dataset = ITGDatasetDF(validation_data, target_column=target_column)
@@ -122,7 +123,9 @@ def prepare_data(
         valid_dataset.scale(scaler)
         test_dataset.scale(scaler)
 
-    return train_dataset, valid_dataset, test_dataset, scaler
+        return train_dataset, valid_dataset, test_dataset, scaler
+    else:
+        return train_dataset, valid_dataset, test_dataset, 0
 
 
 # classifier tools
@@ -211,7 +214,7 @@ def retrain_classifier(
     validation_step: bool = True,
     lam: Union[float, int] = 1,
     loc: float = 0.0,
-    scale: float = 0.01,
+    scale: float = 0.05,
     patience: Union[None, int] = None,
     disable_tqdm: bool = True,
 ) -> (list, list, list, list, list, list):

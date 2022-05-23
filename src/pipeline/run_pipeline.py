@@ -16,24 +16,54 @@ from scripts.utils import train_keys
 import yaml
 import pickle
 import torch
-from Models import Classifier, Regressor
+from pipeline.Models import Classifier, Regressor
 import argparse
 import pandas as pd
 import numpy as np 
 from multiprocessing import Pool
 
-
+def get_seeds(seed):
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)     
+    return 
 
 def ALpipeline(cfg):
 
-    if not isinstance(cfg,dict):
-        seed = cfg[0]
-        SAVE_PATHS["outputs"] = cfg[2]
-        SAVE_PATHS["plots"] = cfg[3]
-        cfg = cfg[1]
-        torch.manual_seed(seed)
-        random.seed(seed)
-        np.random.seed(seed)
+    # how cfg should be declared in Clpipeline or AL pipeline: cfg = {'run_mode':run_mode,'cfg':config}, config will be a list for AL bootstrap, and a dict for AL not bootstrap; it's always a dict for CL
+    if cfg['run_mode'] == 'AL':  #ToDo:=====> add to config
+        run_mode = 'AL'
+        if not isinstance(cfg['cfg'],dict):
+            SAVE_PATHS = {}
+            cfg = cfg['cfg']
+            seed = cfg[0] 
+            SAVE_PATHS["outputs"] = cfg[2]
+            SAVE_PATHS["plots"] = cfg[3]
+            cfg = cfg[1]        
+            get_seeds(seed)           
+            first_CL_iter = False
+        else:
+            cfg = cfg['cfg']
+    elif cfg['run_mode'] == 'CL': 
+        run_mode = 'CL'
+        if not isinstance(cfg['cfg'],dict):
+            cfg = cfg['cfg']
+            seed = cfg[0]
+            SAVE_PATHS = {}
+            SAVE_PATHS["outputs"] = cfg[2]  # todo=====> figure out whether save paths should be like this
+            SAVE_PATHS["plots"] = cfg[3]            
+            scaler = cfg[4]['scaler']
+            train_sample = cfg[4]['train']
+            valid_dataset = cfg[4]['val']
+            holdout_set = cfg[4]['test']     
+            plot_sample = holdout_set
+            unlabelled_pool = cfg[4]['unlabelled']   
+            models = cfg[5]
+            first_CL_iter = cfg[6]
+            cfg = cfg[1]
+            get_seeds(seed)
+        else:
+            raise ValueError('for CL a list is always expected')
 
     # Create logger object for use in pipeline
     verboselogs.install()
@@ -41,11 +71,7 @@ def ALpipeline(cfg):
     coloredlogs.install(level="DEBUG")  # cfg["logging_level"])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
-
-    # comet_project_name = "AL-pipeline"
-    # experiment = Experiment(project_name = comet_project_name)
-
+    device = torch.device("cpu") # --- enforced due to cluster issues
 
     # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
@@ -79,121 +105,125 @@ def ALpipeline(cfg):
     with open(os.path.join(save_dest, "config.yaml"), "w") as f:
         out = yaml.dump(cfg, f, default_flow_style=False)
 
-    # --------------------------------------------- Load data ----------------------------------------------------------
-    train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
-        PATHS["train"],
-        PATHS["validation"],
-        PATHS["test"],
-        fluxes=FLUXES,
-        samplesize_debug=sample_size,
-    )
-    # --- holdout set is from the test set
-    plot_sample = test_dataset.sample(test_size)  # Holdout dataset
-    holdout_set = plot_sample
-    # holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
 
-    valid_dataset = eval_dataset.sample(valid_size)  # validation set
-    # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
-    eval_dataset.remove(valid_dataset.data.index)  #
-    unlabelled_pool = eval_dataset
+    # --------------------------------------------- Load data ----------------------------------------------------------
+    if run_mode == 'AL':
+        train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
+            PATHS["train"],
+            PATHS["validation"],
+            PATHS["test"],
+            fluxes=FLUXES,
+            samplesize_debug=sample_size,
+        )
+        # --- holdout set is from the test set
+        plot_sample = test_dataset.sample(test_size)  # Holdout dataset
+        holdout_set = plot_sample
+        # holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
+        train_sample = train_dataset.sample(train_size)
+
+        valid_dataset = eval_dataset.sample(valid_size)  # validation set
+        # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
+        train_dataset.remove(train_sample.data.index)  #
+        unlabelled_pool = train_dataset  # ToDo: move declaration of train sample here, unabelled pool should be rest of train sample!
+
+        # Load pretrained models
+        logging.info("Loaded the following models:\n")
+    elif run_mode == 'CL':
+        pass # --- data is passed from CL pipeline, see start of the function
+
+
     buffer_size = 0
     classifier_buffer = []
-    # Load pretrained models
-    logging.info("Loaded the following models:\n")
-
     # ------------------------------------------- Load or train first models ------------------------------------------
-    models = {f:{} for f in FLUXES}
-    for model in PRETRAINED:
-        logging.debug(f"Size of training dataset {len(train_dataset)}")
-        train_sample = train_dataset.sample(train_size)
-        if model == "Regressor":
-            for FLUX in FLUXES:
-                if PRETRAINED[model][FLUX]["trained"] == True:
-                    trained_model = md.load_model(
-                        model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX, dropout
-                    )
-                    if FLUX not in models.keys():
-                        models[FLUX] = {model: trained_model.to(device)}
+    if run_mode == 'AL'  or (run_mode=='CL' and first_CL_iter):
+        models = {f:{} for f in FLUXES}
+        for model in PRETRAINED:
+            if model == "Regressor":
+                for FLUX in FLUXES:
+                    if PRETRAINED[model][FLUX]["trained"] == True:
+                        trained_model = md.load_model(
+                            model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX, dropout
+                        )
+                        if FLUX not in models.keys():
+                            models[FLUX] = {model: trained_model.to(device)}
+                        else:
+                            models[FLUX][model] = trained_model.to(device)
+
                     else:
-                        models[FLUX][model] = trained_model.to(device)
+                        logging.info(f"{FLUX} {model} not trained - training now")
 
-                else:
-                    logging.info(f"{FLUX} {model} not trained - training now")
+                        models[FLUX][model] = Regressor(
+                            device=device, 
+                            scaler=scaler, 
+                            flux=FLUX, 
+                            dropout=dropout,
+                            model_size=cfg['hyperparams']['model_size']
+                            )
+        
+                        models[FLUX][model], losses = md.train_model(
+                            models[FLUX][model],
+                            train_sample,
+                            valid_dataset,
+                            save_path=PRETRAINED[model][FLUX]["save_path"],
+                            epochs=cfg["train_epochs"],
+                            patience=cfg["train_patience"],
+                        )
+                        
+                        train_loss, valid_loss = losses
+                        output_dict["train_loss_init"].append(train_loss)
 
-                    models[FLUX][model] = Regressor(
-                        device=device, 
-                        scaler=scaler, 
-                        flux=FLUX, 
-                        dropout=dropout,
-                        model_size=cfg['hyperparams']['model_size']
+                            # if model == "Classifier":  --- not used currently
+                            #    losses, train_accuracy, validation_losses, val_accuracy = losses
+            else:
+                if PRETRAINED[model][FLUXES[0]]["trained"] == True:
+                    trained_model = md.load_model(
+                        model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0], dropout
+                    )
+                    models[FLUXES[0]] = {model: trained_model.to(device)} 
+                else: 
+                    logging.info(f"{FLUXES[0]} {model} not trained - training now")
+                    models[FLUXES[0]][model] = Classifier(device)
+
+                    models[FLUXES[0]][model], losses = md.train_model(
+                            models[FLUXES[0]][model],
+                            train_sample,
+                            valid_dataset,
+                            save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
+                            epochs=cfg["train_epochs"],
+                            patience=cfg["train_patience"],
                         )
 
-                    models[FLUX][model], losses = md.train_model(
-                        models[FLUX][model],
-                        train_sample,
-                        valid_dataset,
-                        save_path=PRETRAINED[model][FLUX]["save_path"],
-                        epochs=cfg["train_epochs"],
-                        patience=cfg["train_patience"],
-                    )
-                    
-                    train_loss, valid_loss = losses
-                    output_dict["train_loss_init"].append(train_loss)
+            for FLUX in FLUXES:
+                logging.debug(f"Models for {FLUX} : {models[FLUX].keys()}")
 
-                    # if model == "Classifier":  --- not used currently
-                    #    losses, train_accuracy, validation_losses, val_accuracy = losses
-        else:
-            if PRETRAINED[model][FLUXES[0]]["trained"] == True:
-                trained_model = md.load_model(
-                    model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0], dropout
-                )
-                models[FLUXES[0]] = {model: trained_model.to(device)} 
-            else: 
-                logging.info(f"{FLUXES[0]} {model} not trained - training now")
-                models[FLUXES[0]][model] = Classifier(device)
-
-                models[FLUXES[0]][model], losses = md.train_model(
-                        models[FLUXES[0]][model],
-                        train_sample,
-                        valid_dataset,
-                        save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
-                        epochs=cfg["train_epochs"],
-                        patience=cfg["train_patience"],
-                    )
-
-    for FLUX in FLUXES:
-        logging.debug(f"Models for {FLUX} : {models[FLUX].keys()}")
-
-    # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
-    for FLUX in FLUXES:
-        logging.info(f"Test loss for {FLUX} before pipeline:")
-        _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale = True)
-        logging.info(f"Holdout Loss: {holdout_loss}")
-        logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
-        output_dict["test_loss_init"].append(holdout_loss)
-        output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
+        # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
+        for FLUX in FLUXES:
+            logging.info(f"Test loss for {FLUX} before pipeline:")
         
-    _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
-    output_dict['class_test_acc_init'].append(holdout_class_losses[1])
-    # Create logger object for use in pipeline
-    verboselogs.install()
-    logger = logging.getLogger(__name__)
-    coloredlogs.install(level="DEBUG")#cfg["logging_level"])
+            _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
+            logging.info(f"Holdout Loss: {holdout_loss}")
+            logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
+            output_dict["test_loss_init"].append(holdout_loss)
+            output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
+            
+        _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
+        output_dict['class_test_acc_init'].append(holdout_class_losses[1])
+        # Create logger object for use in pipeline
+        verboselogs.install()
+        logger = logging.getLogger(__name__)
+        coloredlogs.install(level="DEBUG")#cfg["logging_level"])
+    else:
+        pass # --- models are passed from CL pipeline        
+
 
     if len(train_sample) > 100_000:
         logger.warning(
             "Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data"
         )
 
-        #comet_project_name = "AL-pipeline"
-        #experiment = Experiment(project_name = comet_project_name)
-
-
         # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
-    classifier_buffer = []
-    buffer_size = 0
-
+ 
     for i in range(cfg["iterations"]):
         logging.info(f"Iteration: {i+1}\n")
 
@@ -249,7 +279,7 @@ def ALpipeline(cfg):
         prediction_candidates_before = []
         for FLUX in FLUXES:
             prediction_candidates_before.append(
-                models[FLUX]["Regressor"].predict(candidates)
+                models[FLUX]["Regressor"].predict(candidates, unscale=False)
             )
 
         # =================== >>>>>>>>>> Here goes the Qualikiz acquisition <<<<<<<<<<<<< ==================
@@ -287,8 +317,11 @@ def ALpipeline(cfg):
         unlabelled_pool.scale(scaler)
         valid_dataset.scale(scaler)
         holdout_set.scale(scaler)
-
-
+             
+        # --- update scaler in the models
+        for FLUX in FLUXES:
+            for model in PRETRAINED:
+                models[FLUX][model].scaler = scaler
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
@@ -330,7 +363,7 @@ def ALpipeline(cfg):
         train_losses_unscaled, val_losses_unscaled = [], []
         holdout_pred_after, holdout_loss, holdout_loss_unscaled = [], [], []
         for FLUX in FLUXES:
-            preds, _ = models[FLUX]["Regressor"].predict(holdout_set)
+            preds, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale=False)
             holdout_pred_before.append(preds)
 
             retrain_losses = pt.retrain_regressor(
@@ -422,12 +455,15 @@ def ALpipeline(cfg):
         except:
             pass
         
- 
+
+
+
 
         n_train = len(train_sample)
         output_dict["n_train_points"].append(n_train)
         logging.info(f"Number of training points at end of iteration {i + 1}: {n_train}")
 
+    if run_mode == 'AL':   #we don't necessarily want this in CL for the moment
         # --- Save at end of iteration
         output_path = os.path.join(
             save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl"
@@ -441,7 +477,10 @@ def ALpipeline(cfg):
         
         classifier_path = os.path.join(save_dest, f"{FLUXES[0]}_classifier_lam_{lam}_iteration_{i}.pkl")
         torch.save(models[FLUXES[0]]["Classifier"].state_dict(), classifier_path)
-    return output_dict        
+        return output_dict
+
+    else:
+        return   train_sample, valid_dataset, holdout_set, output_dict, scaler, models # ugly
 
 
 if __name__=='__main__':
@@ -474,28 +513,31 @@ if __name__=='__main__':
     Ncand = cfg["hyperparams"]["candidate_size"]
 
     retrain = cfg["retrain_classifier"]
+
     if Nbootstraps>1:
         #cfg = np.repeat(cfg,Nbootstraps)
-        seeds = np.arange(Nbootstraps).astype(int)
+        seeds = [np.random.randint(0,2**32-1) for i in range(Nbootstraps)]
         inp = []
         for s in seeds:
             inp.append([s,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]])
+        cfg = [{'run_mode':'AL','cfg':inp[i]} for i in range(len(inp))]
         with Pool(Nbootstraps) as p:            
-            output = p.map(ALpipeline,inp)
-        output = {'out':output}
-
+            output = p.map(ALpipeline,cfg)
     else:
         seed = np.random.randint(0,2**32-1)
-        output = ALpipeline([seed,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]])
-        output = {'out':output}
-    
+        output = ALpipeline({'run_mode':'AL','cfg':[seed,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]]})
+
+    output = {'out':output}
+    total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
+
     if args.output_dir is None:
         total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
-        output_dir = f"../.../outputs/{total}_{Ntrain}/"
+        output_dir = f"../.../outputs/{total}_{Ntrain}/" # --- next time we should make sure we have consistent paths to avoid this
 
     else:
         output_dir = args.output_dir
+    #output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
     with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
-        pickle.dump(output,f)                                
+        pickle.dump(output,f)               
