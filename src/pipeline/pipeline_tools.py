@@ -21,10 +21,6 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 output_dict = {
     "train_loss_init": [],  # Regressor performance before pipeline
     "test_loss_init": [],
-    "class_train_loss_init": [], # Regressor performance before pipeline
-    "class_test_loss_init": [],
-    "class_train_acc_init": [], # Regressor performance before pipeline
-    "class_test_acc_init": [],
     "test_loss_init_unscaled": [],
     "retrain_losses": [], # regressor performance during retraining
     "retrain_val_losses": [],
@@ -44,6 +40,15 @@ output_dict = {
     "holdout_pred_after": [],
     "holdout_ground_truth": [],
 
+    "class_train_loss_init": [], 
+    "class_test_loss_init": [],
+    "class_train_acc_init": [],
+    "class_test_acc_init": [],
+    "class_precision_init": [],
+    "class_recall_init": [],
+    "class_f1_init": [],
+    "class_auc_init": [],
+
     "class_train_loss": [],
     "class_val_loss": [],
     "class_missed_loss": [],
@@ -51,7 +56,12 @@ output_dict = {
     "class_val_acc": [],
     "class_missed_acc": [],
     "holdout_class_acc": [],
-    "holdout_class_loss": []
+    "holdout_class_loss": [],
+    "holdout_class_precision": [],
+    "holdout_class_recall": [],
+    "holdout_class_f1": [],
+    "holdout_class_auc": [],
+    "class_retrain_iterations": [],
 }
 
 
@@ -572,6 +582,7 @@ def get_most_uncertain(
         total_std = total_std + alpha * median_dist# nearest
 
     if acquisition == "random":
+        logging.info("Using random acquisition")
         # choose random indices
         uncertain_list_indices = np.random.choice(n_candidates, int(keep * n_candidates), replace=False)
         #random_certain is all the indices not in random_idx
