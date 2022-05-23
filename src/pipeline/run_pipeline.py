@@ -287,7 +287,11 @@ def ALpipeline(cfg):
         unlabelled_pool.scale(scaler)
         valid_dataset.scale(scaler)
         holdout_set.scale(scaler)
-
+        
+        # --- update scaler in the models
+        for FLUX in FLUXES:
+            for model in PRETRAINED:
+                models[FLUX][model].scaler = scaler
 
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
