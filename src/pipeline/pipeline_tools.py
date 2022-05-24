@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from tqdm.auto import tqdm
 from scipy.spatial.distance import cdist
 
@@ -76,6 +76,7 @@ def prepare_data(
     test_size: int = None,
     samplesize_debug: int = 1,
     scale: bool = True,
+    scale_output: bool = True,
 ) -> (ITGDatasetDF, ITGDatasetDF, ITGDatasetDF, StandardScaler):
     """
     Loads the data from the given paths and prepares it for training.
@@ -124,18 +125,29 @@ def prepare_data(
     valid_dataset = ITGDatasetDF(validation_data, target_column=target_column)
     test_dataset = ITGDatasetDF(test_data, target_column=target_column)
 
+    train_dataset_regressor = copy.deepcopy(train_dataset)
+    train_dataset_regressor.data = train_dataset.data.drop(train_dataset.data[train_dataset.data["stable_label"] == 0].index)
+
     if scale: 
         scaler = StandardScaler()
-        scaler.fit(train_data.drop(["stable_label"], axis=1))
+        #scaler = MinMaxScaler()
 
-        train_dataset.scale(scaler)
-        valid_dataset.scale(scaler)
-        test_dataset.scale(scaler)
+        if scale_output: # TODO: Should stable values be dropped here?
+            scaler.fit(train_data.drop(["stable_label", "index"], axis=1))
+        else:
+            drop = ["stable_label", "index"] + fluxes
+            scaler.fit(train_data.drop(drop, axis=1))
 
-        return train_dataset, valid_dataset, test_dataset, scaler
+        train_dataset.scale(scaler, scale_output=scale_output)
+        valid_dataset.scale(scaler, scale_output=scale_output)
+        test_dataset.scale(scaler, scale_output=scale_output)
+
+        train_dataset_regressor.scale(scaler, scale_output=scale_output)
+
+        return train_dataset, valid_dataset, test_dataset, scaler, train_dataset_regressor
     
     else:
-        return train_dataset, valid_dataset, test_dataset, None
+        return train_dataset, valid_dataset, test_dataset, None, train_dataset_regressor
 
 
 # classifier tools
@@ -388,8 +400,8 @@ def retrain_regressor(
         opt,
         mode="min",
         factor=0.5,
-        patience=0.5 * patience,
-        min_lr=(1 / 16) * learning_rate,
+        patience=0.25 * patience,
+        min_lr=(1 / 32) * learning_rate,
     )
     train_loss = []
     train_loss_unscaled = []
@@ -403,16 +415,10 @@ def retrain_regressor(
         train_loss.append(loss.item())
         train_loss_unscaled.append(unscaled_loss.item())
 
-        logging.log(15, f"Training Loss: {loss.item():.4f}")
-        logging.log(15, f"Training Loss Unscaled: {unscaled_loss.item():.4f}")
-
         if validation_step:
             loss, loss_unscaled = model.validation_step(val_loader, scheduler)
             val_loss.append(loss)
             val_loss_unscaled.append(loss_unscaled)
-
-            logging.log(15, f"Validation loss: {loss:.4f}")
-            logging.log(15, f"Validation loss unscaled: {loss_unscaled:.4f}")
 
         if len(val_loss) > patience:
             if np.mean(val_loss[-patience:]) < val_loss[-1]:

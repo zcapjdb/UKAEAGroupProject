@@ -73,34 +73,51 @@ def ALpipeline(cfg):
         out = yaml.dump(cfg, f, default_flow_style=False)
 
     # --------------------------------------------- Load data ----------------------------------------------------------
-    train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
+    train_classifier, eval_dataset, test_dataset, scaler, train_regressor = pt.prepare_data(
         PATHS["train"],
         PATHS["validation"],
         PATHS["test"],
         fluxes=FLUXES,
         samplesize_debug=sample_size,
         scale=False,
+        scale_output=False,
     )
 
-    train_sample = train_dataset.sample(train_size)
+    train_sample = train_regressor.sample(train_size)
+    logging.info(f"Train size: {len(train_sample)}")
     scaler = StandardScaler()
     scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
 
-    train_sample.scale(scaler)
-    test_dataset.scale(scaler)
-    eval_dataset.scale(scaler)
+    train_sample.scale(scaler, scale_output=True)
+    test_dataset.scale(scaler, scale_output=True)
+    eval_dataset.scale(scaler, scale_output=True)
+
+    train_classifier.scale(scaler, scale_output=True)
+    train_classifier = train_classifier.sample(train_size)
 
     # --- holdout set is from the test set
-    plot_sample = test_dataset.sample(test_size)  # Holdout dataset
-    holdout_set = plot_sample
+    holdout_set = test_dataset.sample(test_size)  # Holdout dataset
+    holdout_classifier = copy.deepcopy(holdout_set)
 
-    valid_dataset = eval_dataset.sample(valid_size)  # validation set
+    # drop any data from holdout set with stable_label = 0
+    holdout_set.data = holdout_set.data.drop(holdout_set.data[holdout_set.data["stable_label"] == 0].index)
+
+    eval_regressor = copy.deepcopy(eval_dataset)
+    eval_regressor.data = eval_regressor.data.drop(eval_regressor.data[eval_regressor.data["stable_label"] == 0].index)
+    valid_dataset = eval_regressor.sample(valid_size)
+
+    valid_classifier = eval_dataset.sample(valid_size)  # validation set
+
+
     # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
-    eval_dataset.remove(valid_dataset.data.index)  #
+    eval_dataset.remove(valid_dataset.data.index) 
+    eval_dataset.remove(valid_classifier.data.index)
+
     unlabelled_pool = eval_dataset
     buffer_size = 0
     classifier_buffer = []
     # Load pretrained models
+
     logging.info("Loaded the following models:\n")
 
     # ------------------------------------------- Load or train first models ------------------------------------------
@@ -140,8 +157,6 @@ def ALpipeline(cfg):
                     train_loss, valid_loss = losses
                     output_dict["train_loss_init"].append(train_loss)
 
-                    # if model == "Classifier":  --- not used currently
-                    #    losses, train_accuracy, validation_losses, val_accuracy = losses
         elif CLASSIFIER:
             if PRETRAINED[model][FLUXES[0]]["trained"] == True:
                 trained_model = md.load_model(
@@ -154,8 +169,8 @@ def ALpipeline(cfg):
 
                 models[FLUXES[0]][model], losses = md.train_model(
                         models[FLUXES[0]][model],
-                        train_sample,
-                        valid_dataset,
+                        train_classifier,
+                        valid_classifier,
                         save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
                         epochs=cfg["train_epochs"],
                         patience=cfg["train_patience"],
@@ -172,11 +187,8 @@ def ALpipeline(cfg):
         logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
         output_dict["test_loss_init"].append(holdout_loss)
         output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
-    if CLASSIFIER:
-        _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
-        output_dict['class_test_acc_init'].append(holdout_class_losses[1])
-        
-        _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
+    if CLASSIFIER:   
+        _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
         output_dict['class_test_acc_init'].append(holdout_class_losses[1])
         output_dict['class_precision_init'].append(holdout_class_losses[2])
         output_dict['class_recall_init'].append(holdout_class_losses[3])
@@ -198,6 +210,7 @@ def ALpipeline(cfg):
 
     for i in range(cfg["iterations"]):
         logging.info(f"Iteration: {i+1}\n")
+        epochs = cfg["initial_epochs"] * (i + 1)
 
         # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
         candidates = unlabelled_pool.sample(candidate_size)
@@ -211,9 +224,16 @@ def ALpipeline(cfg):
                 batch_size=batch_size,
                 classifier=models[FLUXES[0]]["Classifier"],
                 device=device,
-            )  # It's not the classifier's job to say whether a point is stable or not. This happens at the end of the pipeline when we get the true labels by running Qualikiz.
+            ) 
 
-        epochs = cfg["initial_epochs"] * (i + 1)
+            passed_scaler = len(candidates)
+            correct_passed = int(0.95 * passed_scaler)
+            # if len(output_dict["holdout_class_acc"]) != 0:
+            #     correct_passed = output_dict["class_test_acc_init"][0] * passed_scaler
+
+            # else:
+            #     correct_passed = output_dict["holdout_class_acc"][-1] * passed_scaler
+
 
         # ---  get most uncertain candidate inputs as decided by regressor   --- NEW AL FRAMEWORK GOES HERE
         candidates_uncerts, data_idxs = [], []
@@ -280,20 +300,38 @@ def ALpipeline(cfg):
         unlabelled_pool.scale(scaler, unscale=True)
         valid_dataset.scale(scaler, unscale=True)
         holdout_set.scale(scaler, unscale=True)
-    # --- train data is enriched by new unstable candidate points
+
+        # --- train data is enriched by new unstable candidate points
         logging.info(f"Enriching training data with {len(candidates)} new points")
         train_sample.add(candidates)
+
         # --- get new scaler from enriched training set, rescale them with new scaler
         scaler = StandardScaler()
         scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
-        train_sample.scale(scaler)
-        unlabelled_pool.scale(scaler)
-        valid_dataset.scale(scaler)
-        holdout_set.scale(scaler)
+        train_sample.scale(scaler, scale_output=True)
+        unlabelled_pool.scale(scaler, scale_output=True)
+        valid_dataset.scale(scaler, scale_output=True)
+        holdout_set.scale(scaler, scale_output=True)
+
+        # # scale output separately
+        # scaler_output = StandardScaler()
+        # leading_flux = train_sample.data[FLUXES[0]].values
+        # zeros = np.zeros(len(correct_passed))
+
+        # leading_flux = np.concatenate((leading_flux, zeros))
+        # scaler_output.fit(leading_flux.reshape(-1, 1))
+
+        # train_sample.data[FLUXES[0]] = scaler_output.transform(
+        #     train_sample.data[FLUXES[0]].values.reshape(-1, 1)
+        # )
+
+        # # scale second flux normally
+        # scaler_output_2 = StandardScaler()
+
 
         # --- update scaler in the models
-        for FLUX in FLUXES:
-            models[FLUX]["Regressor"].scaler = scaler
+        # for FLUX in FLUXES:
+        #     models[FLUX]["Regressor"].scaler = scaler
 
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
@@ -308,8 +346,8 @@ def ALpipeline(cfg):
                 # retrain the classifier on the misclassified points
                 losses, accs = pt.retrain_classifier(
                     misclassified_dataset,
-                    train_sample,
-                    valid_dataset,
+                    train_classifier,
+                    valid_classifier,
                     models[FLUXES[0]]["Classifier"],
                     batch_size=batch_size,
                     epochs=epochs,
@@ -324,7 +362,7 @@ def ALpipeline(cfg):
                 output_dict["class_val_acc"].append(accs[1])
                 output_dict["class_missed_acc"].append(accs[2])
 
-                _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
+                _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
                 output_dict['holdout_class_loss'].append(holdout_class_losses[0])
                 output_dict['holdout_class_acc'].append(holdout_class_losses[1])
                 output_dict['holdout_class_precision'].append(holdout_class_losses[2])
@@ -455,6 +493,7 @@ def ALpipeline(cfg):
         if CLASSIFIER:
             classifier_path = os.path.join(save_dest, f"{FLUXES[0]}_classifier_lam_{lam}_iteration_{i}.pkl")
             torch.save(models[FLUXES[0]]["Classifier"].state_dict(), classifier_path)
+
     return output_dict        
 
 if __name__=='__main__':
