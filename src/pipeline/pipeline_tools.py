@@ -462,7 +462,9 @@ def get_uncertainty(
         step_list = []
         for step, (x, y, z, idx) in enumerate(dataloader):
             x = x.to(device)
+            z = z.to(device)
             predictions = regressor(x.float()).detach().cpu().numpy()
+            
             step_list.append(predictions)
 
         flat_list = [item for sublist in step_list for item in sublist]
@@ -506,7 +508,7 @@ def get_uncertainty(
         assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error(
             "Ordering error"
         )
-
+        
         return out_std[reorder], uncertain_data_idx
     else:
         return out_std, idx_array
@@ -539,6 +541,7 @@ def get_most_uncertain(
         idx_array: idx_array used for ordering  (which one have we followed)
 
     """
+    logging.debug(f"Getting most uncertain for: {model.flux}")
     data_copy = copy.deepcopy(dataset)
     n_candidates = out_stds[0].shape[0]
 
@@ -610,6 +613,12 @@ def get_most_uncertain(
 
     # Remove them from the sample
     data_copy.remove(certain_data_idx)
+
+    out_idx = idx_arrays[0][uncertain_list_indices]
+    nans = dataset.data[model.flux].loc[out_idx]
+
+    logging.debug(f"NaN inputs selected:{nans.isna().sum()}")
+    logging.debug(f"Number of selected points {len(out_idx)} ")
 
     return data_copy, total_std[uncertain_list_indices], idx_arrays[0][uncertain_list_indices], unlabelled_pool
 

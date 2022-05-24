@@ -43,6 +43,7 @@ def ALpipeline(cfg):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device("cpu")
 
+    CLASSIFIER = cfg["use_classifier"]
     FLUXES = cfg["flux"]  # is now a list of the relevant fluxes
     PRETRAINED = cfg["pretrained"]
     PATHS = cfg["data"]
@@ -141,7 +142,7 @@ def ALpipeline(cfg):
 
                     # if model == "Classifier":  --- not used currently
                     #    losses, train_accuracy, validation_losses, val_accuracy = losses
-        else:
+        elif CLASSIFIER:
             if PRETRAINED[model][FLUXES[0]]["trained"] == True:
                 trained_model = md.load_model(
                     model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0], dropout
@@ -171,13 +172,16 @@ def ALpipeline(cfg):
         logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
         output_dict["test_loss_init"].append(holdout_loss)
         output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
+    if CLASSIFIER:
+        _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
+        output_dict['class_test_acc_init'].append(holdout_class_losses[1])
         
-    _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
-    output_dict['class_test_acc_init'].append(holdout_class_losses[1])
-    output_dict['class_precision_init'].append(holdout_class_losses[2])
-    output_dict['class_recall_init'].append(holdout_class_losses[3])
-    output_dict['class_f1_init'].append(holdout_class_losses[4])
-    output_dict['class_auc_init'].append(holdout_class_losses[5])
+        _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
+        output_dict['class_test_acc_init'].append(holdout_class_losses[1])
+        output_dict['class_precision_init'].append(holdout_class_losses[2])
+        output_dict['class_recall_init'].append(holdout_class_losses[3])
+        output_dict['class_f1_init'].append(holdout_class_losses[4])
+        output_dict['class_auc_init'].append(holdout_class_losses[5])
 
     # Create logger object for use in pipeline
     verboselogs.install()
@@ -201,12 +205,13 @@ def ALpipeline(cfg):
         unlabelled_pool.remove(candidates.data.index)
 
         # --- See Issue #37 --- candidates are only those that the classifier selects as unstable.
-        candidates = pt.select_unstable_data(
-            candidates,
-            batch_size=batch_size,
-            classifier=models[FLUXES[0]]["Classifier"],
-            device=device,
-        )
+        if CLASSIFIER: # if we are using the classifier use it to remove stable labels
+            candidates = pt.select_unstable_data(
+                candidates,
+                batch_size=batch_size,
+                classifier=models[FLUXES[0]]["Classifier"],
+                device=device,
+            )  # It's not the classifier's job to say whether a point is stable or not. This happens at the end of the pipeline when we get the true labels by running Qualikiz.
 
         epochs = cfg["initial_epochs"] * (i + 1)
 
@@ -251,15 +256,21 @@ def ALpipeline(cfg):
 
         # ToDo ===========>>>> Now we do have the labels because Qualikiz gave them to us!  Need to discard misclassified data from enriched_train_loader, and retrain the classifier if buffer_size is big enough
         # check for misclassified data in candidates and add them to the buffer
-        candidates, misclassified_data, num_misclassified, data_idx, candidates_uncert_before = pt.check_for_misclassified_data(
-            candidates, 
-            uncertainty=candidates_uncert_before, 
-            indices=data_idx
-            )
-        buffer_size += num_misclassified
-        classifier_buffer.append(misclassified_data)
-        logging.info(f"Misclassified data: {num_misclassified}")
-        logging.info(f"Total Buffer size: {buffer_size}")
+        if CLASSIFIER:
+            candidates, misclassified_data, num_misclassified, data_idx, candidates_uncert_before = pt.check_for_misclassified_data(
+                candidates, 
+                uncertainty=candidates_uncert_before, 
+                indices=data_idx
+                )
+            buffer_size += num_misclassified
+            classifier_buffer.append(misclassified_data)
+            logging.info(f"Misclassified data: {num_misclassified}")
+            logging.info(f"Total Buffer size: {buffer_size}")
+        
+        elif len(FLUXES)>1:
+            # at this stage we know which of the inputs give a stable label or not so we can drop the stable values
+            #  
+            pass 
 
         # --- set up retraining by rescaling all points according to new training data --------------------
 
@@ -441,8 +452,9 @@ def ALpipeline(cfg):
             regressor_path = os.path.join(save_dest, f"{FLUX}_regressor_lam_{lam}_iteration_{i}.pkl")
             torch.save(models[FLUX]["Regressor"].state_dict(), regressor_path)
         
-        classifier_path = os.path.join(save_dest, f"{FLUXES[0]}_classifier_lam_{lam}_iteration_{i}.pkl")
-        torch.save(models[FLUXES[0]]["Classifier"].state_dict(), classifier_path)
+        if CLASSIFIER:
+            classifier_path = os.path.join(save_dest, f"{FLUXES[0]}_classifier_lam_{lam}_iteration_{i}.pkl")
+            torch.save(models[FLUXES[0]]["Classifier"].state_dict(), classifier_path)
     return output_dict        
 
 if __name__=='__main__':
