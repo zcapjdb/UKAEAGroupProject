@@ -255,22 +255,9 @@ class Regressor(nn.Module):
     def unscale(self, y):
         # get the index of the scaler that corresponds to the target
         scaler_features = self.scaler.feature_names_in_
+        scaler_index = np.where(scaler_features == self.flux)[0][0]
 
-        # check if self.flux is in scaler_features
-        if self.flux in scaler_features:
-            scaler_index = np.where(scaler_features == self.flux)[0][0]
-            
-            # scale_min = self.scaler.min_[scaler_index]
-            # scale_scale = self.scaler.scale_[scaler_index]
-            # rescale = MinMaxScaler()
-            # rescale.scale_ = scale_scale
-            # rescale.min_ = scale_min
-            # return rescale.inverse_transform(y)
-
-            return y * self.scaler.scale_[scaler_index] + self.scaler.mean_[scaler_index]
-
-        else:
-            return y
+        return y * self.scaler.scale_[scaler_index] + self.scaler.mean_[scaler_index]
 
     def enable_dropout(self):
         """Function to enable the dropout layers during test-time"""
@@ -487,45 +474,22 @@ class ITGDatasetDF(Dataset):
         if not keep_index:
             self.data["index"] = self.data.index
 
-    def scale(self, scaler, unscale=False, scale_output=True):
+    def scale(self, scaler, unscale=False):
         # Scale features in the scaler object and leave the rest as is
         if not unscale:
-            if scale_output:
-                scaled = scaler.transform(self.data.drop([self.label, "index"], axis=1))
-            else:
-                # get list of target_keys that are in self.data
-                output_keys = [key for key in target_keys if key in self.data.columns]
-                drop = [self.label, "index"] + output_keys
-                scaled = scaler.transform(self.data.drop(drop, axis=1))
-
+            scaled = scaler.transform(self.data.drop([self.label, "index"], axis=1))
         else:
-            if scale_output:
-                scaled = scaler.inverse_transform(self.data.drop([self.label, "index"], axis=1))
-            else:
-                output_keys = [key for key in target_keys if key in self.data.columns]
-                drop = [self.label, "index"] + output_keys
-                scaled = scaler.inverse_transform(self.data.drop([self.label, "index", self.target], axis=1))
+            scaled = scaler.inverse_transform(self.data.drop([self.label, "index"], axis=1))
 
-        if scale_output:
-            cols = [c for c in self.data if c != self.label and c != "index"]
-            temp_df = pd.DataFrame(scaled, index=self.data.index, columns=cols)
+        cols = [c for c in self.data if c != self.label and c != "index"]
+        temp_df = pd.DataFrame(scaled, index=self.data.index, columns=cols)
 
-            temp_df["index"] = self.data["index"]
-            temp_df[self.label] = self.data[self.label]
+        temp_df["index"] = self.data["index"]
+        temp_df[self.label] = self.data[self.label]
 
-            self.data = temp_df
-
-        else:
-            cols = [c for c in self.data if c not in drop] 
-            temp_df = pd.DataFrame(scaled, index=self.data.index, columns=cols)
-
-            temp_df["index"] = self.data["index"]
-            temp_df[self.label] = self.data[self.label]
-            temp_df[self.target] = self.data[self.target]
+        self.data = temp_df
 
         del temp_df
-
-        
 
     def sample(self, batch_size):
         return ITGDatasetDF(

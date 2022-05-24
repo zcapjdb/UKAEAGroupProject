@@ -5,8 +5,6 @@ from sklearn.preprocessing import StandardScaler
 import os
 import copy
 
-# import comet_ml import Experiment
-
 import random
 import pipeline.pipeline_tools as pt
 import pipeline.Models as md
@@ -80,7 +78,6 @@ def ALpipeline(cfg):
         fluxes=FLUXES,
         samplesize_debug=sample_size,
         scale=False,
-        scale_output=False,
     )
 
     train_sample = train_regressor.sample(train_size)
@@ -88,15 +85,15 @@ def ALpipeline(cfg):
     scaler = StandardScaler()
     scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
 
-    train_sample.scale(scaler, scale_output=True)
-    test_dataset.scale(scaler, scale_output=True)
-    eval_dataset.scale(scaler, scale_output=True)
+    train_sample.scale(scaler)
+    test_dataset.scale(scaler)
+    eval_dataset.scale(scaler)
 
-    train_classifier.scale(scaler, scale_output=True)
+    train_classifier.scale(scaler)
     train_classifier = train_classifier.sample(train_size)
 
     # --- holdout set is from the test set
-    holdout_set = test_dataset.sample(test_size)  # Holdout dataset
+    holdout_set = test_dataset.sample(test_size)
     holdout_classifier = copy.deepcopy(holdout_set)
 
     # drop any data from holdout set with stable_label = 0
@@ -198,7 +195,7 @@ def ALpipeline(cfg):
     # Create logger object for use in pipeline
     verboselogs.install()
     logger = logging.getLogger(__name__)
-    coloredlogs.install(level="DEBUG")#cfg["logging_level"])
+    coloredlogs.install(level="DEBUG")
 
     if len(train_sample) > 100_000:
         logger.warning(
@@ -225,14 +222,7 @@ def ALpipeline(cfg):
                 classifier=models[FLUXES[0]]["Classifier"],
                 device=device,
             ) 
-
-            passed_scaler = len(candidates)
-            correct_passed = int(0.95 * passed_scaler)
-            # if len(output_dict["holdout_class_acc"]) != 0:
-            #     correct_passed = output_dict["class_test_acc_init"][0] * passed_scaler
-
-            # else:
-            #     correct_passed = output_dict["holdout_class_acc"][-1] * passed_scaler
+            logging.info(f"{len(candidates)} candidates selected")
 
 
         # ---  get most uncertain candidate inputs as decided by regressor   --- NEW AL FRAMEWORK GOES HERE
@@ -308,30 +298,14 @@ def ALpipeline(cfg):
         # --- get new scaler from enriched training set, rescale them with new scaler
         scaler = StandardScaler()
         scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
-        train_sample.scale(scaler, scale_output=True)
-        unlabelled_pool.scale(scaler, scale_output=True)
-        valid_dataset.scale(scaler, scale_output=True)
-        holdout_set.scale(scaler, scale_output=True)
+        train_sample.scale(scaler)
+        unlabelled_pool.scale(scaler)
+        valid_dataset.scale(scaler)
+        holdout_set.scale(scaler)
 
-        # # scale output separately
-        # scaler_output = StandardScaler()
-        # leading_flux = train_sample.data[FLUXES[0]].values
-        # zeros = np.zeros(len(correct_passed))
-
-        # leading_flux = np.concatenate((leading_flux, zeros))
-        # scaler_output.fit(leading_flux.reshape(-1, 1))
-
-        # train_sample.data[FLUXES[0]] = scaler_output.transform(
-        #     train_sample.data[FLUXES[0]].values.reshape(-1, 1)
-        # )
-
-        # # scale second flux normally
-        # scaler_output_2 = StandardScaler()
-
-
-        # --- update scaler in the models
-        # for FLUX in FLUXES:
-        #     models[FLUX]["Regressor"].scaler = scaler
+        #--- update scaler in the models
+        for FLUX in FLUXES:
+            models[FLUX]["Regressor"].scaler = scaler
 
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
@@ -527,7 +501,6 @@ if __name__=='__main__':
 
     retrain = cfg["retrain_classifier"]
     if Nbootstraps>1:
-        #cfg = np.repeat(cfg,Nbootstraps)
         seeds = np.arange(Nbootstraps).astype(int)
         inp = []
         for s in seeds:

@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from tqdm.auto import tqdm
 from scipy.spatial.distance import cdist
 
@@ -76,7 +76,6 @@ def prepare_data(
     test_size: int = None,
     samplesize_debug: int = 1,
     scale: bool = True,
-    scale_output: bool = True,
 ) -> (ITGDatasetDF, ITGDatasetDF, ITGDatasetDF, StandardScaler):
     """
     Loads the data from the given paths and prepares it for training.
@@ -130,19 +129,13 @@ def prepare_data(
 
     if scale: 
         scaler = StandardScaler()
-        #scaler = MinMaxScaler()
+        scaler.fit(train_data.drop(["stable_label", "index"], axis=1))
 
-        if scale_output: # TODO: Should stable values be dropped here?
-            scaler.fit(train_data.drop(["stable_label", "index"], axis=1))
-        else:
-            drop = ["stable_label", "index"] + fluxes
-            scaler.fit(train_data.drop(drop, axis=1))
+        train_dataset.scale(scaler)
+        valid_dataset.scale(scaler)
+        test_dataset.scale(scaler)
 
-        train_dataset.scale(scaler, scale_output=scale_output)
-        valid_dataset.scale(scaler, scale_output=scale_output)
-        test_dataset.scale(scaler, scale_output=scale_output)
-
-        train_dataset_regressor.scale(scaler, scale_output=scale_output)
+        train_dataset_regressor.scale(scaler)
 
         return train_dataset, valid_dataset, test_dataset, scaler, train_dataset_regressor
     
