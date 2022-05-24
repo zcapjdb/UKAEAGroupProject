@@ -5,7 +5,7 @@ import pandas as pd
 import pipeline.pipeline_tools as pt
 
 import numpy as np
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score
 from scripts.utils import train_keys, target_keys
 from tqdm.auto import tqdm

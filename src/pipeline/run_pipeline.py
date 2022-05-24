@@ -304,8 +304,9 @@ def ALpipeline(cfg):
         holdout_set.scale(scaler)
 
         #--- update scaler in the models
-        for FLUX in FLUXES:
-            models[FLUX]["Regressor"].scaler = scaler
+        # TODO: WHY does this make it worse???
+        # for FLUX in FLUXES:
+        #     models[FLUX]["Regressor"].scaler = scaler
 
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
