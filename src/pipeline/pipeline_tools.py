@@ -114,25 +114,28 @@ def prepare_data(
     test_data = test_data.dropna(subset=[target_column])
 
 
-
     train_data["stable_label"] = np.where(train_data[target_column] != 0, 1, 0)
     validation_data["stable_label"] = np.where(
         validation_data[target_column] != 0, 1, 0
     )
     test_data["stable_label"] = np.where(test_data[target_column] != 0, 1, 0)
 
-    scaler = StandardScaler()
-    scaler.fit_transform(train_data.drop(["stable_label"], axis=1))
-
     train_dataset = ITGDatasetDF(train_data, target_column=target_column)
     valid_dataset = ITGDatasetDF(validation_data, target_column=target_column)
     test_dataset = ITGDatasetDF(test_data, target_column=target_column)
+
     if scale: 
+        scaler = StandardScaler()
+        scaler.fit(train_data.drop(["stable_label"], axis=1))
+
         train_dataset.scale(scaler)
         valid_dataset.scale(scaler)
         test_dataset.scale(scaler)
 
-    return train_dataset, valid_dataset, test_dataset, scaler
+        return train_dataset, valid_dataset, test_dataset, scaler
+    
+    else:
+        return train_dataset, valid_dataset, test_dataset, None
 
 
 # classifier tools

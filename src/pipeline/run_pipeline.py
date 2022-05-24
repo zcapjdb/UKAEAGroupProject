@@ -43,12 +43,6 @@ def ALpipeline(cfg):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device("cpu")
 
-    # comet_project_name = "AL-pipeline"
-    # experiment = Experiment(project_name = comet_project_name)
-
-
-    # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
-
     CLASSIFIER = cfg["use_classifier"]
     FLUXES = cfg["flux"]  # is now a list of the relevant fluxes
     PRETRAINED = cfg["pretrained"]
@@ -66,8 +60,6 @@ def ALpipeline(cfg):
     dropout = cfg["hyperparams"]["dropout"]
     # Dictionary to store results of the classifier and regressor for later use
     output_dict = pt.output_dict
-
-    # To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test 
 
     # --- Set up saving
     save_dest = os.path.join(SAVE_PATHS["outputs"], FLUXES[0])
@@ -87,11 +79,20 @@ def ALpipeline(cfg):
         PATHS["test"],
         fluxes=FLUXES,
         samplesize_debug=sample_size,
+        scale=False,
     )
+
+    train_sample = train_dataset.sample(train_size)
+    scaler = StandardScaler()
+    scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
+
+    train_sample.scale(scaler)
+    test_dataset.scale(scaler)
+    eval_dataset.scale(scaler)
+
     # --- holdout set is from the test set
     plot_sample = test_dataset.sample(test_size)  # Holdout dataset
     holdout_set = plot_sample
-    # holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
 
     valid_dataset = eval_dataset.sample(valid_size)  # validation set
     # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
@@ -105,8 +106,6 @@ def ALpipeline(cfg):
     # ------------------------------------------- Load or train first models ------------------------------------------
     models = {f:{} for f in FLUXES}
     for model in PRETRAINED:
-        logging.debug(f"Size of training dataset {len(train_dataset)}")
-        train_sample = train_dataset.sample(train_size)
         if model == "Regressor":
             for FLUX in FLUXES:
                 if PRETRAINED[model][FLUX]["trained"] == True:
@@ -194,22 +193,11 @@ def ALpipeline(cfg):
             "Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data"
         )
 
-        #comet_project_name = "AL-pipeline"
-        #experiment = Experiment(project_name = comet_project_name)
-
-
-        # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
-
     classifier_buffer = []
     buffer_size = 0
 
     for i in range(cfg["iterations"]):
         logging.info(f"Iteration: {i+1}\n")
-
-        #if i != 0:
-        #    # reset the output dictionary for each iteration
-        #    for value in output_dict.values():
-        #        del value[:]
 
         # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
         candidates = unlabelled_pool.sample(candidate_size)
@@ -228,7 +216,6 @@ def ALpipeline(cfg):
         epochs = cfg["initial_epochs"] * (i + 1)
 
         # ---  get most uncertain candidate inputs as decided by regressor   --- NEW AL FRAMEWORK GOES HERE
-        # get the uncertainties from regressors
         candidates_uncerts, data_idxs = [], []
 
         for FLUX in FLUXES:
@@ -298,7 +285,7 @@ def ALpipeline(cfg):
         train_sample.add(candidates)
         # --- get new scaler from enriched training set, rescale them with new scaler
         scaler = StandardScaler()
-        scaler.fit_transform(train_sample.data.drop(["stable_label","index"], axis=1))
+        scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
         train_sample.scale(scaler)
         unlabelled_pool.scale(scaler)
         valid_dataset.scale(scaler)
@@ -352,8 +339,6 @@ def ALpipeline(cfg):
                 classifier_buffer = []
                 buffer_size = 0
 
-
-
         # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
         holdout_pred_before = []
         train_losses, val_losses = [], []
@@ -391,7 +376,6 @@ def ALpipeline(cfg):
             logging.info(f"{FLUX} test loss: {hold_loss}")
             logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
   
-
 
         candidates_uncerts_after, data_idxs_after = [], []
 
@@ -452,7 +436,6 @@ def ALpipeline(cfg):
         except:
             pass
         
- 
 
         n_train = len(train_sample)
         output_dict["n_train_points"].append(n_train)
@@ -473,7 +456,6 @@ def ALpipeline(cfg):
             classifier_path = os.path.join(save_dest, f"{FLUXES[0]}_classifier_lam_{lam}_iteration_{i}.pkl")
             torch.save(models[FLUXES[0]]["Classifier"].state_dict(), classifier_path)
     return output_dict        
-
 
 if __name__=='__main__':
     # add argument to pass config file
