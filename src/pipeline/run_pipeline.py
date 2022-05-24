@@ -132,8 +132,7 @@ def ALpipeline(cfg):
         pass # --- data is passed from CL pipeline, see start of the function
 
 
-    buffer_size = 0
-    classifier_buffer = []
+
     # ------------------------------------------- Load or train first models ------------------------------------------
     if run_mode == 'AL'  or (run_mode=='CL' and first_CL_iter):
         models = {f:{} for f in FLUXES}
@@ -222,7 +221,8 @@ def ALpipeline(cfg):
         )
 
         # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
-
+    buffer_size = 0
+    classifier_buffer = []
  
     for i in range(cfg["iterations"]):
         logging.info(f"Iteration: {i+1}\n")
@@ -263,6 +263,7 @@ def ALpipeline(cfg):
 
         (
             candidates,
+            uncert_statistics,
             candidates_uncert_before,
             data_idx,
             unlabelled_pool,
@@ -319,10 +320,9 @@ def ALpipeline(cfg):
         holdout_set.scale(scaler)
              
         # --- update scaler in the models
-        for FLUX in FLUXES:
-            for model in PRETRAINED:
-                models[FLUX][model].scaler = scaler
-        # --- Classifier retraining:
+        #for FLUX in FLUXES:
+        #        models[FLUX]["Regressor"].scaler = scaler
+         #--- Classifier retraining:
         if cfg["retrain_classifier"]:
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
                 # concatenate datasets from the buffer
@@ -430,7 +430,8 @@ def ALpipeline(cfg):
             )
         )
 
-
+        output_dict["uncert_statistics"]["mean"].append(uncert_statistics[0])
+        output_dict["uncert_statistics"]["std"].append(uncert_statistics[1])
         output_dict["novel_uncert_before"].append(candidates_uncert_before)
         output_dict["novel_uncert_after"].append(candidates_uncert_after)
 
@@ -455,10 +456,6 @@ def ALpipeline(cfg):
         except:
             pass
         
-
-
-
-
         n_train = len(train_sample)
         output_dict["n_train_points"].append(n_train)
         logging.info(f"Number of training points at end of iteration {i + 1}: {n_train}")
@@ -530,14 +527,15 @@ if __name__=='__main__':
     output = {'out':output}
     total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
 
-    if args.output_dir is None:
-        total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
-        output_dir = f"../.../outputs/{total}_{Ntrain}/" # --- next time we should make sure we have consistent paths to avoid this
+   # if args.output_dir is None:
+   #     total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
+   #     output_dir = f"../.../outputs/{total}_{Ntrain}/" # --- next time we should make sure we have consistent paths to avoid this##
 
-    else:
-        output_dir = args.output_dir
+    #else:
+    #    output_dir = args.output_dir
+    output_dir = f"{SAVE_PATHS['outputs']}/{total}_{Ntrain}/"        
     #output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
+    with open(f"{output_dir}experiment_new_caling_with_regressor.pkl",'wb') as f:  #bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
         pickle.dump(output,f)               

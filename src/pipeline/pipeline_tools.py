@@ -40,6 +40,7 @@ output_dict = {
     "d_novel_uncert": [],
     "novel_uncert_before": [],
     "novel_uncert_after": [],
+    "uncert_statistics": {'mean':[],'std':[]}
     "holdout_pred_before": [],
     "holdout_pred_after": [],
     "holdout_ground_truth": [],
@@ -51,7 +52,7 @@ output_dict = {
     "class_val_acc": [],
     "class_missed_acc": [],
     "holdout_class_acc": [],
-    "holdout_class_loss": []
+    "holdout_class_loss": [],
 }
 
 
@@ -599,8 +600,9 @@ def get_most_uncertain(
 
     # Remove them from the sample
     data_copy.remove(certain_data_idx)
-
-    return data_copy, total_std[uncertain_list_indices], idx_arrays[0][uncertain_list_indices], unlabelled_pool
+    mean_uncert = np.mean(total_std)
+    std_uncert = np.std(total_std)
+    return data_copy, [mean_uncert,std_uncert], total_std[uncertain_list_indices], idx_arrays[0][uncertain_list_indices], unlabelled_pool
 
 
 def regressor_uncertainty(
