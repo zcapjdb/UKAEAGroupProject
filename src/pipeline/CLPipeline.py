@@ -45,8 +45,14 @@ def CLPipeline(arg):
     models = None
     print(config_tasks)
     for j,cfg in enumerate(config_tasks):
+        print('=====================================')
+        print('=====================================')
+        print(f'Task number: {j}')
+        print('=====================================')
+        print('=====================================')
         PATHS = cfg["data"]
         FLUX = cfg["flux"]        
+        task = f'task{j}'
         if CL_mode!= 'shrink_perturb':
             cfg['hyperparams']['lambda'] = 1
         if j==0:
@@ -60,24 +66,35 @@ def CLPipeline(arg):
             test_new = test.sample(cfg['hyperparams']['test_size']) 
             save = copy.deepcopy(test_new)
             save.scale(scaler, unscale=True)
-            test_data.update({f'task{j}': save})
+            test_data.update({task: save})
             first_iter = True
         else:
+            train = train.sample(cfg['hyperparams']['train_size'])  # resample training set
+            scaler = StandardScaler()
+            scaler.fit_transform(train.data.drop(["stable_label","index"], axis=1))
+            train.scale(scaler)
+            for flux in models.keys():
+                models[flux]['Regressor'].scaler = scaler
+            
+
             train_new, eval_new, test_new, _ = pt.prepare_data(
     PATHS["train"], PATHS["validation"], PATHS["test"], fluxes=FLUX, samplesize_debug=1, scale=False
 ) 
+
             test_new = test_new.sample(cfg['hyperparams']['test_size'])
             save = copy.deepcopy(test_new)
-            test_data.update({f'task{j}': save })
+            test_data.update({task: save })
+            
             test_new.scale(scaler)
             test.add(test_new) #--- assuming we have validation and testing - this is not always true in practice. In fact, in a real case we have to keep updating them
             eval_new.scale(scaler)   
             val_new = eval_new.sample(cfg['hyperparams']['valid_size'])
             val.add(val_new)   # val and test have been scaled in the AL pipeline already
             unlabelled_pool = train_new
+            unlabelled_pool.scale(scaler)   
             first_iter = False
-            
-        inp = [seed,cfg,save_outputs_path,save_plots_path, {'scaler':scaler,'train':train,'val':val,'test':test,'unlabelled':unlabelled_pool}, models, first_iter]
+ 
+        inp = [seed,cfg,save_outputs_path,save_plots_path, {'scaler':scaler,'train':train,'val':val,'test':test,'unlabelled':unlabelled_pool,'task':task}, models, first_iter]
 
             # ---  train dataset is augmented each time in the pipeline, without removing old data
         inp = {'run_mode':'CL','cfg':inp}
@@ -168,6 +185,6 @@ if __name__=='__main__':
     with Pool(Nbootstraps) as p:
         outputs = p.map(CLPipeline,inp)
    
-    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl', 'wb') as f:
+    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/experiment_shrink_perturb_{lam}.pkl','wb') as f: #bootstrapped_CL_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl', 'wb') as f:
         pkl.dump(outputs, f)
 
