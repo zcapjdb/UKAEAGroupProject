@@ -1,3 +1,4 @@
+from email.policy import default
 import coloredlogs, verboselogs, logging
 from multiprocessing import Pool
 import numpy as np
@@ -463,6 +464,12 @@ if __name__=='__main__':
     parser.add_argument("-c", "--config", help="config file", required=True)
     parser.add_argument("-o", "--output_dir", help="outputs directory", required=False, default=None)
     parser.add_argument("-p", "--plot_dir", help="plots directory", required=False, default=None)
+    parser.add_argument("--no_classifier",default=None, action="store_false", required = False)
+    parser.add_argument("--no_classifier_retrain", default=None, action="store_false", required= False)
+    parser.add_argument("--train_size", default=None, required=False, type=int)
+    parser.add_argument("--candidate_size", default=None, required=False, type=int)
+    parser.add_argument("--acquisition", default=None, required=False)
+
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -478,6 +485,19 @@ if __name__=='__main__':
         SAVE_PATHS["plots"] = args.plot_dir
     else:
         SAVE_PATHS["plots"] = cfg["save_paths"]["plots"]
+    
+    if args.no_classifier is not None:
+        cfg["use_classifier"] = args.no_classifier
+    if args.no_classifier_retrain is not None: 
+        cfg["retrain_classifier"] = args.no_classifier_retrain
+    if args.train_size is not None: 
+        cfg["hyperparams"]["train_size"] = args.train_size
+    if args.candidate_size is not None: 
+        cfg["hyperparams"]["candidate_size"] = args.candidate_size
+        logging.debug(f"candidate_size: {cfg['hyperparams']['candidate_size']}")
+    if args.acquisition is not None: 
+        cfg["acquisition"] = args.acquisition
+
 
     Nbootstraps = cfg['Nbootstraps']        
     lam = cfg["hyperparams"]["lambda"]
