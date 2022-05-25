@@ -1,4 +1,6 @@
 CL_method: shrink_perturb
+mem_replay: 1 
+lambda_task: 0.5
 common:
   MC_dropout_runs: 50
   acquisition: individual
@@ -21,7 +23,7 @@ common:
   learning_rate: 0.001
   logging_level: DEBUG
   patience: 10
-  retrain_classifier: false
+  retrain_classifier: true
   retrain_regressor: true
   sample_size_debug: 1
   train_epochs: 30

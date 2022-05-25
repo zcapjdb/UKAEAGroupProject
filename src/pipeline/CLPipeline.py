@@ -37,6 +37,8 @@ def CLPipeline(arg):
     CL_mode = arg[2]
     save_plots_path = arg[3]
     save_outputs_path = arg[4]
+    mem_replay = arg[5]
+    lambda_task = arg[6]
     test_data = {}   # --- saves test data for each task
     forgetting = {}  # --- saves test MSE on previous tasks with updated model
     outputs = {} # --- saves all output losses for each task
@@ -68,7 +70,7 @@ def CLPipeline(arg):
             test_data.update({f'task{j}': save})
             first_iter = True
         else:
-            train = train.sample(cfg['hyperparams']['train_size'])  # resample training set ToDo:======>>>>> Memory Replay Size (read paper to get a feel for it)
+            train = train.sample(cfg['hyperparams']['train_size']*mem_replay)  # resample training set ToDo:======>>>>> Memory Replay Size (read paper to get a feel for it)
             scaler = StandardScaler()
             scaler.fit_transform(train.data.drop(["stable_label","index"], axis=1))
             train.scale(scaler)
@@ -79,7 +81,7 @@ def CLPipeline(arg):
 ) 
             test_new = test_new.sample(cfg['hyperparams']['test_size'])
             save = copy.deepcopy(test_new)
-            test_data.update({f'task{j}': save })
+            test_data.update({f'task{j}': save })  # --- save UNSCALED data for future testing
             test_new.scale(scaler)
             test.add(test_new) #--- assuming we have validation and testing - this is not always true in practice. In fact, in a real case we have to keep updating them
             eval_new.scale(scaler)   
@@ -97,7 +99,7 @@ def CLPipeline(arg):
         if CL_mode == 'shrink_perturb':
             for flux in models.keys():
                 for model in models[flux].keys():
-                    models[flux][model].shrink_perturb(lam=lam, scale=0.01, loc=0.0)
+                    models[flux][model].shrink_perturb(lam=lambda_task, scale=0.01, loc=0.0)
         #elif self.cl_mode == 'EWC':
         #    self.EWC()
         #elif self.cl_mode == 'OGD': # ToDo =========>>> implement other frameworks if needed
@@ -107,12 +109,12 @@ def CLPipeline(arg):
 
         
         for k in test_data.keys():
-            test_data[k].scale(scaler)
-            _, regr_test_loss = models[cfg['flux'][0]]['Regressor'].predict(test_data[k]) # ToDo====>>> generalise to two outputs
+            test_data[k].scale(scaler)   # --- scale all test data saved so far with current scaler
+            _, regr_test_loss = models[cfg['flux'][0]]['Regressor'].predict(test_data[k], unscale=True) # ToDo====>>> generalise to two outputs
             _, class_test_loss = models[cfg['flux'][0]]['Classifier'].predict(test_data[k])
             forgetting.update({f'regression_{k}_model{j}':regr_test_loss})
             forgetting.update({f'classification_{k}_model{j}':class_test_loss})
-            test_data[k].scale(scaler, unscale=True)
+            test_data[k].scale(scaler, unscale=True) # --- unscale data for future passes
 
 
     outputs = {'outputs':outputs, 'forgetting':forgetting}
@@ -166,7 +168,8 @@ if __name__=='__main__':
 
     config_tasks = [task1,task2,task3,task4]
     CL_mode = cfg['CL_method']
-    lam = cfg['common']['hyperparams']['lambda']
+    mem_replay = cfg['mem_replay']
+    lambda_task = cfg['lambda_task']
     if CL_mode != 'shrink_perturb':
         lam = 1
 
@@ -174,11 +177,11 @@ if __name__=='__main__':
     inp = []
     for s in seeds:
         inp.append([s, config_tasks,CL_mode,f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/', 
-        f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/'])
+        f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/', mem_replay, lambda_task])
 
     with Pool(Nbootstraps) as p:
         outputs = p.map(CLPipeline,inp)
    
-    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/experiment_short.pkl','wb') as f: #bootstrapped_CL_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl', 'wb') as f:
+    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lambda_task}_{acquisition}_replaysize_{mem_replay}.pkl', 'wb') as f:
         pkl.dump(outputs, f)
 
