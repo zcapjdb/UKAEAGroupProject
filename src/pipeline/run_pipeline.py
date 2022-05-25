@@ -280,12 +280,14 @@ def ALpipeline(cfg):
 
         # --- set up retraining by rescaling all points according to new training data --------------------
 
-       # --- unscale all datasets, 
         candidates.scale(scaler, unscale=True)
         train_sample.scale(scaler, unscale=True)
+        train_classifier.scale(scaler,unscale=True)
         unlabelled_pool.scale(scaler, unscale=True)
         valid_dataset.scale(scaler, unscale=True)
+        valid_classifier.scale(scaler,unscale=True)
         holdout_set.scale(scaler, unscale=True)
+        holdout_classifier.scale(scaler, unscale=True)
 
         # --- train data is enriched by new unstable candidate points
         logging.info(f"Enriching training data with {len(candidates)} new points")
@@ -295,9 +297,12 @@ def ALpipeline(cfg):
         scaler = StandardScaler()
         scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
         train_sample.scale(scaler)
+        train_classifier.scale(scaler)
         unlabelled_pool.scale(scaler)
         valid_dataset.scale(scaler)
+        valid_classifier.scale(scaler)
         holdout_set.scale(scaler)
+        holdout_classifier.scale(scaler)
 
         #--- update scaler in the models
         # TODO: WHY does this make it worse???
