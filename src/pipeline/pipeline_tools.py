@@ -148,7 +148,7 @@ def prepare_data(
 def get_data(cfg,scaler=None,j=None):
     PATHS = cfg["data"]
     FLUX = cfg["flux"]        
-    train_classifier, eval_dataset, test_dataset, scaler, train_regressor = pt.prepare_data(
+    train_classifier, eval_dataset, test_dataset, scaler, train_regressor = prepare_data(
             PATHS["train"],
             PATHS["validation"],
             PATHS["test"],
@@ -172,7 +172,7 @@ def get_data(cfg,scaler=None,j=None):
     holdout_set = test_dataset.sample(cfg['hyperparams']['test_size'])  # holdout set
     holdout_classifier = copy.deepcopy(holdout_set) # copy it for classifier
     holdout_set.data = holdout_set.data.drop(holdout_set.data[holdout_set.data["stable_label"] == 0].index) # delete stable points for regressor
-    if j in not None: # --- only for AL
+    if j is not None: # --- only for AL
         #--- save unscaled test data
         save_class = copy.deepcopy(holdout_classifier)
         save_regr = copy.deepcopy(holdout_set)
