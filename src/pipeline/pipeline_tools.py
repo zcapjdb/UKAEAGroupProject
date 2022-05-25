@@ -32,7 +32,10 @@ output_dict = {
     "retrain_val_losses_unscaled": [],
     "post_test_loss": [],  # regressor performance after retraining
     "post_test_loss_unscaled": [],  # regressor performance after retraining, unscaled
+    "post_test_loss_unscaled_norm": [],  # regressor performance after retraining, unscaled, normalised
+
     "n_train_points": [],
+    
     "mse_before": [],
     "mse_after": [],
     "d_mse": [],

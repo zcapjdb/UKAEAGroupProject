@@ -45,6 +45,11 @@ def CLPipeline(arg):
     models = None
     print(config_tasks)
     for j,cfg in enumerate(config_tasks):
+        print('=====================================')
+        print('=====================================')
+        print(f'Task number: {j}')
+        print('=====================================')
+        print('=====================================')        
         PATHS = cfg["data"]
         FLUX = cfg["flux"]        
         if CL_mode!= 'shrink_perturb':
@@ -63,6 +68,10 @@ def CLPipeline(arg):
             test_data.update({f'task{j}': save})
             first_iter = True
         else:
+            train = train.sample(cfg['hyperparams']['train_size'])  # resample training set ToDo:======>>>>> Memory Replay Size (read paper to get a feel for it)
+            scaler = StandardScaler()
+            scaler.fit_transform(train.data.drop(["stable_label","index"], axis=1))
+            train.scale(scaler)
             train_new, eval_new, test_new, _ = pt.prepare_data(
     PATHS["train"], PATHS["validation"], PATHS["test"], fluxes=FLUX, samplesize_debug=1, scale=False
 ) 
@@ -168,6 +177,6 @@ if __name__=='__main__':
     with Pool(Nbootstraps) as p:
         outputs = p.map(CLPipeline,inp)
    
-    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl', 'wb') as f:
+    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/experiment_short.pkl','wb') as f: #bootstrapped_CL_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl', 'wb') as f:
         pkl.dump(outputs, f)
 

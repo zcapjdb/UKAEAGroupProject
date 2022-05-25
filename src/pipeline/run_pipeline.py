@@ -200,7 +200,7 @@ def ALpipeline(cfg):
         for FLUX in FLUXES:
             logging.info(f"Test loss for {FLUX} before pipeline:")
         
-            _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
+            _, holdout_loss, holdout_loss_unscaled, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
             logging.info(f"Holdout Loss: {holdout_loss}")
             logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
             output_dict["test_loss_init"].append(holdout_loss)
@@ -361,7 +361,7 @@ def ALpipeline(cfg):
         holdout_pred_before = []
         train_losses, val_losses = [], []
         train_losses_unscaled, val_losses_unscaled = [], []
-        holdout_pred_after, holdout_loss, holdout_loss_unscaled = [], [], []
+        holdout_pred_after, holdout_loss, holdout_loss_unscaled,holdout_loss_unscaled_norm = [], [], [],[]
         for FLUX in FLUXES:
             preds, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale=False)
             holdout_pred_before.append(preds)
@@ -387,12 +387,14 @@ def ALpipeline(cfg):
             
             logging.info(f"Running prediction on validation data set")
             # --- validation on holdout set after regressor is retrained
-            hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
+            hold_pred_after, hold_loss, hold_loss_unscaled, hold_loss_unscaled_norm = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
             holdout_pred_after.append(hold_pred_after)
             holdout_loss.append(hold_loss)
             holdout_loss_unscaled.append(hold_loss_unscaled)
+            holdout_loss_unscaled_norm.append(hold_loss_unscaled_norm)
             logging.info(f"{FLUX} test loss: {hold_loss}")
             logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
+            logging.info(f"{FLUX} test loss unscaled norm: {hold_loss_unscaled_norm}")
   
 
 
@@ -445,6 +447,7 @@ def ALpipeline(cfg):
         output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
         output_dict["post_test_loss"].append(holdout_loss)
         output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
+        output_dict["post_test_loss_unscaled_norm"].append(holdout_loss_unscaled_norm)
 
         try:
             output_dict["mse_before"].append(
@@ -455,9 +458,6 @@ def ALpipeline(cfg):
         except:
             pass
         
-
-
-
 
         n_train = len(train_sample)
         output_dict["n_train_points"].append(n_train)
