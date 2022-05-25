@@ -21,10 +21,6 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 output_dict = {
     "train_loss_init": [],  # Regressor performance before pipeline
     "test_loss_init": [],
-    "class_train_loss_init": [], # Regressor performance before pipeline
-    "class_test_loss_init": [],
-    "class_train_acc_init": [], # Regressor performance before pipeline
-    "class_test_acc_init": [],
     "test_loss_init_unscaled": [],
     "retrain_losses": [], # regressor performance during retraining
     "retrain_val_losses": [],
@@ -47,6 +43,15 @@ output_dict = {
     "holdout_pred_after": [],
     "holdout_ground_truth": [],
 
+    "class_train_loss_init": [], 
+    "class_test_loss_init": [],
+    "class_train_acc_init": [],
+    "class_test_acc_init": [],
+    "class_precision_init": [],
+    "class_recall_init": [],
+    "class_f1_init": [],
+    "class_auc_init": [],
+
     "class_train_loss": [],
     "class_val_loss": [],
     "class_missed_loss": [],
@@ -54,7 +59,12 @@ output_dict = {
     "class_val_acc": [],
     "class_missed_acc": [],
     "holdout_class_acc": [],
-    "holdout_class_loss": []
+    "holdout_class_loss": [],
+    "holdout_class_precision": [],
+    "holdout_class_recall": [],
+    "holdout_class_f1": [],
+    "holdout_class_auc": [],
+    "class_retrain_iterations": [],
 }
 
 
@@ -107,28 +117,32 @@ def prepare_data(
     test_data = test_data.dropna(subset=[target_column])
 
 
-
     train_data["stable_label"] = np.where(train_data[target_column] != 0, 1, 0)
     validation_data["stable_label"] = np.where(
         validation_data[target_column] != 0, 1, 0
     )
     test_data["stable_label"] = np.where(test_data[target_column] != 0, 1, 0)
 
-    if scale:
-        scaler = StandardScaler()
-        scaler.fit_transform(train_data.drop(["stable_label"], axis=1))
-
     train_dataset = ITGDatasetDF(train_data, target_column=target_column)
     valid_dataset = ITGDatasetDF(validation_data, target_column=target_column)
     test_dataset = ITGDatasetDF(test_data, target_column=target_column)
+
+    train_dataset_regressor = copy.deepcopy(train_dataset)
+    train_dataset_regressor.data = train_dataset.data.drop(train_dataset.data[train_dataset.data["stable_label"] == 0].index)
+
     if scale: 
+        scaler = StandardScaler()
+        scaler.fit(train_data.drop(["stable_label", "index"], axis=1))
+
         train_dataset.scale(scaler)
         valid_dataset.scale(scaler)
         test_dataset.scale(scaler)
+        train_dataset_regressor.scale(scaler)
 
-        return train_dataset, valid_dataset, test_dataset, scaler
+        return train_dataset, valid_dataset, test_dataset, scaler, train_dataset_regressor
+    
     else:
-        return train_dataset, valid_dataset, test_dataset, 0
+        return train_dataset, valid_dataset, test_dataset, None, train_dataset_regressor
 
 
 # classifier tools
@@ -381,8 +395,8 @@ def retrain_regressor(
         opt,
         mode="min",
         factor=0.5,
-        patience=0.5 * patience,
-        min_lr=(1 / 16) * learning_rate,
+        patience=0.25 * patience,
+        min_lr=(1 / 32) * learning_rate,
     )
     train_loss = []
     train_loss_unscaled = []
@@ -396,16 +410,10 @@ def retrain_regressor(
         train_loss.append(loss.item())
         train_loss_unscaled.append(unscaled_loss.item())
 
-        logging.log(15, f"Training Loss: {loss.item():.4f}")
-        logging.log(15, f"Training Loss Unscaled: {unscaled_loss.item():.4f}")
-
         if validation_step:
             loss, loss_unscaled = model.validation_step(val_loader, scheduler)
             val_loss.append(loss)
             val_loss_unscaled.append(loss_unscaled)
-
-            logging.log(15, f"Validation loss: {loss:.4f}")
-            logging.log(15, f"Validation loss unscaled: {loss_unscaled:.4f}")
 
         if len(val_loss) > patience:
             if np.mean(val_loss[-patience:]) < val_loss[-1]:
@@ -455,7 +463,9 @@ def get_uncertainty(
         step_list = []
         for step, (x, y, z, idx) in enumerate(dataloader):
             x = x.to(device)
+            z = z.to(device)
             predictions = regressor(x.float()).detach().cpu().numpy()
+            
             step_list.append(predictions)
 
         flat_list = [item for sublist in step_list for item in sublist]
@@ -499,7 +509,7 @@ def get_uncertainty(
         assert uncertain_data_idx.tolist() == order_idx.tolist(), logging.error(
             "Ordering error"
         )
-
+        
         return out_std[reorder], uncertain_data_idx
     else:
         return out_std, idx_array
@@ -532,6 +542,7 @@ def get_most_uncertain(
         idx_array: idx_array used for ordering  (which one have we followed)
 
     """
+    logging.debug(f"Getting most uncertain for: {model.flux}")
     data_copy = copy.deepcopy(dataset)
     n_candidates = out_stds[0].shape[0]
 
@@ -578,6 +589,7 @@ def get_most_uncertain(
         total_std = total_std + alpha * median_dist# nearest
 
     if acquisition == "random":
+        logging.info("Using random acquisition")
         # choose random indices
         uncertain_list_indices = np.random.choice(n_candidates, int(keep * n_candidates), replace=False)
         #random_certain is all the indices not in random_idx
@@ -602,6 +614,12 @@ def get_most_uncertain(
 
     # Remove them from the sample
     data_copy.remove(certain_data_idx)
+
+    out_idx = idx_arrays[0][uncertain_list_indices]
+    nans = dataset.data[model.flux].loc[out_idx]
+
+    logging.debug(f"NaN inputs selected:{nans.isna().sum()}")
+    logging.debug(f"Number of selected points {len(out_idx)} ")
 
     return data_copy, total_std[uncertain_list_indices], idx_arrays[0][uncertain_list_indices], unlabelled_pool
 

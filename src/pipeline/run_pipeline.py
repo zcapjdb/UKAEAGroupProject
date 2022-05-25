@@ -1,11 +1,10 @@
+from email.policy import default
 import coloredlogs, verboselogs, logging
 from multiprocessing import Pool
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 import os
 import copy
-
-# import comet_ml import Experiment
 
 import random
 import pipeline.pipeline_tools as pt
@@ -46,7 +45,7 @@ def ALpipeline(cfg):
             cfg = cfg['cfg']
     elif cfg['run_mode'] == 'CL': 
         run_mode = 'CL'
-        if not isinstance(cfg['cfg'],dict):
+        if not isinstance(cfg['cfg'],dict):  # ToDo =========>>>>>> fix passing from CL
             cfg = cfg['cfg']
             seed = cfg[0]
             SAVE_PATHS = {}
@@ -88,11 +87,10 @@ def ALpipeline(cfg):
     test_size = cfg["hyperparams"]["test_size"]
     batch_size = cfg["hyperparams"]["batch_size"]
     candidate_size = cfg["hyperparams"]["candidate_size"]
+    CLASSIFIER = True  #CLASSIFIER = cfg["use_classifier"]
     dropout = cfg["hyperparams"]["dropout"]
     # Dictionary to store results of the classifier and regressor for later use
     output_dict = pt.output_dict
-
-    # To Do:  explore candidate_size hyperparam, explore architecture, validation loss shouldn't be used as test 
 
     # --- Set up saving
     save_dest = os.path.join(SAVE_PATHS["outputs"], FLUXES[0])
@@ -108,32 +106,60 @@ def ALpipeline(cfg):
 
     # --------------------------------------------- Load data ----------------------------------------------------------
     if run_mode == 'AL':
-        train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
+        train_classifier, eval_dataset, test_dataset, scaler, train_regressor = pt.prepare_data(
             PATHS["train"],
             PATHS["validation"],
             PATHS["test"],
             fluxes=FLUXES,
             samplesize_debug=sample_size,
+            scale=False,
         )
+
+        train_sample = train_regressor.sample(train_size)
+        logging.info(f"Train size: {len(train_sample)}")
+        scaler = StandardScaler()
+        scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
+
+        train_sample.scale(scaler)
+        test_dataset.scale(scaler)
+        eval_dataset.scale(scaler)
+
+        train_classifier.scale(scaler)
+        train_classifier = train_classifier.sample(train_size)
+
         # --- holdout set is from the test set
-        plot_sample = test_dataset.sample(test_size)  # Holdout dataset
-        holdout_set = plot_sample
-        # holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
-        train_sample = train_dataset.sample(train_size)
+        holdout_set = test_dataset.sample(test_size)
+        holdout_classifier = copy.deepcopy(holdout_set)
 
-        valid_dataset = eval_dataset.sample(valid_size)  # validation set
+        # drop any data from holdout set with stable_label = 0
+        holdout_set.data = holdout_set.data.drop(holdout_set.data[holdout_set.data["stable_label"] == 0].index)
+
+        eval_regressor = copy.deepcopy(eval_dataset)
+        eval_regressor.data = eval_regressor.data.drop(eval_regressor.data[eval_regressor.data["stable_label"] == 0].index)
+        valid_dataset = eval_regressor.sample(valid_size)
+
+        valid_classifier = eval_dataset.sample(valid_size)  # validation set
+
+
         # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
-        train_dataset.remove(train_sample.data.index)  #
-        unlabelled_pool = train_dataset  # ToDo: move declaration of train sample here, unabelled pool should be rest of train sample!
+        eval_dataset.remove(valid_dataset.data.index) 
+        eval_dataset.remove(valid_classifier.data.index)
 
+        unlabelled_pool = eval_dataset
+        buffer_size = 0
+        classifier_buffer = []
         # Load pretrained models
+
         logging.info("Loaded the following models:\n")
+
     elif run_mode == 'CL':
         pass # --- data is passed from CL pipeline, see start of the function
 
 
     buffer_size = 0
     classifier_buffer = []
+            # ------------------------------------------- Load or train first models ------------------------------------------
+
     # ------------------------------------------- Load or train first models ------------------------------------------
     if run_mode == 'AL'  or (run_mode=='CL' and first_CL_iter):
         models = {f:{} for f in FLUXES}
@@ -174,7 +200,9 @@ def ALpipeline(cfg):
 
                             # if model == "Classifier":  --- not used currently
                             #    losses, train_accuracy, validation_losses, val_accuracy = losses
-            else:
+      
+
+            elif CLASSIFIER:
                 if PRETRAINED[model][FLUXES[0]]["trained"] == True:
                     trained_model = md.load_model(
                         model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0], dropout
@@ -186,35 +214,37 @@ def ALpipeline(cfg):
 
                     models[FLUXES[0]][model], losses = md.train_model(
                             models[FLUXES[0]][model],
-                            train_sample,
-                            valid_dataset,
+                            train_classifier,
+                            valid_classifier,
                             save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
                             epochs=cfg["train_epochs"],
                             patience=cfg["train_patience"],
                         )
 
-            for FLUX in FLUXES:
-                logging.debug(f"Models for {FLUX} : {models[FLUX].keys()}")
+        for FLUX in FLUXES:
+            logging.debug(f"Models for {FLUX} : {models[FLUX].keys()}")
 
         # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
         for FLUX in FLUXES:
             logging.info(f"Test loss for {FLUX} before pipeline:")
-        
-            _, holdout_loss, holdout_loss_unscaled, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
-            logging.info(f"Holdout Loss: {holdout_loss}")
+            _, holdout_loss, holdout_loss_unscaled, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)        logging.info(f"Holdout Loss: {holdout_loss}")
             logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
             output_dict["test_loss_init"].append(holdout_loss)
             output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
-            
-        _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_set) 
-        output_dict['class_test_acc_init'].append(holdout_class_losses[1])
-        # Create logger object for use in pipeline
-        verboselogs.install()
-        logger = logging.getLogger(__name__)
-        coloredlogs.install(level="DEBUG")#cfg["logging_level"])
+        if CLASSIFIER:   
+            _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
+            output_dict['class_test_acc_init'].append(holdout_class_losses[1])
+            output_dict['class_precision_init'].append(holdout_class_losses[2])
+            output_dict['class_recall_init'].append(holdout_class_losses[3])
+            output_dict['class_f1_init'].append(holdout_class_losses[4])
+            output_dict['class_auc_init'].append(holdout_class_losses[5])
     else:
-        pass # --- models are passed from CL pipeline        
+            pass # --- models are passed from CL pipeline            
 
+    # Create logger object for use in pipeline
+    verboselogs.install()
+    logger = logging.getLogger(__name__)
+    coloredlogs.install(level="DEBUG")
 
     if len(train_sample) > 100_000:
         logger.warning(
@@ -226,11 +256,7 @@ def ALpipeline(cfg):
  
     for i in range(cfg["iterations"]):
         logging.info(f"Iteration: {i+1}\n")
-
-        #if i != 0:
-        #    # reset the output dictionary for each iteration
-        #    for value in output_dict.values():
-        #        del value[:]
+        epochs = cfg["initial_epochs"] * (i + 1)
 
         # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
         candidates = unlabelled_pool.sample(candidate_size)
@@ -238,17 +264,17 @@ def ALpipeline(cfg):
         unlabelled_pool.remove(candidates.data.index)
 
         # --- See Issue #37 --- candidates are only those that the classifier selects as unstable.
-        candidates = pt.select_unstable_data(
-            candidates,
-            batch_size=batch_size,
-            classifier=models[FLUXES[0]]["Classifier"],
-            device=device,
-        )  # It's not the classifier's job to say whether a point is stable or not. This happens at the end of the pipeline when we get the true labels by running Qualikiz.
+        if CLASSIFIER: # if we are using the classifier use it to remove stable labels
+            candidates = pt.select_unstable_data(
+                candidates,
+                batch_size=batch_size,
+                classifier=models[FLUXES[0]]["Classifier"],
+                device=device,
+            ) 
+            logging.info(f"{len(candidates)} candidates selected")
 
-        epochs = cfg["initial_epochs"] * (i + 1)
 
         # ---  get most uncertain candidate inputs as decided by regressor   --- NEW AL FRAMEWORK GOES HERE
-        # get the uncertainties from regressors
         candidates_uncerts, data_idxs = [], []
 
         for FLUX in FLUXES:
@@ -289,15 +315,21 @@ def ALpipeline(cfg):
 
         # ToDo ===========>>>> Now we do have the labels because Qualikiz gave them to us!  Need to discard misclassified data from enriched_train_loader, and retrain the classifier if buffer_size is big enough
         # check for misclassified data in candidates and add them to the buffer
-        candidates, misclassified_data, num_misclassified, data_idx, candidates_uncert_before = pt.check_for_misclassified_data(
-            candidates, 
-            uncertainty=candidates_uncert_before, 
-            indices=data_idx
-            )
-        buffer_size += num_misclassified
-        classifier_buffer.append(misclassified_data)
-        logging.info(f"Misclassified data: {num_misclassified}")
-        logging.info(f"Total Buffer size: {buffer_size}")
+        if CLASSIFIER:
+            candidates, misclassified_data, num_misclassified, data_idx, candidates_uncert_before = pt.check_for_misclassified_data(
+                candidates, 
+                uncertainty=candidates_uncert_before, 
+                indices=data_idx
+                )
+            buffer_size += num_misclassified
+            classifier_buffer.append(misclassified_data)
+            logging.info(f"Misclassified data: {num_misclassified}")
+            logging.info(f"Total Buffer size: {buffer_size}")
+        
+        elif len(FLUXES)>1:
+            # at this stage we know which of the inputs give a stable label or not so we can drop the stable values
+            #  
+            pass 
 
         # --- set up retraining by rescaling all points according to new training data --------------------
 
@@ -307,12 +339,14 @@ def ALpipeline(cfg):
         unlabelled_pool.scale(scaler, unscale=True)
         valid_dataset.scale(scaler, unscale=True)
         holdout_set.scale(scaler, unscale=True)
-    # --- train data is enriched by new unstable candidate points
+
+        # --- train data is enriched by new unstable candidate points
         logging.info(f"Enriching training data with {len(candidates)} new points")
         train_sample.add(candidates)
+
         # --- get new scaler from enriched training set, rescale them with new scaler
         scaler = StandardScaler()
-        scaler.fit_transform(train_sample.data.drop(["stable_label","index"], axis=1))
+        scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
         train_sample.scale(scaler)
         unlabelled_pool.scale(scaler)
         valid_dataset.scale(scaler)
@@ -335,8 +369,8 @@ def ALpipeline(cfg):
                 # retrain the classifier on the misclassified points
                 losses, accs = pt.retrain_classifier(
                     misclassified_dataset,
-                    train_sample,
-                    valid_dataset,
+                    train_classifier,
+                    valid_classifier,
                     models[FLUXES[0]]["Classifier"],
                     batch_size=batch_size,
                     epochs=epochs,
@@ -351,11 +385,20 @@ def ALpipeline(cfg):
                 output_dict["class_val_acc"].append(accs[1])
                 output_dict["class_missed_acc"].append(accs[2])
 
+                _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
+                output_dict['holdout_class_loss'].append(holdout_class_losses[0])
+                output_dict['holdout_class_acc'].append(holdout_class_losses[1])
+                output_dict['holdout_class_precision'].append(holdout_class_losses[2])
+                output_dict['holdout_class_recall'].append(holdout_class_losses[3])
+                output_dict['holdout_class_f1'].append(holdout_class_losses[4])
+                output_dict['holdout_class_auc'].append(holdout_class_losses[5])
+
+                # record which iterations the classifier was retrained on
+                output_dict['class_retrain_iterations'].append(i)
+
                 # reset buffer
                 classifier_buffer = []
                 buffer_size = 0
-
-
 
         # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
         holdout_pred_before = []
@@ -396,7 +439,6 @@ def ALpipeline(cfg):
             logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
             logging.info(f"{FLUX} test loss unscaled norm: {hold_loss_unscaled_norm}")
   
-
 
         candidates_uncerts_after, data_idxs_after = [], []
 
@@ -482,6 +524,7 @@ def ALpipeline(cfg):
     else:
         return   train_sample, valid_dataset, holdout_set, output_dict, scaler, models # ugly
 
+    return output_dict        
 
 if __name__=='__main__':
     # add argument to pass config file
@@ -489,6 +532,12 @@ if __name__=='__main__':
     parser.add_argument("-c", "--config", help="config file", required=True)
     parser.add_argument("-o", "--output_dir", help="outputs directory", required=False, default=None)
     parser.add_argument("-p", "--plot_dir", help="plots directory", required=False, default=None)
+    parser.add_argument("--no_classifier",default=None, action="store_false", required = False)
+    parser.add_argument("--no_classifier_retrain", default=None, action="store_false", required= False)
+    parser.add_argument("--train_size", default=None, required=False, type=int)
+    parser.add_argument("--candidate_size", default=None, required=False, type=int)
+    parser.add_argument("--acquisition", default=None, required=False)
+
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -504,6 +553,19 @@ if __name__=='__main__':
         SAVE_PATHS["plots"] = args.plot_dir
     else:
         SAVE_PATHS["plots"] = cfg["save_paths"]["plots"]
+    
+    if args.no_classifier is not None:
+        cfg["use_classifier"] = args.no_classifier
+    if args.no_classifier_retrain is not None: 
+        cfg["retrain_classifier"] = args.no_classifier_retrain
+    if args.train_size is not None: 
+        cfg["hyperparams"]["train_size"] = args.train_size
+    if args.candidate_size is not None: 
+        cfg["hyperparams"]["candidate_size"] = args.candidate_size
+        logging.debug(f"candidate_size: {cfg['hyperparams']['candidate_size']}")
+    if args.acquisition is not None: 
+        cfg["acquisition"] = args.acquisition
+
 
     Nbootstraps = cfg['Nbootstraps']        
     lam = cfg["hyperparams"]["lambda"]
