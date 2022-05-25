@@ -69,7 +69,7 @@ def CLPipeline(arg):
             test_data.update({task: save})
             first_iter = True
         else:
-            train = train.sample(cfg['hyperparams']['train_size'])  # resample training set
+            train = train.sample(cfg['hyperparams']['train_size'])  # resample training set ToDo:======>>>>> Memory Replay Size (read paper to get a feel for it)
             scaler = StandardScaler()
             scaler.fit_transform(train.data.drop(["stable_label","index"], axis=1))
             train.scale(scaler)
@@ -94,6 +94,8 @@ def CLPipeline(arg):
             unlabelled_pool.scale(scaler)   
             first_iter = False
  
+        #indices_task = train.data.index
+        #task_weights.update({task:{indices:task_weight}})
         inp = [seed,cfg,save_outputs_path,save_plots_path, {'scaler':scaler,'train':train,'val':val,'test':test,'unlabelled':unlabelled_pool,'task':task}, models, first_iter]
 
             # ---  train dataset is augmented each time in the pipeline, without removing old data
@@ -185,6 +187,6 @@ if __name__=='__main__':
     with Pool(Nbootstraps) as p:
         outputs = p.map(CLPipeline,inp)
    
-    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/experiment_shrink_perturb_{lam}.pkl','wb') as f: #bootstrapped_CL_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl', 'wb') as f:
+    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/experiment_shrink_perturb_{lam}_candsize30k.pkl','wb') as f: #bootstrapped_CL_{CL_mode}_lam_{lam}_{acquisition}_{classretrain}.pkl', 'wb') as f:
         pkl.dump(outputs, f)
 

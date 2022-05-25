@@ -68,7 +68,8 @@ class Classifier(nn.Module):
         y_hat = self.model(x)
         return y_hat
 
-    def train_step(self, dataloader, optimizer, epoch=None, disable_tqdm=False):
+
+    def train_step(self, dataloader, optimizer, epoch=None, disable_tqdm=False, tasks=None):  # {'task_i':{indices:task_weight} for i in tasks} ToDo:===> declare in CLPipeline
         # Initalise loss function
         BCE = nn.BCELoss()
 
@@ -86,12 +87,18 @@ class Classifier(nn.Module):
             y_hat = self.forward(X.float())
             loss = BCE(y_hat, y.unsqueeze(-1).float())
 
+
+
             # Backpropagation
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-            losses.append(loss.item())
+            loss = loss.item()
+            if tasks is not None:   # --- multiply each loss for the task weight
+                for t in tasks.keys():
+                    task_weights = torch.Tensor(tasks[t][idx])
+                    loss[idx] = loss[idx]*task_weights
+            losses.append(loss)
 
             # calculate train accuracy
             pred_class = torch.round(y_hat.squeeze())  # torch.round(y_hat.squeeze())
@@ -426,10 +433,13 @@ class ITGDatasetDF(Dataset):
         target_column: str,
         target_var: str = "stable_label",
         keep_index: bool = False,
+        task: str =  'task0'
     ):
         self.data = df
         self.target = target_column
         self.label = target_var
+        # --- init task
+        #self.data.loc[:,'task'] = task
 
         # make sure the dataframe contains the variable information we need
         assert target_column and target_var in list(self.data.columns)
@@ -463,10 +473,12 @@ class ITGDatasetDF(Dataset):
             self.data.sample(batch_size), self.target, self.label, keep_index=True
         )
 
-    def add(self, dataset):
+    def add(self, dataset,task=None):
         # rows["index"] = np.arange(len(self.data), len(self.data) + len(rows))
         # self.data = pd.concat([self.data, rows], axis=0)
         self.data = pd.concat([self.data, dataset.data], axis=0)
+    #    if task is not None:
+    #        self.data[dataset.data.index,'task'] = task
 
     # Not sure if needed yet
     # return a copy of the dataset with only the specified indices
@@ -488,7 +500,8 @@ class ITGDatasetDF(Dataset):
         y = self.data[self.label].iloc[idx]
         z = self.data[self.target].iloc[idx]
         idx = self.data["index"].iloc[idx]
-        return x, y, z, idx
+       # task = self.data["task"].iloc[idx]
+        return x, y, z, idx#,task
 
 
 # General Model functions

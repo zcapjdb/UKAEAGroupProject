@@ -58,6 +58,7 @@ def ALpipeline(cfg):
             holdout_set = cfg[4]['test']     
             plot_sample = holdout_set
             unlabelled_pool = cfg[4]['unlabelled']   
+            task = cfg[4]['task']
             models = cfg[5]
             first_CL_iter = cfg[6]
             cfg = cfg[1]
@@ -114,18 +115,26 @@ def ALpipeline(cfg):
             PATHS["test"],
             fluxes=FLUXES,
             samplesize_debug=sample_size,
+            scale = False
         )
+        train_sample = train_dataset.sample(train_size)
+        scaler = StandardScaler()
+        scaler.fit_transform(train_sample.data.drop(["stable_label","index"], axis=1))
+        train_sample.scale(scaler)
+        
         # --- holdout set is from the test set
         plot_sample = test_dataset.sample(test_size)  # Holdout dataset
+        plot_sample.scale(scaler)
         holdout_set = plot_sample
         # holdout_set = pt.pandas_to_numpy_data(plot_sample) # Holdout set, remaining validation is unlabeled pool
-        train_sample = train_dataset.sample(train_size)
+    
 
         valid_dataset = eval_dataset.sample(valid_size)  # validation set
         # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
         train_dataset.remove(train_sample.data.index)  #
         unlabelled_pool = train_dataset  # ToDo: move declaration of train sample here, unabelled pool should be rest of train sample!
 
+        
         # Load pretrained models
         logging.info("Loaded the following models:\n")
     elif run_mode == 'CL':
@@ -226,7 +235,7 @@ def ALpipeline(cfg):
  
     for i in range(cfg["iterations"]):
         logging.info(f"Iteration: {i+1}\n")
-
+        train_sample.sample(len(train_sample))
         #if i != 0:
         #    # reset the output dictionary for each iteration
         #    for value in output_dict.values():
@@ -277,6 +286,7 @@ def ALpipeline(cfg):
         )
 
         logging.debug(f"Number of most uncertain {len(data_idx)}")
+        num_most_uncertain = len(data_idx)
         prediction_candidates_before = []
         for FLUX in FLUXES:
             prediction_candidates_before.append(
@@ -303,27 +313,40 @@ def ALpipeline(cfg):
         # --- set up retraining by rescaling all points according to new training data --------------------
 
        # --- unscale all datasets, 
-        candidates.scale(scaler, unscale=True)
-        train_sample.scale(scaler, unscale=True)
-        unlabelled_pool.scale(scaler, unscale=True)
-        valid_dataset.scale(scaler, unscale=True)
-        holdout_set.scale(scaler, unscale=True)
-    # --- train data is enriched by new unstable candidate points
-        logging.info(f"Enriching training data with {len(candidates)} new points")
-        train_sample.add(candidates)
-        # --- get new scaler from enriched training set, rescale them with new scaler
-        scaler = StandardScaler()
-        scaler.fit_transform(train_sample.data.drop(["stable_label","index"], axis=1))
-        train_sample.scale(scaler)
-        unlabelled_pool.scale(scaler)
-        valid_dataset.scale(scaler)
-        holdout_set.scale(scaler)
-             
-        # --- update scaler in the models
-        #for FLUX in FLUXES:
-        #        models[FLUX]["Regressor"].scaler = scaler
+        logging.info(f"Enriching training data with {len(candidates)} new points") 
+        if len(candidates) > 0:      # --- if there are no candidates, it means that the classifier is terrible
+            candidates.scale(scaler, unscale=True)
+            train_sample.scale(scaler, unscale=True)
+            unlabelled_pool.scale(scaler, unscale=True)
+            valid_dataset.scale(scaler, unscale=True)
+            holdout_set.scale(scaler, unscale=True)
+        # --- train data is enriched by new unstable candidate points
+
+            train_sample.add(candidates)
+            # --- get new scaler from enriched training set, rescale them with new scaler
+            scaler = StandardScaler()
+            scaler.fit_transform(train_sample.data.drop(["stable_label","index"], axis=1))
+            train_sample.scale(scaler)
+            unlabelled_pool.scale(scaler)
+            valid_dataset.scale(scaler)
+            holdout_set.scale(scaler)
+                
+            # --- update scaler in the models
+            for FLUX in FLUXES:
+                    models[FLUX]["Regressor"].scaler = scaler
+
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        print('accuracy on candidates: ',1-num_misclassified/num_most_uncertain)
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        not_enough_accuracy = num_misclassified>0.3*num_most_uncertain  # --- TodO=====>>> fix this, it' not acc at the moment
          #--- Classifier retraining:
-        if cfg["retrain_classifier"]:
+        if cfg["retrain_classifier"] or not_enough_accuracy :  # --- if accuracy is too bad, force retrain of classifier
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
                 # concatenate datasets from the buffer
                 misclassified = pd.concat(classifier_buffer)
@@ -352,113 +375,117 @@ def ALpipeline(cfg):
                 output_dict["class_missed_acc"].append(accs[2])
 
                 # reset buffer
-                classifier_buffer = []
-                buffer_size = 0
-
+                
+                if not not_enough_accuracy:
+                    classifier_buffer = []
+                    buffer_size = 0
+                else:
+                    i = i-1 # --- this iteration doesn't count
 
 
         # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
-        holdout_pred_before = []
-        train_losses, val_losses = [], []
-        train_losses_unscaled, val_losses_unscaled = [], []
-        holdout_pred_after, holdout_loss, holdout_loss_unscaled = [], [], []
-        for FLUX in FLUXES:
-            preds, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale=False)
-            holdout_pred_before.append(preds)
+        if not not_enough_accuracy:
+            holdout_pred_before = []
+            train_losses, val_losses = [], []
+            train_losses_unscaled, val_losses_unscaled = [], []
+            holdout_pred_after, holdout_loss, holdout_loss_unscaled = [], [], []
+            for FLUX in FLUXES:
+                preds, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale=False)
+                holdout_pred_before.append(preds)
 
-            retrain_losses = pt.retrain_regressor(
-                train_sample,
-                valid_dataset,
-                models[FLUX]["Regressor"],
-                learning_rate=cfg["learning_rate"],
-                epochs=epochs,
-                validation_step=True,
-                lam=lam,
-                patience=cfg["patience"],
-                batch_size=batch_size,
-            )
+                retrain_losses = pt.retrain_regressor(
+                    train_sample,
+                    valid_dataset,
+                    models[FLUX]["Regressor"],
+                    learning_rate=cfg["learning_rate"],
+                    epochs=epochs,
+                    validation_step=True,
+                    lam=lam,
+                    patience=cfg["patience"],
+                    batch_size=batch_size,
+                )
 
-            train_loss, val_loss, train_loss_unscaled, val_loss_unscaled = retrain_losses
+                train_loss, val_loss, train_loss_unscaled, val_loss_unscaled = retrain_losses
 
-            train_losses.append(train_loss)
-            val_losses.append(val_loss)
-            train_losses_unscaled.append(train_loss_unscaled)
-            val_losses_unscaled.append(val_loss_unscaled)
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
+                train_losses_unscaled.append(train_loss_unscaled)
+                val_losses_unscaled.append(val_loss_unscaled)
+                
+                logging.info(f"Running prediction on validation data set")
+                # --- validation on holdout set after regressor is retrained
+                hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
+                holdout_pred_after.append(hold_pred_after)
+                holdout_loss.append(hold_loss)
+                holdout_loss_unscaled.append(hold_loss_unscaled)
+                logging.info(f"{FLUX} test loss: {hold_loss}")
+                logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
+    
+
+
+            candidates_uncerts_after, data_idxs_after = [], []
+
+            for FLUX in FLUXES:
+                temp_uncert, temp_idx = pt.get_uncertainty(
+                    candidates,
+                    models[FLUX]["Regressor"],
+                    n_runs=cfg["MC_dropout_runs"],
+                    device=device,
+                )
+
+                candidates_uncerts_after.append(temp_uncert)
+                data_idxs_after.append(temp_idx)
             
-            logging.info(f"Running prediction on validation data set")
-            # --- validation on holdout set after regressor is retrained
-            hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
-            holdout_pred_after.append(hold_pred_after)
-            holdout_loss.append(hold_loss)
-            holdout_loss_unscaled.append(hold_loss_unscaled)
-            logging.info(f"{FLUX} test loss: {hold_loss}")
-            logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
-  
+            candidates_uncert_after = pt.reorder_arrays(
+                candidates_uncerts_after,
+                data_idxs_after,
+                data_idx
+                )
+            
+            candidates_uncert_after = np.array(candidates_uncert_after)
+            candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
 
+            logging.info("Change in uncertainty for most uncertain data points:")
 
-        candidates_uncerts_after, data_idxs_after = [], []
-
-        for FLUX in FLUXES:
-            temp_uncert, temp_idx = pt.get_uncertainty(
-                candidates,
-                models[FLUX]["Regressor"],
-                n_runs=cfg["MC_dropout_runs"],
-                device=device,
+            output_dict["d_novel_uncert"].append(
+                pt.uncertainty_change(
+                    x=candidates_uncert_before,
+                    y=candidates_uncert_after,
+                    plot_title="Novel data",
+                    iteration=i,
+                    save_path=save_dest,
+                )
             )
 
-            candidates_uncerts_after.append(temp_uncert)
-            data_idxs_after.append(temp_idx)
-        
-        candidates_uncert_after = pt.reorder_arrays(
-            candidates_uncerts_after,
-            data_idxs_after,
-            data_idx
-            )
-        
-        candidates_uncert_after = np.array(candidates_uncert_after)
-        candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
+            output_dict["uncert_statistics"]["mean"].append(uncert_statistics[0])
+            output_dict["uncert_statistics"]["std"].append(uncert_statistics[1])
+            output_dict["novel_uncert_before"].append(candidates_uncert_before)
+            output_dict["novel_uncert_after"].append(candidates_uncert_after)
 
-        logging.info("Change in uncertainty for most uncertain data points:")
+            output_dict["holdout_pred_before"].append(
+                holdout_pred_before
+            )  # these two are probably the only important ones
+            output_dict["holdout_pred_after"].append(holdout_pred_after)
+            output_dict["holdout_ground_truth"].append(holdout_set.target)
+            output_dict["retrain_losses"].append(train_losses)
+            output_dict["retrain_val_losses"].append(val_losses)
+            output_dict["retrain_losses_unscaled"].append(train_losses_unscaled)
+            output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
+            output_dict["post_test_loss"].append(holdout_loss)
+            output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
 
-        output_dict["d_novel_uncert"].append(
-            pt.uncertainty_change(
-                x=candidates_uncert_before,
-                y=candidates_uncert_after,
-                plot_title="Novel data",
-                iteration=i,
-                save_path=save_dest,
-            )
-        )
-
-        output_dict["uncert_statistics"]["mean"].append(uncert_statistics[0])
-        output_dict["uncert_statistics"]["std"].append(uncert_statistics[1])
-        output_dict["novel_uncert_before"].append(candidates_uncert_before)
-        output_dict["novel_uncert_after"].append(candidates_uncert_after)
-
-        output_dict["holdout_pred_before"].append(
-            holdout_pred_before
-        )  # these two are probably the only important ones
-        output_dict["holdout_pred_after"].append(holdout_pred_after)
-        output_dict["holdout_ground_truth"].append(holdout_set.target)
-        output_dict["retrain_losses"].append(train_losses)
-        output_dict["retrain_val_losses"].append(val_losses)
-        output_dict["retrain_losses_unscaled"].append(train_losses_unscaled)
-        output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
-        output_dict["post_test_loss"].append(holdout_loss)
-        output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
-
-        try:
-            output_dict["mse_before"].append(
-                train_mse_before
-            )  # these three relate to the training MSE, probably not so useful to inspect
-            output_dict["mse_after"].append(train_mse_after)
-            output_dict["d_mse"].append(delta_mse)
-        except:
-            pass
-        
-        n_train = len(train_sample)
-        output_dict["n_train_points"].append(n_train)
-        logging.info(f"Number of training points at end of iteration {i + 1}: {n_train}")
+            try:
+                output_dict["mse_before"].append(
+                    train_mse_before
+                )  # these three relate to the training MSE, probably not so useful to inspect
+                output_dict["mse_after"].append(train_mse_after)
+                output_dict["d_mse"].append(delta_mse)
+            except:
+                pass
+            
+            n_train = len(train_sample)
+            output_dict["n_train_points"].append(n_train)
+            logging.info(f"Number of training points at end of iteration {i + 1}: {n_train}")
 
     if run_mode == 'AL':   #we don't necessarily want this in CL for the moment
         # --- Save at end of iteration

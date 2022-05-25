@@ -40,7 +40,7 @@ output_dict = {
     "d_novel_uncert": [],
     "novel_uncert_before": [],
     "novel_uncert_after": [],
-    "uncert_statistics": {'mean':[],'std':[]}
+    "uncert_statistics": {'mean':[],'std':[]},
     "holdout_pred_before": [],
     "holdout_pred_after": [],
     "holdout_ground_truth": [],
@@ -183,7 +183,7 @@ def check_for_misclassified_data(
 
     missed_points = []
     for (x, y, z, idx) in candidate_loader:
-        # if y == 0, then it is misclassified, keep only the misclassified points
+        # if y == 0, then it is misclassified, because all candidates should be unstable; keep only the misclassified points
         if y.item() == 0:
             missed_points.append(idx.item())
 
