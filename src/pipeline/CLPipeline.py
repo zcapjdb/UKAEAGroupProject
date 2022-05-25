@@ -72,6 +72,8 @@ def CLPipeline(arg):
             scaler = StandardScaler()
             scaler.fit_transform(train.data.drop(["stable_label","index"], axis=1))
             train.scale(scaler)
+            for flux in models.keys():
+                models[flux]['Regressor'].scaler = scaler            
             train_new, eval_new, test_new, _ = pt.prepare_data(
     PATHS["train"], PATHS["validation"], PATHS["test"], fluxes=FLUX, samplesize_debug=1, scale=False
 ) 

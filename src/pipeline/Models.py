@@ -338,7 +338,7 @@ class Regressor(nn.Module):
         pred = []
         losses = []
         losses_unscaled = []
-        ys = []
+        zs = []
         for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
             x = x.to(self.device)
             z = z.to(self.device)
@@ -348,7 +348,7 @@ class Regressor(nn.Module):
             if unscale:  
                 losses_unscaled.append(loss[1].item())
                 loss = loss[0]
-                ys.extend(y.squeeze().detach().cpu().numpy())
+                zs.extend(self.unscale(z.squeeze().detach().cpu().numpy()))
             losses.append(loss.item())
         average_loss = np.sum(losses) / size
 
@@ -356,7 +356,7 @@ class Regressor(nn.Module):
 
         if unscale:
             unscaled_avg_loss = np.sum(losses_unscaled) / size
-            unscaled_avg_loss_norm = unscaled_avg_loss/np.sum(ys)*size
+            unscaled_avg_loss_norm = unscaled_avg_loss/np.sum(np.power(zs,2))*size   #--- MSE/mean_groundtruth is the relative mean squared error
             return pred, average_loss, unscaled_avg_loss, unscaled_avg_loss_norm
         return pred, average_loss
 
