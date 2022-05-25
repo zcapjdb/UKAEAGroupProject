@@ -110,9 +110,9 @@ def CLPipeline(arg):
         
         for k in test_data.keys():
             test_data[k].scale(scaler)   # --- scale all test data saved so far with current scaler
-            _, regr_test_loss = models[cfg['flux'][0]]['Regressor'].predict(test_data[k], unscale=True) # ToDo====>>> generalise to two outputs
+            _, regr_test_loss,regr_test_loss_unscaled, regr_test_loss_unscaled_norm = models[cfg['flux'][0]]['Regressor'].predict(test_data[k], unscale=True) # ToDo====>>> generalise to two outputs
             _, class_test_loss = models[cfg['flux'][0]]['Classifier'].predict(test_data[k])
-            forgetting.update({f'regression_{k}_model{j}':regr_test_loss})
+            forgetting.update({f'regression_{k}_model{j}':{'regr_test_loss':regr_test_loss,'regr_test_loss_unscaled':regr_test_loss_unscaled, 'regr_test_loss_unscaled_norm': regr_test_loss_unscaled_norm}})
             forgetting.update({f'classification_{k}_model{j}':class_test_loss})
             test_data[k].scale(scaler, unscale=True) # --- unscale data for future passes
 
