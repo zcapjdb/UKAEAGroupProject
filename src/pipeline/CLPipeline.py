@@ -23,13 +23,20 @@ import argparse
 import pandas as pd
 import copy
 
-def get_data(self,cfg, scale=True):
-    PATHS = cfg["data"]
-    FLUX = cfg["flux"]
-    train_dataset, eval_dataset, test_dataset, scaler = pt.prepare_data(
-    PATHS["train"], PATHS["validation"], PATHS["test"], fluxes=FLUX, samplesize_debug=0.1, scale=scale
-) 
-    return train_dataset, eval_dataset, test_dataset,scaler
+
+
+    
+def downsample(cfg,data,mem_replay):
+    train_size = cfg['hyperparams']['train_size']*mem_replay
+    val_size = cfg['hyperparams']['valid_size']*mem_replay
+    test_size = cfg['hyperparams']['test_size']*mem_replay
+    train_sample = data[0].sample(int(len(data[0])*train_size))
+    train_classifier = data[1].sample(int(len(data[1])*train_size))
+    valid_dataset =  data[2].sample(int(len(data[2])*val_size))
+    valid_classifier =  data[3].sample(int(len(data[3])*val_size))
+    holdout_set =  data[4].sample(int(len(data[4])*test_size))
+    holdout_classifier =  data[5].sample(int(len(data[5])*test_size))
+    return train_sample, train_classifier, valid_dataset, valid_classifier,  holdout_set, holdout_classifier
 
 def CLPipeline(arg):
     seed = arg[0]
@@ -39,7 +46,7 @@ def CLPipeline(arg):
     save_outputs_path = arg[4]
     mem_replay = arg[5]
     lambda_task = arg[6]
-    test_data = {}   # --- saves test data for each task
+    saved_test_data = {}   # --- saves test data for each task
     forgetting = {}  # --- saves test MSE on previous tasks with updated model
     outputs = {} # --- saves all output losses for each task
     # --- all of this is so ugly it makes me ashamed, but no time for polishing now
@@ -52,49 +59,50 @@ def CLPipeline(arg):
         print(f'Task number: {j}')
         print('=====================================')
         print('=====================================')        
-        PATHS = cfg["data"]
-        FLUX = cfg["flux"]        
+
         if CL_mode!= 'shrink_perturb':
             cfg['hyperparams']['lambda'] = 1
         if j==0:
-            train_, val, test, scaler = pt.prepare_data(
-    PATHS["train"], PATHS["validation"], PATHS["test"], fluxes=FLUX, samplesize_debug=1, scale=True
-) 
-            train = train_.sample(cfg['hyperparams']['train_size'])
-            train_.remove(train.data.index)
-            unlabelled_pool = train_
-            val = val.sample(cfg['hyperparams']['valid_size'])
-            test_new = test.sample(cfg['hyperparams']['test_size']) 
-            save = copy.deepcopy(test_new)
-            save.scale(scaler, unscale=True)
-            test_data.update({f'task{j}': save})
-            first_iter = True
+            train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, saved_tests, scaler = pt.get_data(cfg,j=0)
+            saved_test_data.update(saved_tests)
+            # ToDo CHANGE THIS later on! ==== >>> test_new = test.sample(cfg['hyperparams']['test_size'])  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<< ======================= 
+            first_iter = True  # -- ok, retain
+
         else:
-            train = train.sample(cfg['hyperparams']['train_size']*mem_replay)  # resample training set ToDo:======>>>>> Memory Replay Size (read paper to get a feel for it)
-            scaler = StandardScaler()
-            scaler.fit_transform(train.data.drop(["stable_label","index"], axis=1))
-            train.scale(scaler)
+            
+            _, _, valid_dataset_new, valid_classifier_new, unlabelled_pool_new, holdout_set_new, holdout_classifier_new, saved_tests,scaler = pt.get_data(cfg, scaler=scaler,j=j)  # --- scaler gets updated during pipeline and passed here
+            saved_test_data.update(saved_tests)
+
+            # --- downsample data from previous tasks, otherwise too much imbalance. 
+            data = [train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier]
+            train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier =  downsample(cfg, data, mem_replay)
+
+            # --- add new task to previous tasks : NB, train set is NOT updated here, it will get updated in AL progressively through the unlabelled pool
+            # TODO ==========>>>>>>>>> MAKE SURE CL IN ALPipeline IS ABLE TO HANDLE THIS WITH NEW TRAIN DEFINITIONS!!!!!!!!
+
+            #train_sample.add(train_sample_new)
+            #train_classifier.add(train_classifier_new)
+            valid_dataset.add(valid_dataset_new)   # --- in a real world situation where data is streaming this is unavailable. Need to update dynamically withi the AL pipeline.
+            valid_classifier.add(valid_classifier_new)
+            holdout_set.add(holdout_set_new)
+            holdout_classifier.add(holdout_classifier_new)
+            unlabelled_pool = unlabelled_pool_new # --- not added, only data from the new task arrives
+
             for flux in models.keys():
                 models[flux]['Regressor'].scaler = scaler            
-            train_new, eval_new, test_new, _ = pt.prepare_data(
-    PATHS["train"], PATHS["validation"], PATHS["test"], fluxes=FLUX, samplesize_debug=1, scale=False
-) 
-            test_new = test_new.sample(cfg['hyperparams']['test_size'])
-            save = copy.deepcopy(test_new)
-            test_data.update({f'task{j}': save })  # --- save UNSCALED data for future testing
-            test_new.scale(scaler)
-            test.add(test_new) #--- assuming we have validation and testing - this is not always true in practice. In fact, in a real case we have to keep updating them
-            eval_new.scale(scaler)   
-            val_new = eval_new.sample(cfg['hyperparams']['valid_size'])
-            val.add(val_new)   # val and test have been scaled in the AL pipeline already
-            unlabelled_pool = train_new
+                
             first_iter = False
             
-        inp = [seed,cfg,save_outputs_path,save_plots_path, {'scaler':scaler,'train':train,'val':val,'test':test,'unlabelled':unlabelled_pool}, models, first_iter]
+        inp = [seed,cfg,save_outputs_path,save_plots_path, 
+            {'scaler':scaler,
+            'train':{'train_class':train_classifier,'train_regr':train_sample},
+            'val':{'val_class': valid_classifier, 'val_regr':valid_dataset},
+            'test':{'test_class': holdout_classifier, 'test_regr': holdout_set},
+            'unlabelled':unlabelled_pool}, models, first_iter]
 
-            # ---  train dataset is augmented each time in the pipeline, without removing old data
         inp = {'run_mode':'CL','cfg':inp}
-        train, val, test, output_dict, scaler, models = ALpipeline(inp)  # --- this is really ugly as it is a recursvie thing and so should really be in a class itself, but not time to polish
+
+        train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier, output_dict, scaler, models = ALpipeline(inp)  # --- this is really ugly as it is a recursvie thing and so should really be in a class itself, but not time to polish
         outputs.update({f'task{j}':output_dict})
         if CL_mode == 'shrink_perturb':
             for flux in models.keys():
@@ -108,13 +116,24 @@ def CLPipeline(arg):
             pass
 
         
-        for k in test_data.keys():
-            test_data[k].scale(scaler)   # --- scale all test data saved so far with current scaler
-            _, regr_test_loss,regr_test_loss_unscaled, regr_test_loss_unscaled_norm = models[cfg['flux'][0]]['Regressor'].predict(test_data[k], unscale=True) # ToDo====>>> generalise to two outputs
-            _, class_test_loss = models[cfg['flux'][0]]['Classifier'].predict(test_data[k])
-            forgetting.update({f'regression_{k}_model{j}':{'regr_test_loss':regr_test_loss,'regr_test_loss_unscaled':regr_test_loss_unscaled, 'regr_test_loss_unscaled_norm': regr_test_loss_unscaled_norm}})
-            forgetting.update({f'classification_{k}_model{j}':class_test_loss})
-            test_data[k].scale(scaler, unscale=True) # --- unscale data for future passes
+        for k in saved_test_data.keys():
+            saved_test_data[k]['save_regr'].scale(scaler)   # --- scale all test data saved so far with current scaler
+            saved_test_data[k]['save_class'].scale(scaler)   # --- scale all test data saved so far with current scaler
+            _, regr_test_loss,regr_test_loss_unscaled, regr_test_loss_unscaled_norm = models[cfg['flux'][0]]['Regressor'].predict(saved_test_data[k]['save_regr'], unscale=True) # ToDo====>>> generalise to two outputs
+            _, holdout_class_losses = models[cfg['flux'][0]]['Classifier'].predict(saved_test_data[k]['save_class']) # ToDo|!!!! Change to account for different class metrics
+            forgetting.update({f'regression_{k}_model{j}':{'regr_test_loss':regr_test_loss,
+                                                           'regr_test_loss_unscaled':regr_test_loss_unscaled, 
+                                                           'regr_test_loss_unscaled_norm': regr_test_loss_unscaled_norm}
+                                                           })
+            forgetting.update({f'classification_{k}_model{j}': {'holdout_class_loss':holdout_class_losses[0],
+                                                                'holdout_class_acc':holdout_class_losses[1],
+                                                                'holdout_class_precision':holdout_class_losses[2],
+                                                                'holdout_class_recall': holdout_class_losses[3],
+                                                                'holdout_class_f1': holdout_class_losses[4],
+                                                                'holdout_class_auc': holdout_class_losses[5]}
+                                                            })
+            
+            saved_test_data[k].scale(scaler, unscale=True) # --- unscale data for future passes
 
 
     outputs = {'outputs':outputs, 'forgetting':forgetting}

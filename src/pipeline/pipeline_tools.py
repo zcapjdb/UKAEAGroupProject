@@ -145,6 +145,57 @@ def prepare_data(
         return train_dataset, valid_dataset, test_dataset, None, train_dataset_regressor
 
 
+def get_data(cfg,scaler=None,j=None):
+    PATHS = cfg["data"]
+    FLUX = cfg["flux"]        
+    train_classifier, eval_dataset, test_dataset, scaler, train_regressor = pt.prepare_data(
+            PATHS["train"],
+            PATHS["validation"],
+            PATHS["test"],
+            fluxes=FLUX,
+            samplesize_debug=1,
+            scale=False,
+        )
+        
+    # --- train sets
+    train_sample = train_regressor.sample(cfg['hyperparams']['train_size'])
+    if scaler is None: # --- ensures that future tasks can be scaled according to scaler of previous tasks
+        scaler = StandardScaler()
+        scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
+    train_sample.scale(scaler)
+    train_classifier.scale(scaler)
+    train_classifier = train_classifier.sample(cfg['hyperparams']['train_size'])
+    # -- scale eval now so don't scale its derivative dsets later
+    eval_dataset.scale(scaler)
+
+    # --- holdout sets are from the test set
+    holdout_set = test_dataset.sample(cfg['hyperparams']['test_size'])  # holdout set
+    holdout_classifier = copy.deepcopy(holdout_set) # copy it for classifier
+    holdout_set.data = holdout_set.data.drop(holdout_set.data[holdout_set.data["stable_label"] == 0].index) # delete stable points for regressor
+    if j in not None: # --- only for AL
+        #--- save unscaled test data
+        save_class = copy.deepcopy(holdout_classifier)
+        save_regr = copy.deepcopy(holdout_set)
+        saved_tests = {f'task{j}': {'save_class':save_class,'save_regr':save_regr}}
+    else:
+        saved_tests = None
+    # --- scale test data
+    holdout_set.scale(scaler)
+    holdout_classifier.scale(scaler)
+
+    # --- valid sets
+    eval_regressor = copy.deepcopy(eval_dataset)
+    eval_regressor.data = eval_regressor.data.drop(eval_regressor.data[eval_regressor.data["stable_label"] == 0].index)
+    valid_dataset = eval_regressor.sample(cfg['hyperparams']['valid_size']) # --- valid for regressor
+    valid_classifier = eval_dataset.sample(cfg['hyperparams']['test_size'])  # --- valid for classifier, must come from original eval
+
+    # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
+    eval_dataset.remove(valid_dataset.data.index) 
+    eval_dataset.remove(valid_classifier.data.index)
+    unlabelled_pool = eval_dataset
+
+    return train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, saved_tests, scaler
+
 # classifier tools
 def select_unstable_data(
     dataset: ITGDatasetDF,

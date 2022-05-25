@@ -45,16 +45,20 @@ def ALpipeline(cfg):
             cfg = cfg['cfg']
     elif cfg['run_mode'] == 'CL': 
         run_mode = 'CL'
-        if not isinstance(cfg['cfg'],dict):  # ToDo =========>>>>>> fix passing from CL
+        if not isinstance(cfg['cfg'],dict):  
+
             cfg = cfg['cfg']
             seed = cfg[0]
             SAVE_PATHS = {}
             SAVE_PATHS["outputs"] = cfg[2]  # todo=====> figure out whether save paths should be like this
             SAVE_PATHS["plots"] = cfg[3]            
             scaler = cfg[4]['scaler']
-            train_sample = cfg[4]['train']
-            valid_dataset = cfg[4]['val']
-            holdout_set = cfg[4]['test']     
+            train_sample = cfg[4]['train']['train_regr']
+            train_classifier = cfg[4]['train']['train_class']
+            valid_classifier = cfg[4]['val']['val_class']
+            valid_dataset = cfg[4]['val']['val_regr']
+            holdout_classifier = cfg[4]['test']['test_class']
+            holdout_set = cfg[4]['test']['test_regr']
             plot_sample = holdout_set
             unlabelled_pool = cfg[4]['unlabelled']   
             models = cfg[5]
@@ -106,52 +110,7 @@ def ALpipeline(cfg):
 
     # --------------------------------------------- Load data ----------------------------------------------------------
     if run_mode == 'AL':
-        train_classifier, eval_dataset, test_dataset, scaler, train_regressor = pt.prepare_data(
-            PATHS["train"],
-            PATHS["validation"],
-            PATHS["test"],
-            fluxes=FLUXES,
-            samplesize_debug=sample_size,
-            scale=False,
-        )
-
-        train_sample = train_regressor.sample(train_size)
-        logging.info(f"Train size: {len(train_sample)}")
-        scaler = StandardScaler()
-        scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
-
-        train_sample.scale(scaler)
-        test_dataset.scale(scaler)
-        eval_dataset.scale(scaler)
-
-        train_classifier.scale(scaler)
-        train_classifier = train_classifier.sample(train_size)
-
-        # --- holdout set is from the test set
-        holdout_set = test_dataset.sample(test_size)
-        holdout_classifier = copy.deepcopy(holdout_set)
-
-        # drop any data from holdout set with stable_label = 0
-        holdout_set.data = holdout_set.data.drop(holdout_set.data[holdout_set.data["stable_label"] == 0].index)
-
-        eval_regressor = copy.deepcopy(eval_dataset)
-        eval_regressor.data = eval_regressor.data.drop(eval_regressor.data[eval_regressor.data["stable_label"] == 0].index)
-        valid_dataset = eval_regressor.sample(valid_size)
-
-        valid_classifier = eval_dataset.sample(valid_size)  # validation set
-
-
-        # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
-        eval_dataset.remove(valid_dataset.data.index) 
-        eval_dataset.remove(valid_classifier.data.index)
-
-        unlabelled_pool = eval_dataset
-        buffer_size = 0
-        classifier_buffer = []
-        # Load pretrained models
-
-        logging.info("Loaded the following models:\n")
-
+        train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, _, scaler = pt.get_data(cfg,j=0)
     elif run_mode == 'CL':
         pass # --- data is passed from CL pipeline, see start of the function
 
@@ -332,13 +291,15 @@ def ALpipeline(cfg):
             pass 
 
         # --- set up retraining by rescaling all points according to new training data --------------------
-
        # --- unscale all datasets, 
         candidates.scale(scaler, unscale=True)
         train_sample.scale(scaler, unscale=True)
+        train_classifier.scale(scaler,unscale=True)
         unlabelled_pool.scale(scaler, unscale=True)
         valid_dataset.scale(scaler, unscale=True)
+        valid_classifier.scale(scaler,unscale=True)
         holdout_set.scale(scaler, unscale=True)
+        holdout_classifier.scale(scaler, unscale=True)
 
         # --- train data is enriched by new unstable candidate points
         logging.info(f"Enriching training data with {len(candidates)} new points")
@@ -348,9 +309,12 @@ def ALpipeline(cfg):
         scaler = StandardScaler()
         scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
         train_sample.scale(scaler)
+        train_classifier.scale(scaler)
         unlabelled_pool.scale(scaler)
         valid_dataset.scale(scaler)
+        valid_classifier.scale(scaler)
         holdout_set.scale(scaler)
+        holdout_classifier.scale(scaler)
              
         # --- update scaler in the models
         for FLUX in FLUXES:
@@ -522,7 +486,7 @@ def ALpipeline(cfg):
         return output_dict
 
     else:
-        return   train_sample, valid_dataset, holdout_set, output_dict, scaler, models # ugly
+        return train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier, output_dict, scaler, models # ugly
 
     return output_dict        
 
