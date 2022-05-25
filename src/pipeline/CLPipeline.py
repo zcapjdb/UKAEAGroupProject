@@ -27,15 +27,15 @@ import copy
 
     
 def downsample(cfg,data,mem_replay):
-    train_size = cfg['hyperparams']['train_size']*mem_replay
-    val_size = cfg['hyperparams']['valid_size']*mem_replay
-    test_size = cfg['hyperparams']['test_size']*mem_replay
-    train_sample = data[0].sample(int(len(data[0])*train_size))
-    train_classifier = data[1].sample(int(len(data[1])*train_size))
-    valid_dataset =  data[2].sample(int(len(data[2])*val_size))
-    valid_classifier =  data[3].sample(int(len(data[3])*val_size))
-    holdout_set =  data[4].sample(int(len(data[4])*test_size))
-    holdout_classifier =  data[5].sample(int(len(data[5])*test_size))
+    train_size = int(cfg['hyperparams']['train_size']*mem_replay)
+    val_size = int(cfg['hyperparams']['valid_size']*mem_replay)
+    test_size = int(cfg['hyperparams']['test_size']*mem_replay)
+    train_sample = data[0].sample(train_size)
+    train_classifier = data[1].sample(train_size)
+    valid_dataset =  data[2].sample(val_size)
+    valid_classifier =  data[3].sample(val_size)
+    holdout_set =  data[4].sample(test_size)
+    holdout_classifier =  data[5].sample(test_size)
     return train_sample, train_classifier, valid_dataset, valid_classifier,  holdout_set, holdout_classifier
 
 def CLPipeline(arg):
@@ -133,7 +133,8 @@ def CLPipeline(arg):
                                                                 'holdout_class_auc': holdout_class_losses[5]}
                                                             })
             
-            saved_test_data[k].scale(scaler, unscale=True) # --- unscale data for future passes
+            saved_test_data[k]['save_regr'].scale(scaler, unscale=True) # --- unscale data for future passes
+            saved_test_data[k]['save_class'].scale(scaler, unscale=True) # --- unscale data for future passes
 
 
     outputs = {'outputs':outputs, 'forgetting':forgetting}

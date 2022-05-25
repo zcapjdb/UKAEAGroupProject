@@ -77,7 +77,6 @@ class Classifier(nn.Module):
 
     def train_step(self, dataloader, optimizer, epoch=None, disable_tqdm=False):
         # Initalise loss function
-        BCE = nn.BCELoss()
 
         size = len(dataloader.dataset)
         num_batches = len(dataloader)
@@ -87,6 +86,19 @@ class Classifier(nn.Module):
         for batch, (X, y, z, idx) in enumerate(
             tqdm(dataloader, desc=f"Epoch {epoch}", disable=disable_tqdm)
         ):
+
+            y_true = y.numpy().flatten()
+            L_pos_class = len(y_true[y_true==1])
+            L_neg_class = len(y_true[y_true==0])
+            w_neg = (L_pos_class+L_neg_class)/(2*L_neg_class)
+            w_pos = (L_pos_class+L_neg_class)/(2*L_pos_class)
+            idx_pos = np.where(y_true[y_true==1])[0]
+            idx_neg = np.where(y_true[y_true==0])[0]
+            weights = np.zeros(len(y_true))
+            weights[idx_pos] = w_pos
+            weights[idx_neg] = w_neg
+            weights = torch.Tensor(weights)
+            BCE = nn.BCELoss(weight=weights.unsqueeze(-1))
 
             X = X.to(self.device)
             y = y.to(self.device)
@@ -99,6 +111,7 @@ class Classifier(nn.Module):
             optimizer.step()
 
             losses.append(loss.item())
+            
 
             # calculate train accuracy
             pred_class = torch.round(y_hat.squeeze())  # torch.round(y_hat.squeeze())
@@ -106,9 +119,10 @@ class Classifier(nn.Module):
                 pred_class == y.float()
             ).item()  # torch.sum(pred_class == y.float()).item()
 
+
         correct /= size
         average_loss = np.mean(losses)
-        logging.debug(f"Train accuracy: {correct:>7f}, loss: {average_loss:>7f}")
+        logging.debug(f"TRAIN accuracy: {correct:>7f}, loss: {average_loss:>7f}")
         return average_loss, correct
 
     def validation_step(self, dataloader, scheduler=None):
@@ -119,6 +133,7 @@ class Classifier(nn.Module):
         test_loss = []
         correct = 0
 
+        true_pos, true_neg, false_pos, false_neg = 0,0,0,0
         with torch.no_grad():
             for X, y, z, _ in dataloader:
                 X = X.to(self.device)
@@ -134,10 +149,25 @@ class Classifier(nn.Module):
                     pred_class == y.float()
                 ).item()  # torch.sum(pred_class == y.float()).item()
 
-        correct /= size
-        average_loss = np.mean(test_loss)
-        logging.debug(f"Test accuracy: {correct:>7f}, loss: {average_loss:>7f}")
+                pred_true_idx = np.where(pred_class == 1)[0]
+                pred_false_idx = np.where(pred_class == 0)[0]
 
+                true_pos += torch.sum(pred_class[pred_true_idx] == y[pred_true_idx].float()).item()
+                true_neg += torch.sum(pred_class[pred_false_idx] == y[pred_false_idx].float()).item()
+
+                false_pos += torch.sum(pred_class[pred_true_idx] != y[pred_true_idx].float()).item()
+                false_neg += torch.sum(pred_class[pred_false_idx] != y[pred_false_idx].float()).item()
+
+        correct /= size
+        average_loss = np.mean(test_loss)       
+        logging.debug(f"Val accuracy: {correct:>7f}, loss: {average_loss:>7f}")
+        try:
+            precision = true_pos / (true_pos + false_pos)
+            recall = true_pos / (true_pos + false_neg)
+            f1 = 2 * precision * recall / (precision + recall)  
+            logging.debug(f"VALID: precision {precision:>7f}, recall: {recall:>7f}, F1: {f1:>7f}")
+        except:
+            print('VALID: no good values this time round.')
         if scheduler is not None:
             scheduler.step(average_loss)
 
@@ -158,6 +188,7 @@ class Classifier(nn.Module):
         BCE = nn.BCELoss()
 
         for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
+            print('Im doing it')
             x = x.to(self.device)
             y = y.to(self.device)
             y_hat = self.forward(x.float())
@@ -182,13 +213,25 @@ class Classifier(nn.Module):
             false_pos += torch.sum(pred_class[pred_true_idx] != y[pred_true_idx].float()).item()
             false_neg += torch.sum(pred_class[pred_false_idx] != y[pred_false_idx].float()).item()
 
+        
         average_loss = np.sum(losses) / size
 
         correct /= size
+        logging.debug(f"TEST accuracy: {correct:>7f}, loss: {average_loss:>7f}")
+        print(true_pos, false_pos,false_neg)
 
-        precision = true_pos / (true_pos + false_pos)
-        recall = true_pos / (true_pos + false_neg)
-        f1 = 2 * precision * recall / (precision + recall)
+        try:
+            precision = true_pos / (true_pos + false_pos)
+            recall = true_pos / (true_pos + false_neg)
+            print('Precision, recall',precision,recall)
+            f1 = 2 * precision * recall / (precision + recall)  
+            print('F1 score',f1)        
+            logging.debug(f"Test precision {precision:>7f}, recall: {recall:>7f}, F1: {f1:>7f}")
+        except:
+            print('TEST: no good values this time round.')
+            precision = np.nan
+            recall = np.nan
+            f1 = np.nan
 
         pred = np.asarray(pred, dtype=object).flatten()
         y_true = np.asarray(y_true, dtype=object).flatten()
