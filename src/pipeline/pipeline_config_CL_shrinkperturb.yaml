@@ -16,7 +16,7 @@ common:
     train_size: 20000
     valid_size: 10000
   initial_epochs: 100
-  iterations: 2
+  iterations: 5
   keep_prob: 0.25
   learning_rate: 0.001
   logging_level: DEBUG
@@ -24,7 +24,7 @@ common:
   retrain_classifier: true
   retrain_regressor: true
   sample_size_debug: 1
-  train_epochs: 3
+  train_epochs: 50
   train_patience: 10
 lambda_task: 1
 mem_replay: 0.5

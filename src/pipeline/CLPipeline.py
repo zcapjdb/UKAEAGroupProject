@@ -27,15 +27,29 @@ import copy
 
     
 def downsample(cfg,data,mem_replay):
+    print('==============')
+    print('==============')
+    print('==============')
+    print('==============')
+    print('==============')
+    print('==============')
+    print('before', cfg['hyperparams']['train_size'],cfg['hyperparams']['valid_size'],cfg['hyperparams']['test_size'] )
     train_size = int(cfg['hyperparams']['train_size']*mem_replay)
-    val_size = int(cfg['hyperparams']['valid_size']*mem_replay)
+    val_size = int(cfg['hyperparams']['valid_size']*mem_replay)   # TODO replace with holdout size
     test_size = int(cfg['hyperparams']['test_size']*mem_replay)
+    print('==============')
+    print('==============')
+    print('==============')
+    print('==============')
+    print('==============')
+    print('==============')    
+    print('after', train_size, val_size,test_size, 'holdout',len(data[4]))
     train_sample = data[0].sample(train_size)
     train_classifier = data[1].sample(train_size)
     valid_dataset =  data[2].sample(val_size)
     valid_classifier =  data[3].sample(val_size)
-    holdout_set =  data[4].sample(test_size)
-    holdout_classifier =  data[5].sample(test_size)
+    holdout_set =  data[4].sample(int(len(data[4])*mem_replay))
+    holdout_classifier =  data[5].sample(int(len(data[5])*mem_replay))
     return train_sample, train_classifier, valid_dataset, valid_classifier,  holdout_set, holdout_classifier
 
 def CLPipeline(arg):
@@ -202,6 +216,6 @@ if __name__=='__main__':
     with Pool(Nbootstraps) as p:
         outputs = p.map(CLPipeline,inp)
    
-    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lambda_task}_{acquisition}_replaysize_{mem_replay}.pkl', 'wb') as f:
+    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/experiment_fulltraining.pkl','wb') as f: #bootstrapped_CL_{CL_mode}_lam_{lambda_task}_{acquisition}_replaysize_{mem_replay}.pkl', 'wb') as f:
         pkl.dump(outputs, f)
 
