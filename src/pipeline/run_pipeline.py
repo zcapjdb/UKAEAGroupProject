@@ -117,7 +117,6 @@ def ALpipeline(cfg):
 
     buffer_size = 0
     classifier_buffer = None
-            # ------------------------------------------- Load or train first models ------------------------------------------
 
     # ------------------------------------------- Load or train first models ------------------------------------------
     if run_mode == 'AL'  or (run_mode=='CL' and first_CL_iter):
@@ -199,7 +198,7 @@ def ALpipeline(cfg):
             output_dict['class_f1_init'].append(holdout_class_losses[4])
             output_dict['class_auc_init'].append(holdout_class_losses[5])
     else:
-            pass # --- models are passed from CL pipeline            
+        pass # --- models are passed from CL pipeline            
 
     # Create logger object for use in pipeline
     verboselogs.install()
@@ -217,7 +216,7 @@ def ALpipeline(cfg):
     for i in range(cfg["iterations"]):
         logging.info(f"Iteration: {i+1}\n")
         epochs = cfg["initial_epochs"] * (i + 1)
-
+        
         # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
         candidates = unlabelled_pool.sample(candidate_size)
         # --- remove the sampled data points from the dataset
@@ -291,7 +290,6 @@ def ALpipeline(cfg):
                     misclassified_data, FLUXES[0], keep_index=True
                 )                             
                 classifier_buffer.add(misclassified_data)   
-            #classifier_buffer.append(misclassified_data)
             logging.info(f"Misclassified data: {num_misclassified}")
             logging.info(f"Total Buffer size: {buffer_size}")
         
@@ -316,6 +314,8 @@ def ALpipeline(cfg):
         # --- train data is enriched by new unstable candidate points
         logging.info(f"Enriching training data with {len(candidates)} new points")
         train_sample.add(candidates)
+        # ---  compute the mean for the loss function
+        mean_train = np.mean(train_sample.data[FLUX[0]]) # ---- ToDo =====>>>>> need to upgrade to two outputs
 
         # --- get new scaler from enriched training set, rescale them with new scaler
         scaler = StandardScaler()
@@ -337,7 +337,7 @@ def ALpipeline(cfg):
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
-                logging.info("Buffer full, retraining classifier")
+                logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
                 # retrain the classifier on the misclassified points
                 losses, accs = pt.retrain_classifier(
                     classifier_buffer,
@@ -402,7 +402,7 @@ def ALpipeline(cfg):
             
             logging.info(f"Running prediction on validation data set")
             # --- validation on holdout set after regressor is retrained
-            hold_pred_after, hold_loss, hold_loss_unscaled, hold_loss_unscaled_norm = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
+            hold_pred_after, hold_loss, hold_loss_unscaled, hold_loss_unscaled_norm = models[FLUX]["Regressor"].predict(holdout_set, unscale=True, mean=mean_train)
             holdout_pred_after.append(hold_pred_after)
             holdout_loss.append(hold_loss)
             holdout_loss_unscaled.append(hold_loss_unscaled)

@@ -66,7 +66,6 @@ def CLPipeline(arg):
     # --- all of this is so ugly it makes me ashamed, but no time for polishing now
     # AL pipeline should be a class that initialises the models by training them the first time, then can be updated with new data (data is a self.) and relative scaler (also a self)
     models = None
-    print(config_tasks)
     for j,cfg in enumerate(config_tasks):
         print('=====================================')
         print('=====================================')
@@ -216,6 +215,6 @@ if __name__=='__main__':
     with Pool(Nbootstraps) as p:
         outputs = p.map(CLPipeline,inp)
    
-    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/experiment_fulltraining.pkl','wb') as f: #bootstrapped_CL_{CL_mode}_lam_{lambda_task}_{acquisition}_replaysize_{mem_replay}.pkl', 'wb') as f:
+    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lambda_task}_{acquisition}_replaysize_{mem_replay}.pkl', 'wb') as f:
         pkl.dump(outputs, f)
 

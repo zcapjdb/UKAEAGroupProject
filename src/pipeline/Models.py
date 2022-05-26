@@ -90,15 +90,19 @@ class Classifier(nn.Module):
             y_true = y.numpy().flatten()
             L_pos_class = len(y_true[y_true==1])
             L_neg_class = len(y_true[y_true==0])
-            w_neg = (L_pos_class+L_neg_class)/(2*L_neg_class)
-            w_pos = (L_pos_class+L_neg_class)/(2*L_pos_class)
-            idx_pos = np.where(y_true[y_true==1])[0]
-            idx_neg = np.where(y_true[y_true==0])[0]
-            weights = np.zeros(len(y_true))
-            weights[idx_pos] = w_pos
-            weights[idx_neg] = w_neg
-            weights = torch.Tensor(weights)
-            BCE = nn.BCELoss(weight=weights.unsqueeze(-1))
+            
+            if L_pos_class>1 and L_neg_class>1:
+                w_neg = (L_pos_class+L_neg_class)/(2*L_neg_class)
+                w_pos = (L_pos_class+L_neg_class)/(2*L_pos_class)
+                idx_pos = np.where(y_true[y_true==1])[0]
+                idx_neg = np.where(y_true[y_true==0])[0]
+                weights = np.zeros(len(y_true))
+                weights[idx_pos] = w_pos
+                weights[idx_neg] = w_neg
+                weights = torch.Tensor(weights)
+                BCE = nn.BCELoss(weight=weights.unsqueeze(-1))
+            else:
+                BCE = nn.BCELoss()
 
             X = X.to(self.device)
             y = y.to(self.device)
@@ -149,23 +153,25 @@ class Classifier(nn.Module):
                     pred_class == y.float()
                 ).item()  # torch.sum(pred_class == y.float()).item()
 
+                
                 pred_true_idx = np.where(pred_class == 1)[0]
                 pred_false_idx = np.where(pred_class == 0)[0]
+                print('Val step debug:',y.size(),y_hat.size(), len(pred_true_idx), len(pred_false_idx))
+                if len(pred_true_idx)>0 and len(pred_false_idx)>0:
+                    true_pos += torch.sum(pred_class[pred_true_idx] == y[pred_true_idx].float()).item()
+                    true_neg += torch.sum(pred_class[pred_false_idx] == y[pred_false_idx].float()).item()
 
-                true_pos += torch.sum(pred_class[pred_true_idx] == y[pred_true_idx].float()).item()
-                true_neg += torch.sum(pred_class[pred_false_idx] == y[pred_false_idx].float()).item()
-
-                false_pos += torch.sum(pred_class[pred_true_idx] != y[pred_true_idx].float()).item()
-                false_neg += torch.sum(pred_class[pred_false_idx] != y[pred_false_idx].float()).item()
+                    false_pos += torch.sum(pred_class[pred_true_idx] != y[pred_true_idx].float()).item()
+                    false_neg += torch.sum(pred_class[pred_false_idx] != y[pred_false_idx].float()).item()
 
         correct /= size
         average_loss = np.mean(test_loss)       
         logging.debug(f"Val accuracy: {correct:>7f}, loss: {average_loss:>7f}")
-        try:
+        try:    
             precision = true_pos / (true_pos + false_pos)
             recall = true_pos / (true_pos + false_neg)
             f1 = 2 * precision * recall / (precision + recall)  
-            logging.debug(f"VALID: precision {precision:>7f}, recall: {recall:>7f}, F1: {f1:>7f}")
+            logging.debug(f"Val precision {precision:>7f}, recall: {recall:>7f}, F1: {f1:>7f}")
         except:
             print('VALID: no good values this time round.')
         if scheduler is not None:
@@ -204,15 +210,16 @@ class Classifier(nn.Module):
                 pred_class == y.float()
             ).item()
 
+
             pred_true_idx = np.where(pred_class == 1)[0]
             pred_false_idx = np.where(pred_class == 0)[0]
+            print('test step debug', y.size(),y_hat.size(), len(pred_true_idx), len(pred_false_idx))
+            if len(pred_true_idx)>0 and len(pred_false_idx)>0:
+                true_pos += torch.sum(pred_class[pred_true_idx] == y[pred_true_idx].float()).item()
+                true_neg += torch.sum(pred_class[pred_false_idx] == y[pred_false_idx].float()).item()
 
-            true_pos += torch.sum(pred_class[pred_true_idx] == y[pred_true_idx].float()).item()
-            true_neg += torch.sum(pred_class[pred_false_idx] == y[pred_false_idx].float()).item()
-
-            false_pos += torch.sum(pred_class[pred_true_idx] != y[pred_true_idx].float()).item()
-            false_neg += torch.sum(pred_class[pred_false_idx] != y[pred_false_idx].float()).item()
-
+                false_pos += torch.sum(pred_class[pred_true_idx] != y[pred_true_idx].float()).item()
+                false_neg += torch.sum(pred_class[pred_false_idx] != y[pred_false_idx].float()).item()
         
         average_loss = np.sum(losses) / size
 
@@ -399,7 +406,7 @@ class Regressor(nn.Module):
 
         return average_loss, average_unscaled_loss
 
-    def predict(self, dataloader, unscale=False):
+    def predict(self, dataloader, unscale=False, mean=None):
 
         if not isinstance(dataloader, DataLoader):
 
@@ -428,7 +435,11 @@ class Regressor(nn.Module):
             if unscale:  
                 losses_unscaled.append(loss[1].item())
                 loss = loss[0]
-                zs.extend(self.unscale(z.squeeze().detach().cpu().numpy()))
+                z = self.unscale(z.squeeze().detach().cpu().numpy())-mean
+                try:
+                    zs.extend(z)
+                except:
+                    zs.extend([z])
             losses.append(loss.item())
         average_loss = np.sum(losses) / size
 
