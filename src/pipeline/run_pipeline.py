@@ -203,7 +203,7 @@ def ALpipeline(cfg):
             "Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data"
         )
 
-    classifier_buffer = []
+    classifier_buffer = None
     buffer_size = 0
 
     for i in range(cfg["iterations"]):
