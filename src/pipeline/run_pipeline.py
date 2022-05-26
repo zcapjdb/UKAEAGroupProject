@@ -113,7 +113,7 @@ def ALpipeline(cfg):
 
     unlabelled_pool = eval_dataset
     buffer_size = 0
-    classifier_buffer = []
+    classifier_buffer = None
     # Load pretrained models
 
     logging.info("Loaded the following models:\n")
@@ -203,7 +203,7 @@ def ALpipeline(cfg):
             "Training sample is larger than 100,000, if using a pretrained model make sure to use the same training data"
         )
 
-    classifier_buffer = []
+    classifier_buffer = None
     buffer_size = 0
 
     for i in range(cfg["iterations"]):
@@ -274,7 +274,15 @@ def ALpipeline(cfg):
                 indices=data_idx
                 )
             buffer_size += num_misclassified
-            classifier_buffer.append(misclassified_data)
+            if classifier_buffer is None:
+                classifier_buffer = md.ITGDatasetDF(
+                    misclassified_data, FLUXES[0], keep_index=True
+                )             
+            else:
+                misclassified_data = md.ITGDatasetDF(
+                    misclassified_data, FLUXES[0], keep_index=True
+                )                             
+                classifier_buffer.add(misclassified_data)   
             logging.info(f"Misclassified data: {num_misclassified}")
             logging.info(f"Total Buffer size: {buffer_size}")
 
@@ -288,6 +296,8 @@ def ALpipeline(cfg):
         valid_classifier.scale(scaler,unscale=True)
         holdout_set.scale(scaler, unscale=True)
         holdout_classifier.scale(scaler, unscale=True)
+        if classifier_buffer is not None:
+            classifier_buffer.scale(scaler, unscale=True)        
 
         # --- train data is enriched by new unstable candidate points
         logging.info(f"Enriching training data with {len(candidates)} new points")
@@ -303,6 +313,8 @@ def ALpipeline(cfg):
         valid_classifier.scale(scaler)
         holdout_set.scale(scaler)
         holdout_classifier.scale(scaler)
+        if classifier_buffer is not None:
+            classifier_buffer.scale(scaler)        
 
         #--- update scaler in the models
         # TODO: WHY does this make it worse???
@@ -313,15 +325,10 @@ def ALpipeline(cfg):
         if cfg["retrain_classifier"]:
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
                 # concatenate datasets from the buffer
-                misclassified = pd.concat(classifier_buffer)
-                misclassified_dataset = md.ITGDatasetDF(
-                    misclassified, FLUXES[0], keep_index=True
-                )
-
                 logging.info("Buffer full, retraining classifier")
                 # retrain the classifier on the misclassified points
                 losses, accs = pt.retrain_classifier(
-                    misclassified_dataset,
+                    classifier_buffer,
                     train_classifier,
                     valid_classifier,
                     models[FLUXES[0]]["Classifier"],
@@ -350,7 +357,7 @@ def ALpipeline(cfg):
                 output_dict['class_retrain_iterations'].append(i)
 
                 # reset buffer
-                classifier_buffer = []
+                classifier_buffer = None
                 buffer_size = 0
 
         # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
