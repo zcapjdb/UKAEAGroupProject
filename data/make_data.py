@@ -53,8 +53,7 @@ def main(required: str = 'LH'):
     elif required == 'CB':
         train, tmp = train_test_split(df.query('wall_material_index==0 & is_hmode==0 & discharge_phase_index==0'), test_size = 0.7, random_state = 42)
         valid, test = train_test_split(tmp, test_size = 0.5, random_state = 42)    
-        valid = valid.sample(10000)
-        test = test.sample(50000)
+        test = test.sample(60000)
         train.to_pickle(f"{path}/carbonwall/Lmode/train_data_clipped.pkl")
         valid.to_pickle(f"{path}/carbonwall/Lmode/valid_data_clipped.pkl")
         test.to_pickle(f"{path}/carbonwall/Lmode/test_data_clipped.pkl")        
@@ -66,16 +65,14 @@ def main(required: str = 'LH'):
 
         train, tmp = train_test_split(df.query('wall_material_index==0 & is_hmode==1 & discharge_phase_index==0'), test_size = 0.7, random_state = 42)
         valid, test = train_test_split(tmp, test_size = 0.5, random_state = 42)    
-        valid = valid.sample(10000)
-        test = test.sample(50000)        
+        test = test.sample(60000)        
         train.to_pickle(f"{path}/carbonwall/Hmode/train_data_clipped.pkl")
         valid.to_pickle(f"{path}/carbonwall/Hmode/valid_data_clipped.pkl")
         test.to_pickle(f"{path}/carbonwall/Hmode/test_data_clipped.pkl")        
 
         train, tmp = train_test_split(df.query('wall_material_index==1 & is_hmode==1 & discharge_phase_index==0'), test_size = 0.7, random_state = 42)
         valid, test = train_test_split(tmp, test_size = 0.5, random_state = 42)   
-        valid = valid.sample(10000)
-        test = test.sample(50000)        
+        test = test.sample(60000)        
         train.to_pickle(f"{path}/berilliumwall/Hmode/train_data_clipped.pkl")
         valid.to_pickle(f"{path}/berilliumwall/Hmode/valid_data_clipped.pkl")
         test.to_pickle(f"{path}/berilliumwall/Hmode/test_data_clipped.pkl")                 

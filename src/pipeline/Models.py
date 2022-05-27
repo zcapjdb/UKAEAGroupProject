@@ -435,7 +435,9 @@ class Regressor(nn.Module):
             if unscale:  
                 losses_unscaled.append(loss[1].item())
                 loss = loss[0]
-                z = self.unscale(z.squeeze().detach().cpu().numpy())-mean
+                z = self.unscale(z.squeeze().detach().cpu().numpy())
+                if mean is not None:
+                    z = z-mean
                 try:
                     zs.extend(z)
                 except:

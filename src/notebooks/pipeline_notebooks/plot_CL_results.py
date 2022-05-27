@@ -24,7 +24,7 @@ plt.rcParams['xtick.minor.width'] =5
 plt.rcParams['ytick.minor.width'] =5
 mpl.rcParams['axes.titlepad'] = 20
 
-path ='/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/paper_results_DONT_TOUCH'
+path ='/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/paper_results_DONT_TOUCH/'
 
 
 names = ['bootstrapped_CL_shrink_perturb_lam_0.5_random_replaysize_0.5',
@@ -103,10 +103,10 @@ for i,name in enumerate(names):
         forgot_class, cum_class, avg_class = final_forgetting(df_class_f1)
         dict_forget['class'].update({label: {'cumul':cum_class,'avg':avg_class}})
         dict_forget['regr'].update({label: {'cumul':cum_regr,'avg':avg_regr}})
+        ax1.scatter([i],[dict_forget['regr'][label]['avg']], color=color, s=1000, marker=marker, label=label)
         
     except:
         pass
-    ax1.scatter([i],[dict_forget['regr'][label]['avg']], color=color, s=1000, marker=marker, label=label)
 
 with open('/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/final_forgetting.yaml','w') as f:
     yaml.dump(dict_forget,f)
@@ -117,6 +117,7 @@ fig.tight_layout()
 fig.savefig(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/CL/all_overplotted_MSE.png')
 fig.clf()
 ax1.set_xticks([])
+ax1.legend(fontsize=22)
 ax1.set_ylabel('avg MSE forgetting')
 fig1.tight_layout()
 fig1.savefig(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/CL/forgetting.png')

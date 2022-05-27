@@ -203,6 +203,7 @@ if __name__=='__main__':
     CL_mode = cfg['CL_method']
     mem_replay = cfg['mem_replay']
     lambda_task = cfg['lambda_task']
+    retrain = cfg['common']['retrain_classifier']
     if CL_mode != 'shrink_perturb':
         lam = 1
 
@@ -215,6 +216,6 @@ if __name__=='__main__':
     with Pool(Nbootstraps) as p:
         outputs = p.map(CLPipeline,inp)
    
-    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lambda_task}_{acquisition}_replaysize_{mem_replay}.pkl', 'wb') as f:
+    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lambda_task}_{acquisition}_replaysize_{mem_replay}_retrainclass_{retrain}.pkl', 'wb') as f:
         pkl.dump(outputs, f)
 

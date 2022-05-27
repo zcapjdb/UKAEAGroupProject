@@ -185,7 +185,7 @@ def ALpipeline(cfg):
         # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
         for FLUX in FLUXES:
             logging.info(f"Test loss for {FLUX} before pipeline:")
-            _, holdout_loss, holdout_loss_unscaled, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
+            _, holdout_loss, holdout_loss_unscaled, holdout_loss_unscaled_norm = models[FLUX]["Regressor"].predict(holdout_set, unscale=True, mean=None )
             logging.info(f"Holdout Loss: {holdout_loss}")
             logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
             output_dict["test_loss_init"].append(holdout_loss)
@@ -315,7 +315,7 @@ def ALpipeline(cfg):
         logging.info(f"Enriching training data with {len(candidates)} new points")
         train_sample.add(candidates)
         # ---  compute the mean for the loss function
-        mean_train = np.mean(train_sample.data[FLUX[0]]) # ---- ToDo =====>>>>> need to upgrade to two outputs
+        mean_train = np.mean(train_sample.data['efiitg_gb']) # ---- ToDo =====>>>>> need to upgrade to two outputs
 
         # --- get new scaler from enriched training set, rescale them with new scaler
         scaler = StandardScaler()

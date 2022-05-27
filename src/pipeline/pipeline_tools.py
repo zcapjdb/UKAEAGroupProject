@@ -169,7 +169,12 @@ def get_data(cfg,scaler=None,j=None):
     eval_dataset.scale(scaler)
 
     # --- holdout sets are from the test set
-    holdout_set = test_dataset.sample(cfg['hyperparams']['test_size'])  # holdout set
+    print('len test',len(test_dataset))
+
+    if len(test_dataset)>cfg['hyperparams']['test_size']:
+        holdout_set = test_dataset.sample(cfg['hyperparams']['test_size'])  # holdout set
+    else:
+        holdout_set = test_dataset
     holdout_classifier = copy.deepcopy(holdout_set) # copy it for classifier
     holdout_set.data = holdout_set.data.drop(holdout_set.data[holdout_set.data["stable_label"] == 0].index) # delete stable points for regressor
     if j is not None: # --- only for AL
