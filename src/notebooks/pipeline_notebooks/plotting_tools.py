@@ -119,7 +119,7 @@ def flatten_data(master_dict, out_flux: int=0, unscale=False):
             outs.extend(np.append(np.array(app),np.zeros(10000-len(app))+np.nan))
             
         val_losses.append(np.array(outs))
-
+        
         app = np.array(dic[test_key])[:,out_flux]
         test_losses.append(np.array(app))
 

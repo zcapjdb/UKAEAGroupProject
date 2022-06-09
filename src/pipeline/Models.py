@@ -156,7 +156,6 @@ class Classifier(nn.Module):
                 
                 pred_true_idx = np.where(pred_class == 1)[0]
                 pred_false_idx = np.where(pred_class == 0)[0]
-                print('Val step debug:',y.size(),y_hat.size(), len(pred_true_idx), len(pred_false_idx))
                 if len(pred_true_idx)>0 and len(pred_false_idx)>0:
                     true_pos += torch.sum(pred_class[pred_true_idx] == y[pred_true_idx].float()).item()
                     true_neg += torch.sum(pred_class[pred_false_idx] == y[pred_false_idx].float()).item()
@@ -194,7 +193,6 @@ class Classifier(nn.Module):
         BCE = nn.BCELoss()
 
         for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
-            print('Im doing it')
             x = x.to(self.device)
             y = y.to(self.device)
             y_hat = self.forward(x.float())
@@ -213,7 +211,6 @@ class Classifier(nn.Module):
 
             pred_true_idx = np.where(pred_class == 1)[0]
             pred_false_idx = np.where(pred_class == 0)[0]
-            print('test step debug', y.size(),y_hat.size(), len(pred_true_idx), len(pred_false_idx))
             if len(pred_true_idx)>0 and len(pred_false_idx)>0:
                 true_pos += torch.sum(pred_class[pred_true_idx] == y[pred_true_idx].float()).item()
                 true_neg += torch.sum(pred_class[pred_false_idx] == y[pred_false_idx].float()).item()
@@ -635,7 +632,9 @@ def train_model(
         opt = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     losses = []
+    losses_unscaled = []
     validation_losses = []
+    validation_losses_unscaled = []
     train_accuracy = []
     val_accuracy = []
 
@@ -665,9 +664,12 @@ def train_model(
             logging.debug(f"Epoch: {epoch}")
             loss, loss_unscaled = model.train_step(train_loader, opt, epoch=epoch)
             losses.append(loss)
+            losses_unscaled.append(loss_unscaled)
+            print(losses, losses_unscaled)
 
             val_loss, val_loss_unscaled = model.validation_step(val_loader)
             validation_losses.append(val_loss)
+            validation_losses_unscaled.append(val_loss_unscaled)
 
             stopping_metric = np.asarray(validation_losses)
         # if validation metric is not better than the average of the last n losses then stop
@@ -700,7 +702,7 @@ def train_model(
         return model, [losses, train_accuracy, validation_losses, val_accuracy]
 
     elif model.type == "regressor":
-        return model, [losses, validation_losses]
+        return model, [losses, losses_unscaled, validation_losses, validation_losses_unscaled] 
 
 
 def load_model(model, save_path, device, scaler, flux, dropout):

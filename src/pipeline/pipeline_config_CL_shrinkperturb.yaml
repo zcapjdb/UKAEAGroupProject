@@ -6,7 +6,7 @@ common:
   flux:
   - efiitg_gb
   hyperparams:
-    batch_size: 512
+    batch_size: 256
     buffer_size: 200
     candidate_size: 10000
     dropout: 0.1
@@ -16,12 +16,12 @@ common:
     train_size: 5000
     valid_size: 10000
   initial_epochs: 50
-  iterations: 20
+  iterations: 25
   keep_prob: 0.25
   learning_rate: 0.001
   logging_level: DEBUG
-  patience: 30
-  retrain_classifier: false
+  patience: 35
+  retrain_classifier: true
   retrain_regressor: true
   sample_size_debug: 1
   train_epochs: 100
@@ -144,3 +144,4 @@ task4:
   save_paths:
     outputs: /home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/berilliumwall/shrink_perturb/
     plots: /home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/CL/berilliumwall/shrink_perturb/
+use_AL: true

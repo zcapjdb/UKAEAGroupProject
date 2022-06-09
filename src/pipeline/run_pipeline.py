@@ -121,6 +121,7 @@ def ALpipeline(cfg):
     # ------------------------------------------- Load or train first models ------------------------------------------
     if run_mode == 'AL'  or (run_mode=='CL' and first_CL_iter):
         models = {f:{} for f in FLUXES}
+        
         for model in PRETRAINED:
             if model == "Regressor":
                 for FLUX in FLUXES:
@@ -153,7 +154,7 @@ def ALpipeline(cfg):
                             patience=cfg["train_patience"],
                         )
                         
-                        train_loss, valid_loss = losses
+                        train_loss, train_loss_unscaled, valid_loss, valid_loss_unscaled = losses
                         output_dict["train_loss_init"].append(train_loss)
 
                             # if model == "Classifier":  --- not used currently
