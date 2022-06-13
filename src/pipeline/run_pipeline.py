@@ -239,6 +239,20 @@ def ALpipeline(cfg):
             candidates_uncerts.append(temp_uncert)
             data_idxs.append(temp_idx)
 
+        if cfg["acquisition"] == "distance_penalty":
+            logging.info(f"Using distance penalty acquisition function with alpha = {cfg['alpha']}")
+            alpha = cfg["alpha"]
+        else:
+            alpha = 1
+
+        if cfg["acquisition"] == "add_uncertainties":
+            logging.info(f"Using add uncertainties acquisition function with beta = {cfg['beta']}, gamma = {cfg['gamma']}")
+            beta = cfg["beta"]
+            gamma = cfg["gamma"]
+        else:
+            beta = 1
+            gamma = 1
+
         (
             candidates,
             candidates_uncert_before,
@@ -251,6 +265,9 @@ def ALpipeline(cfg):
             idx_arrays=data_idxs,
             model=models[FLUX]["Regressor"],
             acquisition=cfg["acquisition"],
+            alpha=alpha,
+            beta=beta,
+            gamma=gamma,
         )
 
         logging.debug(f"Number of most uncertain {len(data_idx)}")
@@ -483,6 +500,11 @@ if __name__=='__main__':
     parser.add_argument("--train_size", default=None, required=False, type=int)
     parser.add_argument("--candidate_size", default=None, required=False, type=int)
     parser.add_argument("--acquisition", default=None, required=False)
+    parser.add_argument("--alpha", default=None, required=False, type=float)
+    parser.add_argument("--beta", default=None, required=False, type=float)
+    parser.add_argument("--gamma", default=None, required=False, type=float)
+    parser.add_argument("--Nbootstraps", default=None, required=False, type=int)
+    parser.add_argument("--iterations", default=None, required=False, type=int)
 
     args = parser.parse_args()
 
@@ -512,6 +534,19 @@ if __name__=='__main__':
     if args.acquisition is not None: 
         cfg["acquisition"] = args.acquisition
 
+    if args.alpha is not None:
+        cfg["alpha"] = args.alpha
+    if args.beta is not None:
+        cfg["beta"] = args.beta
+    if args.gamma is not None:
+        cfg["gamma"] = args.gamma
+
+    if args.Nbootstraps is not None:
+        cfg["Nbootstraps"] = args.Nbootstraps
+
+    if args.iterations is not None:
+        cfg["iterations"] = args.iterations
+
 
     Nbootstraps = cfg['Nbootstraps']        
     lam = cfg["hyperparams"]["lambda"]
@@ -522,7 +557,7 @@ if __name__=='__main__':
 
     retrain = cfg["retrain_classifier"]
     if Nbootstraps>1:
-        seeds = np.arange(Nbootstraps).astype(int)
+        seeds = np.random.randint(0,2**32-1, size = Nbootstraps) #np.arange(Nbootstraps).astype(int)
         inp = []
         for s in seeds:
             inp.append([s,cfg, SAVE_PATHS["outputs"], SAVE_PATHS["plots"]])

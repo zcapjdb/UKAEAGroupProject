@@ -523,6 +523,8 @@ def get_most_uncertain(
     plot: bool = True,
     acquisition: str = "add_uncertainties",
     alpha: float = 1,
+    beta: float = 1,
+    gamma: float = 1,
 ):
 
     """
@@ -566,7 +568,9 @@ def get_most_uncertain(
             total_std = out_stds[0, :]
 
         else:
-            total_std = np.sum(out_stds, axis=0)
+            # sum uncertainties weighted by beta and gamma
+            total_std = beta * out_stds[0, :] + gamma * out_stds[1, :]
+            #total_std = np.sum(out_stds, axis=0)
 
         pred_array = np.stack(pred_list, axis=0)
 
