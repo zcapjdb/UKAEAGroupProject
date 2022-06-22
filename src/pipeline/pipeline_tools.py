@@ -180,13 +180,16 @@ def get_data(cfg,scaler=None,apply_scaler=True,j=None):
         )
         
     # --- train sets
-    train_sample = train_regressor.sample(cfg['hyperparams']['train_size'])
+    if len(train_regressor)>cfg['hyperparams']['train_size']:
+        train_sample = train_regressor.sample(cfg['hyperparams']['train_size'])
+    else:
+        train_sample = copy.deepcopy(train_regressor)
 
     # --- holdout sets are from the test set
     if len(test_dataset)>cfg['hyperparams']['test_size']:
         holdout_set = test_dataset.sample(cfg['hyperparams']['test_size'])  # holdout set
     else:
-        holdout_set = test_dataset
+        holdout_set = copy.deepcopy(test_dataset)
     holdout_classifier = copy.deepcopy(holdout_set) # copy it for classifier
     holdout_set.data = holdout_set.data.drop(holdout_set.data[holdout_set.data["stable_label"] == 0].index) # delete stable points for regressor
     if j is not None: # --- only for CL
@@ -202,7 +205,10 @@ def get_data(cfg,scaler=None,apply_scaler=True,j=None):
     eval_regressor.data = eval_regressor.data.drop(eval_regressor.data[eval_regressor.data["stable_label"] == 0].index)
     valid_dataset = eval_regressor.sample(cfg['hyperparams']['valid_size']) # --- valid for regressor
     valid_classifier = eval_dataset.sample(cfg['hyperparams']['valid_size'])  # --- valid for classifier, must come from original eval
-    train_classifier = train_classifier.sample(cfg['hyperparams']['train_size'])
+    if len(train_classifier)>cfg['hyperparams']['train_size']:
+        train_classifier = train_classifier.sample(cfg['hyperparams']['train_size'])
+    else:
+        pass
 
     # --- unlabelled pool is from the evaluation set minus the validation set (note, I'm not using "validation" and "evaluation" as synonyms)
     eval_dataset.remove(valid_dataset.data.index) 

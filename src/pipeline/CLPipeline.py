@@ -35,8 +35,8 @@ def downsample(cfg,data,mem_replay):
     print('==============')
     print('before', cfg['hyperparams']['train_size'],cfg['hyperparams']['valid_size'],cfg['hyperparams']['test_size'] )
     train_size = int(cfg['hyperparams']['train_size']*mem_replay)
-    val_size = int(cfg['hyperparams']['valid_size']*mem_replay)   # TODO replace with holdout size
-    test_size = int(cfg['hyperparams']['test_size']*mem_replay)
+    val_size = int(cfg['hyperparams']['valid_size']*mem_replay)   
+    test_size = int(cfg['hyperparams']['test_size'])
     print('==============')
     print('==============')
     print('==============')
@@ -44,12 +44,30 @@ def downsample(cfg,data,mem_replay):
     print('==============')
     print('==============')    
     print('after', train_size, val_size,test_size, 'holdout',len(data[4]))
-    train_sample = data[0].sample(train_size)
-    train_classifier = data[1].sample(train_size)
-    valid_dataset =  data[2].sample(val_size)
-    valid_classifier =  data[3].sample(val_size)
-    holdout_set =  data[4].sample(int(len(data[4])*mem_replay))
-    holdout_classifier =  data[5].sample(int(len(data[5])*mem_replay))
+    if len(data[0])>train_size:
+        train_sample = data[0].sample(train_size)
+    else:
+        train_sample = data[0]
+    if len(data[1])>train_size:
+        train_classifier = data[1].sample(train_size)
+    else: 
+        train_classifier =  data[1]
+    if len(data[2])>val_size:
+        valid_dataset =  data[2].sample(val_size)
+    else:
+        valid_dataset = data[2]
+    if len(data[3])>val_size:
+        valid_classifier =  data[3].sample(val_size)
+    else:
+        valid_classifier = data[3]
+    if len(data[4])>test_size:    
+        holdout_set =  data[4].sample(int(len(data[4])))
+    else:
+        holdout_set = data[4]
+    if len(data[5])>test_size:
+        holdout_classifier =  data[5].sample(int(len(data[5])))
+    else:
+        holdout_classifier = data[5]
     return train_sample, train_classifier, valid_dataset, valid_classifier,  holdout_set, holdout_classifier
 
 def apply_shrink_perturb(models,lambda_task):
@@ -59,17 +77,17 @@ def apply_shrink_perturb(models,lambda_task):
     return models
 
 def get_forget_dict(saved_test,models,j,scaler,cfg):
-    forget_dict = {}
+    out_dict = {}
     for k in saved_test.keys():
         saved_test[k]['save_regr'].scale(scaler)   # --- scale all test data saved so far with current scaler
         saved_test[k]['save_class'].scale(scaler)   # --- scale all test data saved so far with current scaler
         _, regr_test_loss,regr_test_loss_unscaled, regr_test_loss_unscaled_norm = models[cfg['flux'][0]]['Regressor'].predict(saved_test[k]['save_regr'], unscale=True) # ToDo====>>> generalise to two outputs
         _, holdout_class_losses = models[cfg['flux'][0]]['Classifier'].predict(saved_test[k]['save_class'])
-        forget_dict.update({f'regression_{k}_model{j}':{'regr_test_loss':regr_test_loss,
+        out_dict.update({f'regression_{k}_model{j}':{'regr_test_loss':regr_test_loss,
                                                         'regr_test_loss_unscaled':regr_test_loss_unscaled, 
                                                         'regr_test_loss_unscaled_norm': regr_test_loss_unscaled_norm}
                                                         })
-        forget_dict.update({f'classification_{k}_model{j}': {'holdout_class_loss':holdout_class_losses[0],
+        out_dict.update({f'classification_{k}_model{j}': {'holdout_class_loss':holdout_class_losses[0],
                                                             'holdout_class_acc':holdout_class_losses[1],
                                                             'holdout_class_precision':holdout_class_losses[2],
                                                             'holdout_class_recall': holdout_class_losses[3],
@@ -78,7 +96,7 @@ def get_forget_dict(saved_test,models,j,scaler,cfg):
                                                         })
         saved_test[k]['save_regr'].scale(scaler,unscale=True)   # --- scale all test data saved so far with current scaler
         saved_test[k]['save_class'].scale(scaler, unscale=True)   # --- scale all test data saved so far with current scaler            
-    return forget_dict
+    return out_dict
 
 
 def CLPipeline(arg):
@@ -253,13 +271,37 @@ def CL_and_AL_Pipeline(arg):
             valid_classifier.add(valid_classifier_new)
             holdout_set.add(holdout_set_new)
             holdout_classifier.add(holdout_classifier_new)
-            unlabelled_pool = unlabelled_pool_new # --- not added, only data from the new task arrives
+            unlabelled_pool = copy.deepcopy(unlabelled_pool_new) # --- not added, only data from the new task arrives
 
             for flux in models.keys():
                 models[flux]['Regressor'].scaler = scaler            
                 
             first_iter = False
-            
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('UNLABELLED POOL SIZE div ACQUISITION ',len(unlabelled_pool)/10000)
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+        print('33333333333333333333333333333333333333333333333')
+
+        maxiter = int(len(unlabelled_pool)/10000)
+        if maxiter < cfg['iterations']:
+            print('PROBLEM!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+            cfg['iterations'] = maxiter
+
         inp = [seed,cfg,save_outputs_path,save_plots_path, 
             {'scaler':scaler,
             'train':{'train_class':train_classifier,'train_regr':train_sample},

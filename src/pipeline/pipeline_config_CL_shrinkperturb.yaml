@@ -1,7 +1,7 @@
 CL_method: shrink_perturb
 common:
   MC_dropout_runs: 50
-  Nbootstraps: 15
+  Nbootstraps: 1
   acquisition: individual
   flux:
   - efiitg_gb
@@ -16,7 +16,7 @@ common:
     train_size: 5000
     valid_size: 10000
   initial_epochs: 50
-  iterations: 25
+  iterations: 35
   keep_prob: 0.25
   learning_rate: 0.001
   logging_level: DEBUG
