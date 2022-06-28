@@ -216,6 +216,7 @@ def ALpipeline(cfg):
  
     for i in range(cfg["iterations"]):
         logging.info(f"Iteration: {i+1}\n")
+        logging.info('unlabelled pool: ',len(unlabelled_pool))
         epochs = cfg["initial_epochs"] * (i + 1)
         
         # --- at each iteration the labelled pool is updated - 10_000 samples are taken out, the most uncertain are put back in
@@ -310,7 +311,9 @@ def ALpipeline(cfg):
         holdout_set.scale(scaler, unscale=True)
         holdout_classifier.scale(scaler, unscale=True)
         if classifier_buffer is not None:
-            classifier_buffer.scale(scaler, unscale=True)
+            print('len classifier buffer at unscale:',len(classifier_buffer))
+            if len(classifier_buffer)>0:
+                    classifier_buffer.scale(scaler, unscale=True)
 
         # --- train data is enriched by new unstable candidate points
         logging.info(f"Enriching training data with {len(candidates)} new points")
@@ -329,7 +332,9 @@ def ALpipeline(cfg):
         holdout_set.scale(scaler)
         holdout_classifier.scale(scaler)
         if classifier_buffer is not None:
-            classifier_buffer.scale(scaler)
+            if len(classifier_buffer)>0:            
+                classifier_buffer.scale(scaler)
+                
              
         # --- update scaler in the models
         for FLUX in FLUXES:
@@ -338,6 +343,7 @@ def ALpipeline(cfg):
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
+                classifier_buffer.scale(scaler)
                 logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
                 # retrain the classifier on the misclassified points
                 losses, accs = pt.retrain_classifier(

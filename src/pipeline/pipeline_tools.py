@@ -179,6 +179,7 @@ def get_data(cfg,scaler=None,apply_scaler=True,j=None):
             scale=False,
         )
         
+    print('size of train, test, val', len(train_regressor),len(test_dataset), len(eval_dataset))
     # --- train sets
     if len(train_regressor)>cfg['hyperparams']['train_size']:
         train_sample = train_regressor.sample(cfg['hyperparams']['train_size'])

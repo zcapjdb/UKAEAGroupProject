@@ -27,47 +27,12 @@ import copy
 
     
 def downsample(cfg,data,mem_replay):
-    print('==============')
-    print('==============')
-    print('==============')
-    print('==============')
-    print('==============')
-    print('==============')
-    print('before', cfg['hyperparams']['train_size'],cfg['hyperparams']['valid_size'],cfg['hyperparams']['test_size'] )
-    train_size = int(cfg['hyperparams']['train_size']*mem_replay)
-    val_size = int(cfg['hyperparams']['valid_size']*mem_replay)   
-    test_size = int(cfg['hyperparams']['test_size'])
-    print('==============')
-    print('==============')
-    print('==============')
-    print('==============')
-    print('==============')
-    print('==============')    
-    print('after', train_size, val_size,test_size, 'holdout',len(data[4]))
-    if len(data[0])>train_size:
-        train_sample = data[0].sample(train_size)
-    else:
-        train_sample = data[0]
-    if len(data[1])>train_size:
-        train_classifier = data[1].sample(train_size)
-    else: 
-        train_classifier =  data[1]
-    if len(data[2])>val_size:
-        valid_dataset =  data[2].sample(val_size)
-    else:
-        valid_dataset = data[2]
-    if len(data[3])>val_size:
-        valid_classifier =  data[3].sample(val_size)
-    else:
-        valid_classifier = data[3]
-    if len(data[4])>test_size:    
-        holdout_set =  data[4].sample(int(len(data[4])))
-    else:
-        holdout_set = data[4]
-    if len(data[5])>test_size:
-        holdout_classifier =  data[5].sample(int(len(data[5])))
-    else:
-        holdout_classifier = data[5]
+    train_sample = data[0].sample( int(len(data[0])*mem_replay))
+    train_classifier = data[1].sample(int(len(data[1])*mem_replay))
+    valid_dataset =  data[2].sample(int(len(data[2])*mem_replay))
+    valid_classifier =  data[3].sample(int(len(data[3])*mem_replay))
+    holdout_set =  data[4].sample(int(len(data[4])*mem_replay))
+    holdout_classifier =  data[5].sample(int(len(data[5])*mem_replay))
     return train_sample, train_classifier, valid_dataset, valid_classifier,  holdout_set, holdout_classifier
 
 def apply_shrink_perturb(models,lambda_task):
@@ -262,8 +227,8 @@ def CL_and_AL_Pipeline(arg):
             saved_test_data.update(saved_tests)
 
             # --- downsample data from previous tasks, otherwise too much imbalance. 
-            data = [train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier]
-            train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier =  downsample(cfg, data, mem_replay)
+          #  data = [train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier]
+          #  train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier =  downsample(cfg, data, mem_replay)
 
 #                train_sample.add(train_sample_new) # ToDo====>>>>  if train sample is available, make sure data is scaled accordingly!
 #                train_classifier.add(train_classifier_new)
@@ -277,27 +242,9 @@ def CL_and_AL_Pipeline(arg):
                 models[flux]['Regressor'].scaler = scaler            
                 
             first_iter = False
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('UNLABELLED POOL SIZE div ACQUISITION ',len(unlabelled_pool)/10000)
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
-        print('33333333333333333333333333333333333333333333333')
 
         maxiter = int(len(unlabelled_pool)/10000)
+        print('maxiter,', maxiter)
         if maxiter < cfg['iterations']:
             print('PROBLEM!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
             cfg['iterations'] = maxiter
@@ -375,6 +322,8 @@ if __name__=='__main__':
     task3.update(common)
     task4.update(common)
 
+    print('---------------- RUNNING ----------------')
+    print(common)
     config_tasks = [task1,task2,task3,task4]
     CL_mode = cfg['CL_method']
     mem_replay = cfg['mem_replay']
