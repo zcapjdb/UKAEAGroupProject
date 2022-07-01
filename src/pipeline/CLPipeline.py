@@ -347,6 +347,6 @@ if __name__=='__main__':
     with Pool(Nbootstraps) as p:
         outputs = p.map(func,inp)
    
-    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lambda_task}_{acquisition}_replaysize_{mem_replay}_useAL_{use_AL}.pkl', 'wb') as f:
+    with open(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/CL/bootstrap/bootstrapped_CL_{CL_mode}_lam_{lambda_task}_{acquisition}_replaysize_{mem_replay}_useAL_{use_AL}_extra_aid.pkl', 'wb') as f:
         pkl.dump(outputs, f)
 

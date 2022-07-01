@@ -226,14 +226,17 @@ def ALpipeline(cfg):
 
         # --- See Issue #37 --- candidates are only those that the classifier selects as unstable.
         if CLASSIFIER: # if we are using the classifier use it to remove stable labels
-            candidates = pt.select_unstable_data(
+            candidates_ = pt.select_unstable_data(
                 candidates,
                 batch_size=batch_size,
                 classifier=models[FLUXES[0]]["Classifier"],
                 device=device,
             ) 
             logging.info(f"{len(candidates)} candidates selected")
-
+            # --- sample some points at random, without classifier pre screening
+            extra_aid_for_cls = copy.deepcopy(candidates)
+            extra_aid_for_cls.remove(candidates_.data.index)
+            extra_aid_for_cls.sample(100) 
 
         # ---  get most uncertain candidate inputs as decided by regressor   --- NEW AL FRAMEWORK GOES HERE
         candidates_uncerts, data_idxs = [], []
@@ -291,9 +294,11 @@ def ALpipeline(cfg):
                 misclassified_data = md.ITGDatasetDF(
                     misclassified_data, FLUXES[0], keep_index=True
                 )                             
-                classifier_buffer.add(misclassified_data)   
+                classifier_buffer.add(misclassified_data)  
             logging.info(f"Misclassified data: {num_misclassified}")
             logging.info(f"Total Buffer size: {buffer_size}")
+            logging.info(f"Candidates to be labelled: {len(candidates)}")
+            
         
         elif len(FLUXES)>1:
             # at this stage we know which of the inputs give a stable label or not so we can drop the stable values
@@ -310,6 +315,7 @@ def ALpipeline(cfg):
         valid_classifier.scale(scaler,unscale=True)
         holdout_set.scale(scaler, unscale=True)
         holdout_classifier.scale(scaler, unscale=True)
+        extra_aid_for_cls.scale(scaler, unscale=True)
         if classifier_buffer is not None:
             print('len classifier buffer at unscale:',len(classifier_buffer))
             if len(classifier_buffer)>0:
@@ -326,6 +332,7 @@ def ALpipeline(cfg):
         scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
         train_sample.scale(scaler)
         train_classifier.scale(scaler)
+        extra_aid_for_cls.scale(scaler)
         unlabelled_pool.scale(scaler)
         valid_dataset.scale(scaler)
         valid_classifier.scale(scaler)
@@ -341,43 +348,59 @@ def ALpipeline(cfg):
             for model in PRETRAINED:
                 models[FLUX][model].scaler = scaler
         # --- Classifier retraining:
-        if cfg["retrain_classifier"]:
+        if cfg["retrain_classifier"]: 
+
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
-                classifier_buffer.scale(scaler)
                 logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
                 # retrain the classifier on the misclassified points
+                train_classifier.add(classifier_buffer)
                 losses, accs = pt.retrain_classifier(
-                    classifier_buffer,
-                    train_classifier,
-                    valid_classifier,
-                    models[FLUXES[0]]["Classifier"],
-                    batch_size=batch_size,
-                    epochs=epochs,
-                    lam=lam,
-                    patience=cfg["patience"],
-                )
-
-                output_dict["class_train_loss"].append(losses[0])
-                output_dict["class_val_loss"].append(losses[1])
-                output_dict["class_missed_loss"].append(losses[2])
-                output_dict["class_train_acc"].append(accs[0])
-                output_dict["class_val_acc"].append(accs[1])
-                output_dict["class_missed_acc"].append(accs[2])
-
-                _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
-                output_dict['holdout_class_loss'].append(holdout_class_losses[0])
-                output_dict['holdout_class_acc'].append(holdout_class_losses[1])
-                output_dict['holdout_class_precision'].append(holdout_class_losses[2])
-                output_dict['holdout_class_recall'].append(holdout_class_losses[3])
-                output_dict['holdout_class_f1'].append(holdout_class_losses[4])
-                output_dict['holdout_class_auc'].append(holdout_class_losses[5])
-
-                # record which iterations the classifier was retrained on
-                output_dict['class_retrain_iterations'].append(i)
-
+                                classifier_buffer,
+                                train_classifier,
+                                valid_classifier,
+                                models[FLUXES[0]]["Classifier"],
+                                batch_size=batch_size,
+                                epochs=epochs,
+                                lam=lam,
+                                patience=cfg["patience"],
+                            )
                 # reset buffer
                 classifier_buffer = None
                 buffer_size = 0
+            elif i<5: # --- hyperparameter
+                classifier_buffer.add(extra_aid_for_cls)
+                train_classifier.add(classifier_buffer)
+                losses, accs = pt.retrain_classifier(
+                                classifier_buffer,
+                                train_classifier,
+                                valid_classifier,
+                                models[FLUXES[0]]["Classifier"],
+                                batch_size=batch_size,
+                                epochs=epochs,
+                                lam=lam,
+                                patience=cfg["patience"],
+                            )               
+        
+
+            output_dict["class_train_loss"].append(losses[0])
+            output_dict["class_val_loss"].append(losses[1])
+            output_dict["class_missed_loss"].append(losses[2])
+            output_dict["class_train_acc"].append(accs[0])
+            output_dict["class_val_acc"].append(accs[1])
+            output_dict["class_missed_acc"].append(accs[2])
+
+            _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
+            output_dict['holdout_class_loss'].append(holdout_class_losses[0])
+            output_dict['holdout_class_acc'].append(holdout_class_losses[1])
+            output_dict['holdout_class_precision'].append(holdout_class_losses[2])
+            output_dict['holdout_class_recall'].append(holdout_class_losses[3])
+            output_dict['holdout_class_f1'].append(holdout_class_losses[4])
+            output_dict['holdout_class_auc'].append(holdout_class_losses[5])
+
+            # record which iterations the classifier was retrained on
+            output_dict['class_retrain_iterations'].append(i)
+
+
 
         holdout_pred_before = []
         train_losses, val_losses = [], []

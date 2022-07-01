@@ -317,15 +317,15 @@ def retrain_classifier(
     """
 
     logging.info("Retraining classifier...\n")
-    data_size = len(misclassified_dataset) + len(training_dataset)
-    logging.log(15, f"Training on {data_size} points")
 
     train = copy.deepcopy(training_dataset)
-    train.add(misclassified_dataset)
+    if misclassified_dataset is not None:
+        train.add(misclassified_dataset)
 
     # create data loaders
     train_loader = pandas_to_numpy_data(train, batch_size=batch_size, shuffle=True)
-    missed_loader = pandas_to_numpy_data(misclassified_dataset, shuffle=True)
+    if misclassified_dataset is not None:
+        missed_loader = pandas_to_numpy_data(misclassified_dataset, shuffle=True)
     valid_loader = pandas_to_numpy_data(valid_dataset)
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
@@ -372,11 +372,14 @@ def retrain_classifier(
             )
             val_loss.append(validation_loss)
             val_acc.append(validation_accuracy)
-
-            logging.debug(f"Evaluating on just the misclassified points")
-            miss_loss, miss_acc = classifier.validation_step(missed_loader)
-            missed_loss.append(miss_loss)
-            missed_acc.append(miss_acc)
+            if misclassified_dataset is not None:
+                logging.debug(f"Evaluating on just the misclassified points")
+                miss_loss, miss_acc = classifier.validation_step(missed_loader)
+                missed_loss.append(miss_loss)
+                missed_acc.append(miss_acc)
+            else:
+                missed_loss.append(np.nan)
+                missed_acc.append(np.nan)
 
         if len(val_loss) > patience:
             if np.mean(val_acc[-patience:]) > val_acc[-1]:

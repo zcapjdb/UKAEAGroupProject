@@ -4,17 +4,17 @@ import pandas as pd
 import numpy as np
 
 
-def get_data(path):
+def get_data(path, train_key, val_key, test_key):
     out_ = {}
     with open(path, "rb") as f:
         dic = pkl.load(f)
     L = len(dic['out'])            
-    out_['retrain_losses'] = [dic['out'][i]['retrain_losses']for i in range(L)] # L models
-    out_['retrain_val_losses'] = [dic['out'][i]['retrain_val_losses'] for i in range(len(dic['out']))]
-    out_['post_test_loss'] = [dic['out'][i]['post_test_loss'] for i in range(len(dic['out']))]
+    out_[train_key] = [dic['out'][i][train_key]for i in range(L)] # L models
+    out_[val_key] = [dic['out'][i][val_key] for i in range(len(dic['out']))]
+    out_[test_key] = [dic['out'][i][test_key] for i in range(len(dic['out']))]
 
-    out_['class_train_acc'] = [dic['out'][i]['class_train_acc'] for i in range(len(dic['out']))]
-    out_['class_val_acc'] = [dic['out'][i]['class_val_acc'] for i in range(len(dic['out']))]
+#    out_['class_train_acc'] = [dic['out'][i]['class_train_acc'] for i in range(len(dic['out']))]
+#    out_['class_val_acc'] = [dic['out'][i]['class_val_acc'] for i in range(len(dic['out']))]
     return out_        
 
 def get_forgetting(master_dic,model='regressor'):
@@ -83,21 +83,20 @@ def final_forgetting(df):
 
 def get_losses_nonbootstrapped(dic):
     train = []
-    for d in dic['retrain_losses']:
+    for d in dic[train_key]:
         train.extend(d[0])
     val = []
-    for d in dic['retrain_val_losses']:
+    for d in dic[val_key]:
         val.extend(d[0])
-    test  = np.array(dic['post_test_loss']).flatten()
+    test  = np.array(dic[test_key]).flatten()
     return train, val, test
 
-def flatten_data(master_dict, out_flux: int=0, unscale=False):
+
+def flatten_data_regr(master_dict, train_key, val_key, test_key, out_flux: int=0, unscale=False):
     train_losses = []
     val_losses = []
     test_losses =[]
-    train_key = 'retrain_losses'
-    val_key = 'retrain_val_losses'
-    test_key = 'post_test_loss'
+
     if unscale:
         train_key = f'{train_key}_unscaled'
         val_key = f'{val_key}_unscaled'
@@ -125,12 +124,45 @@ def flatten_data(master_dict, out_flux: int=0, unscale=False):
 
     return train_losses, val_losses, test_losses
 
-def get_losses_CL(master_dict, out_flux: int = 0, unscale=False):
+
+def flatten_data_cls(master_dict, train_key, val_key, test_key):
+    train_losses = []
+    val_losses = []
+    test_losses =[]
+
+
+    for i in range(len(master_dict)):
+        
+        dic = master_dict[i]['outputs']['task3']
+           
+        outs = []
+        for o in dic[train_key]:
+            app = o
+            outs.extend(np.append(np.array(app),np.zeros(10000-len(app))+np.nan))
+                
+        train_losses.append(np.array(outs))
+
+        outs = []
+        for o in dic[val_key]:
+            app = o
+            outs.extend(np.append(np.array(app),np.zeros(10000-len(app))+np.nan))
+            
+        val_losses.append(np.array(outs))
+        
+        app = np.array(dic[test_key])
+        test_losses.append(np.array(app))
+
+    return train_losses, val_losses, test_losses    
+
+def get_losses_CL(master_dict,  train_key, val_key, test_key,out_flux: int = 0, unscale=False, type='regr'):
     '''
     out_flux should be 0 for the leading flux and 1 for the derived flux
     '''
 
-    train_losses, val_losses, test_losses = flatten_data(master_dict,out_flux=out_flux,unscale=unscale)
+    if type == 'regr':
+        train_losses, val_losses, test_losses = flatten_data_regr(master_dict, train_key, val_key, test_key,out_flux=out_flux,unscale=unscale)
+    elif type == 'cls':
+        train_losses, val_losses, test_losses = flatten_data_cls(master_dict, train_key, val_key, test_key)
     train_mean = np.nanmean(np.array(train_losses), axis=0)
     train_std = np.nanstd(np.array(train_losses),axis=0)
     val_mean =  np.nanmean(np.array(val_losses), axis=0)
@@ -140,16 +172,16 @@ def get_losses_CL(master_dict, out_flux: int = 0, unscale=False):
     return train_mean ,train_std, val_mean, val_std, test_mean , test_std  #      
 
 
-def get_losses(dic):
+def get_losses(dic, train_key, val_key, test_key,):
     train_losses = []
 
-    if len(np.shape(dic['retrain_losses'])) == 3:
-        dic['retrain_losses'] = np.squeeze(dic['retrain_losses'])
-    if len(np.shape(dic['retrain_val_losses'])) == 3:
-        dic['retrain_val_losses'] = np.squeeze(dic['retrain_val_losses'])     
-    if len(np.shape(dic['post_test_loss'])) == 3:
-        dic['post_test_loss'] = np.squeeze(dic['post_test_loss'])     
-    for o in dic['retrain_losses']:
+    if len(np.shape(dic[train_key])) == 3:
+        dic[train_key] = np.squeeze(dic[train_key])
+    if len(np.shape(dic[val_key])) == 3:
+        dic[val_key] = np.squeeze(dic[val_key])     
+    if len(np.shape(dic[test_key])) == 3:
+        dic[test_key] = np.squeeze(dic[test_key])     
+    for o in dic[train_key]:
         L = 0
         outs = []
         for oo  in o:
@@ -158,7 +190,7 @@ def get_losses(dic):
         train_losses.append(np.append(np.array(outs),np.zeros(2000-len(outs))+np.nan))
 
     val_losses = []
-    for o in dic['retrain_val_losses']:
+    for o in dic[val_key]:
         L = 0
         outs = []
         for oo  in o:
@@ -167,7 +199,7 @@ def get_losses(dic):
         val_losses.append(np.append(np.array(outs),np.zeros(2000-len(outs))+np.nan))
 
     test_losses =[]
-    for o in dic['post_test_loss']:
+    for o in dic[test_key]:
         test_losses.append(np.append(np.array(o),np.zeros(2000-len(o))+np.nan))
     train_mean = np.nanmean(np.array(train_losses), axis=0)
     train_std = np.nanstd(np.array(train_losses),axis=0)

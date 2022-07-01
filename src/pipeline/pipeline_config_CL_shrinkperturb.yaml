@@ -2,7 +2,7 @@ CL_method: shrink_perturb
 common:
   MC_dropout_runs: 50
   Nbootstraps: 10
-  acquisition: random
+  acquisition: individual
   flux:
   - efiitg_gb
   hyperparams:
@@ -16,7 +16,7 @@ common:
     train_size: 5000
     valid_size: 10000
   initial_epochs: 50
-  iterations: 10
+  iterations: 25
   keep_prob: 0.25
   learning_rate: 0.001
   logging_level: DEBUG
@@ -26,8 +26,8 @@ common:
   sample_size_debug: 1
   train_epochs: 50
   train_patience: 10
-lambda_task: 0.2
-mem_replay: 0.4
+lambda_task: 1
+mem_replay: 1
 task1:
   data:
     test: /home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/carbonwall/Lmode/test_data_clipped.pkl
