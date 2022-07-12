@@ -2,6 +2,7 @@ from email.policy import default
 import coloredlogs, verboselogs, logging
 from multiprocessing import Pool
 import numpy as np
+import matplotlib.pylab as plt
 from sklearn.preprocessing import StandardScaler
 import os
 import copy
@@ -63,6 +64,7 @@ def ALpipeline(cfg):
             unlabelled_pool = cfg[4]['unlabelled']   
             models = cfg[5]
             first_CL_iter = cfg[6]
+            j = cfg[7]
             cfg = cfg[1]
             get_seeds(seed)
         else:
@@ -112,6 +114,7 @@ def ALpipeline(cfg):
     if run_mode == 'AL':
         train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, _, scaler = pt.get_data(cfg,j=0)
     elif run_mode == 'CL':
+        print('RUNNING IN CL MODE')
         pass # --- data is passed from CL pipeline, see start of the function
 
 
@@ -302,18 +305,19 @@ def ALpipeline(cfg):
 
         # --- set up retraining by rescaling all points according to new training data --------------------
        # --- unscale all datasets, 
-        candidates.scale(scaler, unscale=True)
-        train_sample.scale(scaler, unscale=True)
-        train_classifier.scale(scaler,unscale=True)
-        unlabelled_pool.scale(scaler, unscale=True)
-        valid_dataset.scale(scaler, unscale=True)
-        valid_classifier.scale(scaler,unscale=True)
-        holdout_set.scale(scaler, unscale=True)
-        holdout_classifier.scale(scaler, unscale=True)
-        if classifier_buffer is not None:
-            print('len classifier buffer at unscale:',len(classifier_buffer))
-            if len(classifier_buffer)>0:
-                    classifier_buffer.scale(scaler, unscale=True)
+       # candidates.scale(scaler, unscale=True)
+       # train_sample.scale(scaler, unscale=True)
+       # train_classifier.scale(scaler,unscale=True)
+       # unlabelled_pool.scale(scaler, unscale=True)
+       # valid_dataset.scale(scaler, unscale=True)
+       # valid_classifier.scale(scaler,unscale=True)
+       # holdout_set.scale(scaler, unscale=True)
+       # holdout_classifier.scale(scaler, unscale=True)
+
+       # if classifier_buffer is not None:
+       #     print('len classifier buffer at unscale:',len(classifier_buffer))
+       #     if len(classifier_buffer)>0:
+       #             classifier_buffer.scale(scaler, unscale=True)
 
         # --- train data is enriched by new unstable candidate points
         logging.info(f"Enriching training data with {len(candidates)} new points")
@@ -321,29 +325,31 @@ def ALpipeline(cfg):
         # ---  compute the mean for the loss function
         mean_train = np.mean(train_sample.data['efiitg_gb']) # ---- ToDo =====>>>>> need to upgrade to two outputs
 
+       
         # --- get new scaler from enriched training set, rescale them with new scaler
-        scaler = StandardScaler()
-        scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
-        train_sample.scale(scaler)
-        train_classifier.scale(scaler)
-        unlabelled_pool.scale(scaler)
-        valid_dataset.scale(scaler)
-        valid_classifier.scale(scaler)
-        holdout_set.scale(scaler)
-        holdout_classifier.scale(scaler)
-        if classifier_buffer is not None:
-            if len(classifier_buffer)>0:            
-                classifier_buffer.scale(scaler)
+        # scaler = StandardScaler()
+        #scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
+        #train_sample.scale(scaler)
+        #train_classifier.scale(scaler)
+        #unlabelled_pool.scale(scaler)
+        #valid_dataset.scale(scaler)
+        #valid_classifier.scale(scaler)
+        #holdout_set.scale(scaler)
+        #holdout_classifier.scale(scaler)
+        #if classifier_buffer is not None:
+        #    if len(classifier_buffer)>0:            
+        #        classifier_buffer.scale(scaler)
                 
              
         # --- update scaler in the models
-        for FLUX in FLUXES:
-            for model in PRETRAINED:
-                models[FLUX][model].scaler = scaler
+        #for FLUX in FLUXES:
+        #    for model in PRETRAINED:
+        #        models[FLUX][model].scaler = scaler
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
-                classifier_buffer.scale(scaler)
+                #classifier_buffer.scale(scaler)
+                train_classifier.add(classifier_buffer)
                 logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
                 # retrain the classifier on the misclassified points
                 losses, accs = pt.retrain_classifier(
@@ -469,6 +475,8 @@ def ALpipeline(cfg):
         output_dict["post_test_loss"].append(holdout_loss)
         output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
         output_dict["post_test_loss_unscaled_norm"].append(holdout_loss_unscaled_norm)
+        output_dict["scale_scaler"].append(models[FLUXES[0]]["Regressor"].scaler.scale_)
+        output_dict["mean_scaler"].append(models[FLUXES[0]]["Regressor"].scaler.mean_)
 
 #        try:
 #            output_dict["mse_before"].append(
@@ -572,12 +580,12 @@ if __name__=='__main__':
 
     if args.output_dir is None:
         total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
-        output_dir = f"../.../outputs/{total}_{Ntrain}/" # --- next time we should make sure we have consistent paths to avoid this
+        output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/" # --- next time we should make sure we have consistent paths to avoid this
 
     else:
         output_dir = args.output_dir
     #output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
+    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_noscaling_during_AL.pkl","wb") as f:
         pickle.dump(output,f)               

@@ -4,6 +4,7 @@ import copy
 import pickle as pkl
 from multiprocessing import Pool
 #import comet_ml import Experiment
+import matplotlib.pylab as plt
 from sklearn.preprocessing import StandardScaler
 
 import pipeline.pipeline_tools as pt
@@ -27,13 +28,13 @@ import copy
 
     
 def downsample(cfg,data,mem_replay):
-    train_sample = data[0].sample( int(len(data[0])*mem_replay))
+    train_sample_2 = data[0].sample( int(len(data[0])*mem_replay))
     train_classifier = data[1].sample(int(len(data[1])*mem_replay))
     valid_dataset =  data[2].sample(int(len(data[2])*mem_replay))
     valid_classifier =  data[3].sample(int(len(data[3])*mem_replay))
     holdout_set =  data[4].sample(int(len(data[4])*mem_replay))
     holdout_classifier =  data[5].sample(int(len(data[5])*mem_replay))
-    return train_sample, train_classifier, valid_dataset, valid_classifier,  holdout_set, holdout_classifier
+    return train_sample_2, train_classifier, valid_dataset, valid_classifier,  holdout_set, holdout_classifier
 
 def apply_shrink_perturb(models,lambda_task):
     for flux in models.keys():
@@ -94,7 +95,7 @@ def CLPipeline(arg):
         if CL_mode!= 'shrink_perturb':
             cfg['hyperparams']['lambda'] = 1
         if j==0:
-            train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, saved_tests, scaler = pt.get_data(cfg,j=j,apply_scaler=True) # --- saved_tests is never scaled
+            train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, saved_tests, scaler = pt.get_data(cfg,j=j,apply_scaler=True) # --- saved_tests is never scaled
             saved_test_data.update(saved_tests)
 
             for FLUX in FLUXES:
@@ -113,15 +114,15 @@ def CLPipeline(arg):
 
             # --- downsample data from previous tasks, otherwise too much imbalance. 
             # ---  scaler is same as before for the following lines (to unscale), then gets updated with new data
-            data = [train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier]
-            train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier =  downsample(cfg, data, mem_replay)
+            data = [train_sample_2, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier]
+            train_sample_2, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier =  downsample(cfg, data, mem_replay)
             # --- unscale so they can be added to new (unscaled) data
-            train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier,scaler = pt.scale_data(train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier,unscale=True,scaler=scaler)
+            train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier,scaler = pt.scale_data(train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier,unscale=True,scaler=scaler)
 
-            train_sample_new, train_classifier_new, valid_dataset_new, valid_classifier_new, unlabelled_pool_new, holdout_set_new, holdout_classifier_new, saved_tests,scaler = pt.get_data(cfg, apply_scaler=False,j=j)  # --- new scaler declared here
+            train_sample_2_new, train_classifier_new, valid_dataset_new, valid_classifier_new, unlabelled_pool_new, holdout_set_new, holdout_classifier_new, saved_tests,scaler = pt.get_data(cfg, apply_scaler=False,j=j)  # --- new scaler declared here
             saved_test_data.update(saved_tests)
 
-            train_sample.add(train_sample_new) # 
+            train_sample_2.add(train_sample_2_new) # 
             train_classifier.add(train_classifier_new)
             valid_dataset.add(valid_dataset_new)   # --- in a real world situation where data is streaming this is unavailable. Need to update dynamically withi the AL pipeline.
             valid_classifier.add(valid_classifier_new)
@@ -130,7 +131,7 @@ def CLPipeline(arg):
            # unlabelled_pool = unlabelled_pool_new # --- not added, only data from the new task arrives
 
             # --- rescale by keeping memory of previous tasks -  train sample is available, data is scaled accordingly
-            train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler = pt.scale_data(train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier)
+            train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler = pt.scale_data(train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier)
 
 
         # --- train models for jth task
@@ -138,7 +139,7 @@ def CLPipeline(arg):
             models[FLUX]['Regressor'].scaler = scaler            
             models[FLUX]['Regressor'], losses = md.train_model(
                 models[FLUX]['Regressor'],
-                train_sample,
+                train_sample_2,
                 valid_dataset,
                 epochs=cfg["train_epochs"],
                 patience=cfg["train_patience"],
@@ -218,28 +219,31 @@ def CL_and_AL_Pipeline(arg):
         if CL_mode!= 'shrink_perturb':
             cfg['hyperparams']['lambda'] = 1
         if j==0:
-            train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, saved_tests, scaler = pt.get_data(cfg,j=0)
+            train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, saved_tests, scaler = pt.get_data(cfg,j=0)
             saved_test_data.update(saved_tests)
             first_iter = True  # -- ok, retain
         else:
             # --- read data and scale with scaler of previous task
-            train_sample_new, train_classifier_new, valid_dataset_new, valid_classifier_new, unlabelled_pool_new, holdout_set_new, holdout_classifier_new, saved_tests,scaler = pt.get_data(cfg, scaler=scaler,j=j)  # --- scaler gets updated during pipeline and passed here
+            train_sample_2_plot = copy.deepcopy(train_sample_2)
+            train_sample_2_plot.scale(scaler, unscale=True)
+     
+            #train_sample = copy.deepcopy(train_sample_2)
+            _,_, valid_dataset_new, valid_classifier_new, unlabelled_pool_new, holdout_set_new, holdout_classifier_new, saved_tests,_ = pt.get_data(cfg, scaler=scaler,j=j)  # --- scaler gets updated during pipeline and passed here
             saved_test_data.update(saved_tests)
-
             # --- downsample data from previous tasks, otherwise too much imbalance. 
-          #  data = [train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier]
-          #  train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier =  downsample(cfg, data, mem_replay)
+          #  data = [train_sample_2, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier]
+          #  train_sample_2, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier =  downsample(cfg, data, mem_replay)
 
-#                train_sample.add(train_sample_new) # ToDo====>>>>  if train sample is available, make sure data is scaled accordingly!
+#                train_sample_2.add(train_sample_2_new) # ToDo====>>>>  if train sample is available, make sure data is scaled accordingly!
 #                train_classifier.add(train_classifier_new)
             valid_dataset.add(valid_dataset_new)   # --- in a real world situation where data is streaming this is unavailable. Need to update dynamically withi the AL pipeline.
             valid_classifier.add(valid_classifier_new)
             holdout_set.add(holdout_set_new)
             holdout_classifier.add(holdout_classifier_new)
             unlabelled_pool = copy.deepcopy(unlabelled_pool_new) # --- not added, only data from the new task arrives
-
-            for flux in models.keys():
-                models[flux]['Regressor'].scaler = scaler            
+            
+            #for flux in models.keys():
+            #    models[flux]['Regressor'].scaler = scaler            
                 
             first_iter = False
 
@@ -251,14 +255,15 @@ def CL_and_AL_Pipeline(arg):
 
         inp = [seed,cfg,save_outputs_path,save_plots_path, 
             {'scaler':scaler,
-            'train':{'train_class':train_classifier,'train_regr':train_sample},
+            'train':{'train_class':train_classifier,'train_regr':train_sample_2},
             'val':{'val_class': valid_classifier, 'val_regr':valid_dataset},
             'test':{'test_class': holdout_classifier, 'test_regr': holdout_set},
-            'unlabelled':unlabelled_pool}, models, first_iter]
+            'unlabelled':unlabelled_pool}, models, first_iter, j]
 
         inp = {'run_mode':'CL','cfg':inp}
+    
+        train_sample_2, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier, output_dict, scaler, models = ALpipeline(inp)  # --- this is really ugly as it is a recursvie thing and so should really be in a class itself, but not time to polish
 
-        train_sample, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier, output_dict, scaler, models = ALpipeline(inp)  # --- this is really ugly as it is a recursvie thing and so should really be in a class itself, but not time to polish
         outputs.update({f'task{j}':output_dict})
         this_forgetting = get_forget_dict(saved_test_data,models,j,scaler,cfg)
         forgetting.update(this_forgetting)

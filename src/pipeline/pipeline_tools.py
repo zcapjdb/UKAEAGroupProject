@@ -29,7 +29,8 @@ output_dict = {
     "post_test_loss": [],  # regressor performance after retraining
     "post_test_loss_unscaled": [],  # regressor performance after retraining, unscaled
     "post_test_loss_unscaled_norm": [],  # regressor performance after retraining, unscaled, normalised
-
+    "mean_scaler": [],
+    "scale_scaler": [],
     "n_train_points": [],
     
     "mse_before": [],
@@ -153,24 +154,24 @@ def prepare_data(
     else:
         return train_dataset, valid_dataset, test_dataset, None, train_dataset_regressor
 
-def scale_data(train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler=None, unscale=False):
+def scale_data(train_regr, train_class, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler=None, unscale=False):
     if scaler is None: # --- ensures that future tasks can be scaled according to scaler of previous tasks
         scaler = StandardScaler()
-        scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
-    train_sample.scale(scaler,unscale=unscale)
-    train_classifier.scale(scaler,unscale=unscale)
+        scaler.fit(train_regr.data.drop(["stable_label","index"], axis=1))
+    train_regr.scale(scaler,unscale=unscale)
+    train_class.scale(scaler,unscale=unscale)
     # -- scale eval now so don't scale its derivative dsets later
     valid_dataset.scale(scaler,unscale=unscale)
     valid_classifier.scale(scaler,unscale=unscale)
     holdout_set.scale(scaler,unscale=unscale)
     holdout_classifier.scale(scaler,unscale=unscale)
     unlabelled_pool.scale(scaler,unscale=unscale) 
-    return train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler
+    return train_regr, train_class, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler
 
 def get_data(cfg,scaler=None,apply_scaler=True,j=None):
     PATHS = cfg["data"]
     FLUX = cfg["flux"]        
-    train_classifier, eval_dataset, test_dataset, scaler, train_regressor = prepare_data(
+    train_class, eval_dataset, test_dataset, _, train_regressor = prepare_data(
             PATHS["train"],
             PATHS["validation"],
             PATHS["test"],
@@ -182,9 +183,9 @@ def get_data(cfg,scaler=None,apply_scaler=True,j=None):
     print('size of train, test, val', len(train_regressor),len(test_dataset), len(eval_dataset))
     # --- train sets
     if len(train_regressor)>cfg['hyperparams']['train_size']:
-        train_sample = train_regressor.sample(cfg['hyperparams']['train_size'])
+        train_regr = train_regressor.sample(cfg['hyperparams']['train_size'])
     else:
-        train_sample = copy.deepcopy(train_regressor)
+        train_regr = copy.deepcopy(train_regressor)
 
     # --- holdout sets are from the test set
     if len(test_dataset)>cfg['hyperparams']['test_size']:
@@ -206,8 +207,8 @@ def get_data(cfg,scaler=None,apply_scaler=True,j=None):
     eval_regressor.data = eval_regressor.data.drop(eval_regressor.data[eval_regressor.data["stable_label"] == 0].index)
     valid_dataset = eval_regressor.sample(cfg['hyperparams']['valid_size']) # --- valid for regressor
     valid_classifier = eval_dataset.sample(cfg['hyperparams']['valid_size'])  # --- valid for classifier, must come from original eval
-    if len(train_classifier)>cfg['hyperparams']['train_size']:
-        train_classifier = train_classifier.sample(cfg['hyperparams']['train_size'])
+    if len(train_class)>cfg['hyperparams']['train_size']:
+        train_class = train_class.sample(cfg['hyperparams']['train_size'])
     else:
         pass
 
@@ -217,8 +218,8 @@ def get_data(cfg,scaler=None,apply_scaler=True,j=None):
     unlabelled_pool = eval_dataset 
 
     if apply_scaler:
-        train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler = scale_data(train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler=scaler)
-    return train_sample, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, saved_tests, scaler
+        train_regr, train_class, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler = scale_data(train_regr, train_class, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler=scaler)
+    return train_regr, train_class, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, saved_tests, scaler
 
 # classifier tools
 def select_unstable_data(
@@ -321,7 +322,7 @@ def retrain_classifier(
     logging.log(15, f"Training on {data_size} points")
 
     train = copy.deepcopy(training_dataset)
-    train.add(misclassified_dataset)
+    #train.add(misclassified_dataset)
 
     # create data loaders
     train_loader = pandas_to_numpy_data(train, batch_size=batch_size, shuffle=True)

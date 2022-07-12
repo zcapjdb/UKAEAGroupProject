@@ -34,7 +34,7 @@ def losses_and_forgetting():
  
     lambdas = [1] # [0.4,0.6,0.8,1]
     replays = [1] #[0.4,0.6,0.8,1]
-    acquis =  ['None'] #['random','individual']
+    acquis =  ['individual'] #['random','individual']
     names = [f'bootstrapped_CL_shrink_perturb_lam_{lam}_{acq}_replaysize_{mem}_useAL_{useAL}' for acq in acquis for lam in lambdas for mem in replays]
     cmap_1 = plt.get_cmap('Greens')
 

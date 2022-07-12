@@ -303,6 +303,7 @@ class Regressor(nn.Module):
         # get the index of the scaler that corresponds to the target
         scaler_features = self.scaler.feature_names_in_
         scaler_index = np.where(scaler_features == self.flux)[0][0]
+        print("SCALER INDEX", scaler_index)
 
         return y * self.scaler.scale_[scaler_index] + self.scaler.mean_[scaler_index]
 
@@ -427,6 +428,7 @@ class Regressor(nn.Module):
             x = x.to(self.device)
             z = z.to(self.device)
             z_hat = self.forward(x.float())
+            z_hat[z_hat<0] = 0 # --- clip negative values 
             pred.append(z_hat.squeeze().detach().cpu().numpy())
             loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=unscale)
             if unscale:  
