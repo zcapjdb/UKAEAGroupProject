@@ -303,7 +303,6 @@ class Regressor(nn.Module):
         # get the index of the scaler that corresponds to the target
         scaler_features = self.scaler.feature_names_in_
         scaler_index = np.where(scaler_features == self.flux)[0][0]
-        print("SCALER INDEX", scaler_index)
 
         return y * self.scaler.scale_[scaler_index] + self.scaler.mean_[scaler_index]
 
@@ -329,13 +328,16 @@ class Regressor(nn.Module):
                     param.copy_(param_update)
 
     def loss_function(
-        self, y, y_hat, unscale=False
+        self, y, y_hat, unscale=False, test=False
     ):  # LZ : ToDo if given mode is predicted not to develop, set the outputs related to that mode to zero, and should not contribute to the loss
 
         loss = self.loss(y_hat, y.float())
         if unscale:
             y_hat = torch.Tensor(self.unscale(y_hat.detach().cpu().numpy()))
+            
             y = torch.Tensor(self.unscale(y.detach().cpu().numpy()))
+            if test:
+                y_hat[y_hat<0] = 0 # --- clip negative values 
             loss_unscaled = self.loss(y_hat, y.float())
             return loss, loss_unscaled
         return loss
@@ -411,7 +413,7 @@ class Regressor(nn.Module):
             dataset = copy.deepcopy(dataloader)
             dataset.data = dataset.data.dropna(subset=[self.flux])
 
-            batch_size = min(len(dataset), 512)
+            batch_size = 500
             dataloader = pt.pandas_to_numpy_data(
                 dataset,
                 regressor_var=self.flux,
@@ -428,13 +430,13 @@ class Regressor(nn.Module):
             x = x.to(self.device)
             z = z.to(self.device)
             z_hat = self.forward(x.float())
-            z_hat[z_hat<0] = 0 # --- clip negative values 
-            pred.append(z_hat.squeeze().detach().cpu().numpy())
-            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=unscale)
+            loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=unscale, test=True)
+            z_hat = z_hat.squeeze().detach().cpu().numpy()
             if unscale:  
                 losses_unscaled.append(loss[1].item())
                 loss = loss[0]
                 z = self.unscale(z.squeeze().detach().cpu().numpy())
+                z_hat = self.unscale(z_hat)
                 if mean is not None:
                     z = z-mean
                 try:
@@ -442,6 +444,11 @@ class Regressor(nn.Module):
                 except:
                     zs.extend([z])
             losses.append(loss.item())
+            try:
+                pred.extend(z_hat)
+            except:
+                pred.extend([z_hat])
+
         average_loss = np.sum(losses) / size
 
         pred = np.asarray(pred, dtype=object).flatten()

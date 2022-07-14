@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pylab as plt
 from sklearn.preprocessing import StandardScaler
 import os
+import matplotlib.pylab as plt
 import copy
 
 import random
@@ -116,7 +117,7 @@ def ALpipeline(cfg):
     elif run_mode == 'CL':
         print('RUNNING IN CL MODE')
         pass # --- data is passed from CL pipeline, see start of the function
-
+    
 
     buffer_size = 0
     classifier_buffer = None
@@ -305,19 +306,19 @@ def ALpipeline(cfg):
 
         # --- set up retraining by rescaling all points according to new training data --------------------
        # --- unscale all datasets, 
-       # candidates.scale(scaler, unscale=True)
-       # train_sample.scale(scaler, unscale=True)
-       # train_classifier.scale(scaler,unscale=True)
-       # unlabelled_pool.scale(scaler, unscale=True)
-       # valid_dataset.scale(scaler, unscale=True)
-       # valid_classifier.scale(scaler,unscale=True)
-       # holdout_set.scale(scaler, unscale=True)
-       # holdout_classifier.scale(scaler, unscale=True)
+        candidates.scale(scaler, unscale=True)
+        train_sample.scale(scaler, unscale=True)
+        train_classifier.scale(scaler,unscale=True)
+        unlabelled_pool.scale(scaler, unscale=True)
+        valid_dataset.scale(scaler, unscale=True)
+        valid_classifier.scale(scaler,unscale=True)
+        holdout_set.scale(scaler, unscale=True)
+        holdout_classifier.scale(scaler, unscale=True)
 
-       # if classifier_buffer is not None:
-       #     print('len classifier buffer at unscale:',len(classifier_buffer))
-       #     if len(classifier_buffer)>0:
-       #             classifier_buffer.scale(scaler, unscale=True)
+        if classifier_buffer is not None:
+            print('len classifier buffer at unscale:',len(classifier_buffer))
+            if len(classifier_buffer)>0:
+                    classifier_buffer.scale(scaler, unscale=True)
 
         # --- train data is enriched by new unstable candidate points
         logging.info(f"Enriching training data with {len(candidates)} new points")
@@ -327,24 +328,24 @@ def ALpipeline(cfg):
 
        
         # --- get new scaler from enriched training set, rescale them with new scaler
-        # scaler = StandardScaler()
-        #scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
-        #train_sample.scale(scaler)
-        #train_classifier.scale(scaler)
-        #unlabelled_pool.scale(scaler)
-        #valid_dataset.scale(scaler)
-        #valid_classifier.scale(scaler)
-        #holdout_set.scale(scaler)
-        #holdout_classifier.scale(scaler)
-        #if classifier_buffer is not None:
-        #    if len(classifier_buffer)>0:            
-        #        classifier_buffer.scale(scaler)
+        scaler = StandardScaler()
+        scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
+        train_sample.scale(scaler)
+        train_classifier.scale(scaler)
+        unlabelled_pool.scale(scaler)
+        valid_dataset.scale(scaler)
+        valid_classifier.scale(scaler)
+        holdout_set.scale(scaler)
+        holdout_classifier.scale(scaler)
+        if classifier_buffer is not None:
+            if len(classifier_buffer)>0:            
+                classifier_buffer.scale(scaler)
                 
              
         # --- update scaler in the models
-        #for FLUX in FLUXES:
-        #    for model in PRETRAINED:
-        #        models[FLUX][model].scaler = scaler
+       # for FLUX in FLUXES:
+       #     for model in PRETRAINED:
+       #         models[FLUX][model].scaler = scaler
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
@@ -424,6 +425,18 @@ def ALpipeline(cfg):
             logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
             logging.info(f"{FLUX} test loss unscaled norm: {hold_loss_unscaled_norm}")
   
+            bins = np.arange(-20,80)
+            kkk = np.random.randint(low=0,high=len(holdout_set), size=min(len(holdout_set),5000),)
+            holdout_plot = copy.deepcopy(holdout_set)
+            holdout_plot.scale(scaler, unscale=True)
+            delta = (holdout_plot.data['efiitg_gb'].values[kkk]- hold_pred_after[kkk])**2
+            plt.scatter(holdout_plot.data['efiitg_gb'].values[kkk],delta)
+            plt.ylabel('(y-yhat)^2')
+            plt.yscale('log')
+            plt.xlabel('y')
+            plt.plot(bins,bins, lw=4, color='red')
+            plt.savefig(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/debug/scatter{i}_noscaling.png')
+            plt.close()
 
 #        candidates_uncerts_after, data_idxs_after = [], []
 
@@ -587,5 +600,5 @@ if __name__=='__main__':
     #output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_noscaling_during_AL.pkl","wb") as f:
+    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_noscaling.pkl","wb") as f:
         pickle.dump(output,f)               

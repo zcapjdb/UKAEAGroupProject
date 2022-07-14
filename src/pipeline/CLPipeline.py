@@ -223,12 +223,11 @@ def CL_and_AL_Pipeline(arg):
             saved_test_data.update(saved_tests)
             first_iter = True  # -- ok, retain
         else:
-            # --- read data and scale with scaler of previous task
-            train_sample_2_plot = copy.deepcopy(train_sample_2)
-            train_sample_2_plot.scale(scaler, unscale=True)
+            # --- read data and scale with scaler of previous task --- SCALER IS ***NEVER*** updated
      
             #train_sample = copy.deepcopy(train_sample_2)
-            _,_, valid_dataset_new, valid_classifier_new, unlabelled_pool_new, holdout_set_new, holdout_classifier_new, saved_tests,_ = pt.get_data(cfg, scaler=scaler,j=j)  # --- scaler gets updated during pipeline and passed here
+            _,_, valid_dataset_new, valid_classifier_new, unlabelled_pool_new, holdout_set_new, holdout_classifier_new, saved_tests,_ = pt.get_data(cfg, scaler=scaler, apply_scaler=True,j=j)  # --- scaler gets updated during pipeline and passed here
+             # If scaler updated: SAMPLING MUST BE DONE SO THAT OLD AND NEW POINTS ARE BALANCED???
             saved_test_data.update(saved_tests)
             # --- downsample data from previous tasks, otherwise too much imbalance. 
           #  data = [train_sample_2, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier]
