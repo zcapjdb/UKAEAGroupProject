@@ -80,6 +80,7 @@ def ALpipeline(cfg):
         samplesize_debug=sample_size,
         scale=False,
     )
+    firstscaler = copy.deepcopy(scaler)
 
     train_sample = train_regressor.sample(train_size)
     logging.info(f"Train size: {len(train_sample)}")
