@@ -171,7 +171,7 @@ def scale_data(train_regr, train_class, valid_dataset, valid_classifier, unlabel
 def get_data(cfg,scaler=None,apply_scaler=True,j=None):
     PATHS = cfg["data"]
     FLUX = cfg["flux"]        
-    train_class, eval_dataset, test_dataset, _, train_regressor = prepare_data(
+    train_class, eval_dataset, test_dataset, scaler_, train_regressor = prepare_data(
             PATHS["train"],
             PATHS["validation"],
             PATHS["test"],
@@ -179,7 +179,9 @@ def get_data(cfg,scaler=None,apply_scaler=True,j=None):
             samplesize_debug=1,
             scale=False,
         )
-        
+    if scaler is None:
+        scaler = scaler_
+    
     print('size of train, test, val', len(train_regressor),len(test_dataset), len(eval_dataset))
     # --- train sets
     if len(train_regressor)>cfg['hyperparams']['train_size']:
@@ -192,6 +194,8 @@ def get_data(cfg,scaler=None,apply_scaler=True,j=None):
         holdout_set = test_dataset.sample(cfg['hyperparams']['test_size'])  # holdout set
     else:
         holdout_set = copy.deepcopy(test_dataset)
+    print('LEN TEST SET AT START', len(holdout_set)) 
+           
     holdout_classifier = copy.deepcopy(holdout_set) # copy it for classifier
     holdout_set.data = holdout_set.data.drop(holdout_set.data[holdout_set.data["stable_label"] == 0].index) # delete stable points for regressor
     if j is not None: # --- only for CL
@@ -219,6 +223,7 @@ def get_data(cfg,scaler=None,apply_scaler=True,j=None):
 
     if apply_scaler:
         train_regr, train_class, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler = scale_data(train_regr, train_class, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler=scaler)
+        print('LEN TEST SET AT START', len(holdout_set)) 
     return train_regr, train_class, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, saved_tests, scaler
 
 # classifier tools
