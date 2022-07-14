@@ -379,12 +379,27 @@ class Regressor(nn.Module):
             x = x.to(self.device)
             z = z.to(self.device)
             z_hat = self.forward(x.float())
-            pred.append(z_hat.squeeze().detach().cpu().numpy())
             loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=unscale)
             if unscale:
-                losses_unscaled.append(loss[1].item())
+                TEMP_unscaled_loss = np.sum( (self.unscale(z_hat.detach().cpu().numpy()) - self.unscale(z.unsqueeze(-1).detach().cpu().numpy()))**2  )
+                losses_unscaled.append(TEMP_unscaled_loss)
+                #losses_unscaled.append(loss[1].item())
                 loss = loss[0]
+                z_hat = z_hat.squeeze().detach().cpu().numpy()
+                z_hat = self.unscale(z_hat)
+                try:
+                    pred.extend(z_hat)            
+                except:
+                    pred.extend([z_hat])
+            else:
+                z_hat = z_hat.squeeze().detach().cpu().numpy()
+                try:
+                    pred.extend(z_hat)            
+                except:
+                    pred.extend([z_hat])                
+
             losses.append(loss.item())
+                
         average_loss = np.sum(losses) / size
 
         pred = np.asarray(pred, dtype=object).flatten()

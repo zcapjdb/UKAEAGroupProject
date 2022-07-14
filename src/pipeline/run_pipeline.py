@@ -1,5 +1,6 @@
 from email.policy import default
 import coloredlogs, verboselogs, logging
+import matplotlib.pylab as plt
 from multiprocessing import Pool
 import numpy as np
 from sklearn.preprocessing import StandardScaler
@@ -57,6 +58,13 @@ def ALpipeline(cfg):
     batch_size = cfg["hyperparams"]["batch_size"]
     candidate_size = cfg["hyperparams"]["candidate_size"]
     dropout = cfg["hyperparams"]["dropout"]
+    scaling = cfg['scaling']
+    
+    if scaling=='withscaling':
+        scaleregressor = True
+    else:
+        scaleregressor = False
+
     # Dictionary to store results of the classifier and regressor for later use
     output_dict = pt.output_dict
 
@@ -80,7 +88,6 @@ def ALpipeline(cfg):
         samplesize_debug=sample_size,
         scale=False,
     )
-    firstscaler = copy.deepcopy(scaler)
 
     train_sample = train_regressor.sample(train_size)
     logging.info(f"Train size: {len(train_sample)}")
@@ -100,6 +107,8 @@ def ALpipeline(cfg):
 
     # drop any data from holdout set with stable_label = 0
     holdout_set.data = holdout_set.data.drop(holdout_set.data[holdout_set.data["stable_label"] == 0].index)
+    holdout_plot = copy.deepcopy(holdout_set)
+    holdout_plot.scale(scaler, unscale=True)
 
     eval_regressor = copy.deepcopy(eval_dataset)
     eval_regressor.data = eval_regressor.data.drop(eval_regressor.data[eval_regressor.data["stable_label"] == 0].index)
@@ -297,6 +306,13 @@ def ALpipeline(cfg):
         valid_classifier.scale(scaler,unscale=True)
         holdout_set.scale(scaler, unscale=True)
         holdout_classifier.scale(scaler, unscale=True)
+
+        bins = np.arange(-50,100)
+        plt.hist(candidates.data['efiitg_gb'], bins=bins, color='orange', histtype='step', label='candidates', density=True,lw=4)
+        plt.hist(train_sample.data['efiitg_gb'],bins=bins, color='blue', alpha=0.2, label='train', density=True)
+        plt.hist(holdout_plot.data['efiitg_gb'], bins=bins, color='red',histtype='step',label='test', density=True,lw=4)
+        plt.title(f'iteration number {i}')
+
         if classifier_buffer is not None:
             classifier_buffer.scale(scaler, unscale=True)        
 
@@ -318,9 +334,10 @@ def ALpipeline(cfg):
             classifier_buffer.scale(scaler)        
 
         #--- update scaler in the models
-        # TODO: WHY does this make it worse???
-        # for FLUX in FLUXES:
-        #     models[FLUX]["Regressor"].scaler = scaler
+       #  TODO: WHY does this make it worse???
+        if scaleregressor:
+            for FLUX in FLUXES:
+                models[FLUX]["Regressor"].scaler = scaler
 
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
@@ -449,6 +466,41 @@ def ALpipeline(cfg):
         output_dict["post_test_loss"].append(holdout_loss)
         output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
 
+#        outdir = f"./debug/hist/"
+#        if not os.path.exists(outdir):
+#            os.makedirs(outdir, exist_ok=True)
+
+                            
+#        plt.hist(holdout_pred_after, bins=bins, color='red',histtype='step',label='prediction', density=True, ls=':', lw=4)
+#        plt.legend()
+#        plt.savefig(f'{outdir}/hist{i}_{scaling}.png')
+#        plt.close()
+        
+
+#        outdir = f"./debug/deltahist/"
+#        if not os.path.exists(outdir):
+#            os.makedirs(outdir, exist_ok=True)        
+#        kkk = np.random.randint(low=0,high=len(holdout_set), size=5000,)
+#        delta = (holdout_plot.data['efiitg_gb'].values[kkk]- hold_pred_after[kkk])**2
+#        dd = np.sum(delta)/len(delta)
+#        plt.title(np.round(dd,2))
+#        plt.hist(delta, bins=np.arange(0,100))
+#        plt.savefig(f'{outdir}/hist{i}_delta_{scaling}.png')
+#        plt.close()
+
+
+#       outdir = f"./debug/scatter/"#
+#        if not os.path.exists(outdir):
+#            os.makedirs(outdir, exist_ok=True)
+
+#        plt.scatter(holdout_plot.data['efiitg_gb'].values[kkk],hold_pred_after[kkk])
+#        plt.ylabel('yhat')
+#        plt.ylim(-50,150)
+#        plt.xlabel('y')
+#        plt.plot(bins,bins, lw=4, color='red')
+#        plt.savefig(f'{outdir}/scatter{i}_{scaling}.png')
+#        plt.close()
+
         try:
             output_dict["mse_before"].append(
                 train_mse_before
@@ -527,6 +579,7 @@ if __name__=='__main__':
     Ntrain = cfg["hyperparams"]["train_size"]
     Niter = cfg["iterations"]
     Ncand = cfg["hyperparams"]["candidate_size"]
+    scaling = cfg['scaling']
 
     retrain = cfg["retrain_classifier"]
     if Nbootstraps>1:
@@ -551,5 +604,5 @@ if __name__=='__main__':
         output_dir = args.output_dir
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}.pkl","wb") as f:
+    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_{scaling}.pkl","wb") as f:
         pickle.dump(output,f)                                
