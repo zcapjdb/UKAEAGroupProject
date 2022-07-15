@@ -375,24 +375,32 @@ class Regressor(nn.Module):
         pred = []
         losses = []
         losses_unscaled = []
+        TEST = []
         for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
             x = x.to(self.device)
             z = z.to(self.device)
             z_hat = self.forward(x.float())
             loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=unscale)
+            z_hat = z_hat.squeeze().detach().cpu().numpy()
+            z = z.detach().cpu().numpy()
             if unscale:
-                TEMP_unscaled_loss = np.sum( (self.unscale(z_hat.detach().cpu().numpy()) - self.unscale(z.unsqueeze(-1).detach().cpu().numpy()))**2  )
+                z_hat = self.unscale(z_hat)
+                z = self.unscale(z)
+                TEMP_unscaled_loss = np.sum( (z-z_hat)**2  )
                 losses_unscaled.append(TEMP_unscaled_loss)
                 #losses_unscaled.append(loss[1].item())
                 loss = loss[0]
-                z_hat = z_hat.squeeze().detach().cpu().numpy()
-                z_hat = self.unscale(z_hat)
+                t = z#-z_hat
+                #t = #np.hstack(t)
+
                 try:
-                    pred.extend(z_hat)            
+                    pred.extend(z_hat)    
+                    TEST.extend(t)        
                 except:
                     pred.extend([z_hat])
-            else:
-                z_hat = z_hat.squeeze().detach().cpu().numpy()
+                    TEST.extend([t])
+
+            else: # --- unused
                 try:
                     pred.extend(z_hat)            
                 except:
@@ -406,7 +414,7 @@ class Regressor(nn.Module):
 
         if unscale:
             unscaled_avg_loss = np.sum(losses_unscaled) / size
-            return pred, average_loss, unscaled_avg_loss
+            return TEST, pred, average_loss, unscaled_avg_loss
         return pred, average_loss
 
 

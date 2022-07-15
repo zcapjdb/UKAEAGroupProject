@@ -190,7 +190,7 @@ def ALpipeline(cfg):
     # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
     for FLUX in FLUXES:
         logging.info(f"Test loss for {FLUX} before pipeline:")
-        _, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale = True)
+        _,_, holdout_loss, holdout_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale = True)
         logging.info(f"Holdout Loss: {holdout_loss}")
         logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
         output_dict["test_loss_init"].append(holdout_loss)
@@ -307,11 +307,12 @@ def ALpipeline(cfg):
         holdout_set.scale(scaler, unscale=True)
         holdout_classifier.scale(scaler, unscale=True)
 
-        bins = np.arange(-50,100)
-        plt.hist(candidates.data['efiitg_gb'], bins=bins, color='orange', histtype='step', label='candidates', density=True,lw=4)
-        plt.hist(train_sample.data['efiitg_gb'],bins=bins, color='blue', alpha=0.2, label='train', density=True)
-        plt.hist(holdout_plot.data['efiitg_gb'], bins=bins, color='red',histtype='step',label='test', density=True,lw=4)
-        plt.title(f'iteration number {i}')
+       # bins = np.arange(-50,100)
+       # plt.hist(candidates.data['efiitg_gb'], bins=bins, color='orange', histtype='step', label='candidates', density=True,lw=2)
+       # plt.hist(train_sample.data['efiitg_gb'],bins=bins, color='blue', alpha=0.2, label='train', density=True)
+       # plt.hist(holdout_plot.data['efiitg_gb'], bins=bins, color='red',histtype='step',label='test - at beginning', density=True,lw=4)
+       # plt.title(f'iteration number {i}')
+        
 
         if classifier_buffer is not None:
             classifier_buffer.scale(scaler, unscale=True)        
@@ -338,6 +339,7 @@ def ALpipeline(cfg):
         if scaleregressor:
             for FLUX in FLUXES:
                 models[FLUX]["Regressor"].scaler = scaler
+
 
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
@@ -408,7 +410,7 @@ def ALpipeline(cfg):
             
             logging.info(f"Running prediction on validation data set")
             # --- validation on holdout set after regressor is retrained
-            hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
+            TEST, hold_pred_after, hold_loss, hold_loss_unscaled = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
             holdout_pred_after.append(hold_pred_after)
             holdout_loss.append(hold_loss)
             holdout_loss_unscaled.append(hold_loss_unscaled)
@@ -466,40 +468,50 @@ def ALpipeline(cfg):
         output_dict["post_test_loss"].append(holdout_loss)
         output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
 
-#        outdir = f"./debug/hist/"
-#        if not os.path.exists(outdir):
-#            os.makedirs(outdir, exist_ok=True)
+        outdir = f"./debug/hist/"
+        if not os.path.exists(outdir):
+            os.makedirs(outdir, exist_ok=True)
 
                             
-#        plt.hist(holdout_pred_after, bins=bins, color='red',histtype='step',label='prediction', density=True, ls=':', lw=4)
-#        plt.legend()
-#        plt.savefig(f'{outdir}/hist{i}_{scaling}.png')
-#        plt.close()
+        plt.hist(holdout_pred_after, bins=bins, color='magenta',histtype='step',label='prediction', density=True, ls='--', lw=4)
+        plt.legend()
+        plt.savefig(f'{outdir}/hist{i}_{scaling}.png')
+        plt.close()
         
-
 #        outdir = f"./debug/deltahist/"
 #        if not os.path.exists(outdir):
 #            os.makedirs(outdir, exist_ok=True)        
-#        kkk = np.random.randint(low=0,high=len(holdout_set), size=5000,)
-#        delta = (holdout_plot.data['efiitg_gb'].values[kkk]- hold_pred_after[kkk])**2
-#        dd = np.sum(delta)/len(delta)
-#        plt.title(np.round(dd,2))
-#        plt.hist(delta, bins=np.arange(0,100))
+#        delta = (TEST-holdout_plot.data['efiitg_gb'])**2# (holdout_plot.data['efiitg_gb']- hold_pred_after)**2
+        #dd = np.sum(delta)/len(delta)
+        #delta_test = (TEST- hold_pred_after)**2
+       # TEST = np.hstack(np.hstack(TEST))
+        #print('SHAPE', np.shape(TEST))
+        #for t in TEST:
+        #    try:
+        #        print(len(t))
+        #    except:
+        #        pass
+        #tt = np.sum(TEST)/len(TEST)
+        #plt.title(f'{np.round(dd,2)},{np.round(tt,2)}' )
+        #plt.scatter(delta, TEST,)# bins=np.arange(0,100), alpha=0.2)
+#        plt.hist(delta, bins=np.arange(0,100), alpha=0.2, color='green',density=True)
 #        plt.savefig(f'{outdir}/hist{i}_delta_{scaling}.png')
 #        plt.close()
 
 
-#       outdir = f"./debug/scatter/"#
-#        if not os.path.exists(outdir):
-#            os.makedirs(outdir, exist_ok=True)
+        outdir = f"./debug/scatter/"#
+        if not os.path.exists(outdir):
+            os.makedirs(outdir, exist_ok=True)
 
-#        plt.scatter(holdout_plot.data['efiitg_gb'].values[kkk],hold_pred_after[kkk])
-#        plt.ylabel('yhat')
-#        plt.ylim(-50,150)
-#        plt.xlabel('y')
-#        plt.plot(bins,bins, lw=4, color='red')
-#        plt.savefig(f'{outdir}/scatter{i}_{scaling}.png')
-#        plt.close()
+        holdout_plot_2 = copy.deepcopy(holdout_set)
+        holdout_plot_2.scale(scaler, unscale=True) 
+        plt.scatter(holdout_plot.data['efiitg_gb'],hold_pred_after) 
+        plt.ylabel('yhat')
+        plt.ylim(-50,150)
+        plt.xlabel('y ')
+        plt.plot(bins,bins, lw=4, color='red')
+        plt.savefig(f'{outdir}/scatter{i}_{scaling}.png')
+        plt.close()
 
         try:
             output_dict["mse_before"].append(
