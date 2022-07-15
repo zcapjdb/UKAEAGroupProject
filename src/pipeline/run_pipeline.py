@@ -217,7 +217,8 @@ def ALpipeline(cfg):
 
         # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
- 
+    holdout_plot = copy.deepcopy(holdout_set)
+    holdout_plot.scale(scaler, unscale=True)
     for i in range(cfg["iterations"]):
         logging.info(f"Iteration: {i+1}\n")
         logging.info('unlabelled pool: ',len(unlabelled_pool))
@@ -326,7 +327,12 @@ def ALpipeline(cfg):
         # ---  compute the mean for the loss function
         mean_train = np.mean(train_sample.data['efiitg_gb']) # ---- ToDo =====>>>>> need to upgrade to two outputs
 
-       
+        bins = np.arange(-50,150)
+        plt.hist(candidates.data['efiitg_gb'], bins=bins, color='orange', histtype='step', label='candidates', density=True,lw=2)
+        plt.hist(train_sample.data['efiitg_gb'],bins=bins, color='blue', alpha=0.2, label='train', density=True)
+        plt.hist(holdout_plot.data['efiitg_gb'], bins=bins, color='red',histtype='step',label='test', density=True,lw=2)
+        plt.title(f'iteration number {i}')       
+
         # --- get new scaler from enriched training set, rescale them with new scaler
         scaler = StandardScaler()
         scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
@@ -343,9 +349,9 @@ def ALpipeline(cfg):
                 
              
         # --- update scaler in the models
-       # for FLUX in FLUXES:
-       #     for model in PRETRAINED:
-       #         models[FLUX][model].scaler = scaler
+        for FLUX in FLUXES:
+            for model in PRETRAINED:
+                models[FLUX][model].scaler = scaler
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
             if buffer_size >= cfg["hyperparams"]["buffer_size"]:
@@ -425,17 +431,19 @@ def ALpipeline(cfg):
             logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
             logging.info(f"{FLUX} test loss unscaled norm: {hold_loss_unscaled_norm}")
   
+            plt.hist(hold_pred_after, bins=bins, color='magenta',histtype='step',label='pred', density=True,lw=2)
+            plt.title(f'iter {i}, task {j}')
+            plt.legend()
+            plt.savefig(f"debug/hist/CL/{cfg['acquisition']}/hist{i}_{j}_{cfg['acquisition']}.png")
+            plt.close()
+
+
             bins = np.arange(-20,80)
-            kkk = np.random.randint(low=0,high=len(holdout_set), size=min(len(holdout_set),5000),)
-            holdout_plot = copy.deepcopy(holdout_set)
-            holdout_plot.scale(scaler, unscale=True)
-            delta = (holdout_plot.data['efiitg_gb'].values[kkk]- hold_pred_after[kkk])**2
-            plt.scatter(holdout_plot.data['efiitg_gb'].values[kkk],delta)
-            plt.ylabel('(y-yhat)^2')
-            plt.yscale('log')
+            plt.scatter(holdout_plot.data['efiitg_gb'].values,hold_pred_after)
+            plt.ylabel('yhat')
             plt.xlabel('y')
             plt.plot(bins,bins, lw=4, color='red')
-            plt.savefig(f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/debug/scatter{i}_noscaling.png')
+            plt.savefig(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/debug/scatter/CL/{cfg['acquisition']}/scatter{i}_{j}_{cfg['acquisition']}.png")
             plt.close()
 
 #        candidates_uncerts_after, data_idxs_after = [], []
