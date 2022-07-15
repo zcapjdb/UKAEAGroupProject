@@ -116,12 +116,12 @@ def CLPipeline(arg):
             # ---  scaler is same as before for the following lines (to unscale), then gets updated with new data
             data = [train_sample_2, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier]
             train_sample_2, train_classifier, valid_dataset, valid_classifier, holdout_set, holdout_classifier =  downsample(cfg, data, mem_replay)
-            # --- unscale so they can be added to new (unscaled) data
-            train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier,scaler = pt.scale_data(train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier,unscale=True,scaler=scaler)
-
-            train_sample_2_new, train_classifier_new, valid_dataset_new, valid_classifier_new, unlabelled_pool_new, holdout_set_new, holdout_classifier_new, saved_tests,scaler = pt.get_data(cfg, apply_scaler=False,j=j)  # --- new scaler declared here
+            # --- unscale previous data so they can be added to new (unscaled) data
+            train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier,_ = pt.scale_data(train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier,unscale=True,scaler=scaler)
+            # --- get data of new task but do not apply its scaler
+            train_sample_2_new, train_classifier_new, valid_dataset_new, valid_classifier_new, unlabelled_pool_new, holdout_set_new, holdout_classifier_new, saved_tests,_ = pt.get_data(cfg, apply_scaler=False,j=j) 
             saved_test_data.update(saved_tests)
-
+            # --- add datasets
             train_sample_2.add(train_sample_2_new) # 
             train_classifier.add(train_classifier_new)
             valid_dataset.add(valid_dataset_new)   # --- in a real world situation where data is streaming this is unavailable. Need to update dynamically withi the AL pipeline.
@@ -130,8 +130,8 @@ def CLPipeline(arg):
             holdout_classifier.add(holdout_classifier_new)
            # unlabelled_pool = unlabelled_pool_new # --- not added, only data from the new task arrives
 
-            # --- rescale by keeping memory of previous tasks -  train sample is available, data is scaled accordingly
-            train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler = pt.scale_data(train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier)
+            # --- rescale with scaler
+            train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler = pt.scale_data(train_sample_2, train_classifier, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler=None) # --- scaler=None fits new data
 
 
         # --- train models for jth task
