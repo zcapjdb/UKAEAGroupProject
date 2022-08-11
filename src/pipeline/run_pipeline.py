@@ -96,6 +96,8 @@ def ALpipeline(cfg):
     candidate_size = cfg["hyperparams"]["candidate_size"]
     CLASSIFIER = True  #CLASSIFIER = cfg["use_classifier"]
     dropout = cfg["hyperparams"]["dropout"]
+    keep_prob = cfg['keep_prob']
+
     # Dictionary to store results of the classifier and regressor for later use
     output_dict = pt.output_dict
 
@@ -249,6 +251,8 @@ def ALpipeline(cfg):
                 models[FLUX]["Regressor"],
                 n_runs=cfg["MC_dropout_runs"],
                 device=device,
+                iter_num=i,
+        #        plot=True
             )
             candidates_uncerts.append(temp_uncert)
             data_idxs.append(temp_idx)
@@ -263,10 +267,13 @@ def ALpipeline(cfg):
             unlabelled_pool=unlabelled_pool,
             out_stds=candidates_uncerts,
             idx_arrays=data_idxs,
+            keep = keep_prob,
             model=models[FLUX]["Regressor"],
             acquisition=cfg["acquisition"],
         )
 
+       # pt.plot_TSNE(candidates, train_sample, iter_num=i)
+        
         logging.debug(f"Number of most uncertain {len(data_idx)}")
         prediction_candidates_before = []
         for FLUX in FLUXES:
@@ -327,16 +334,17 @@ def ALpipeline(cfg):
         # ---  compute the mean for the loss function
         mean_train = np.mean(train_sample.data['efiitg_gb']) # ---- ToDo =====>>>>> need to upgrade to two outputs
 
-        bins = np.arange(-50,150)
-        plt.hist(candidates.data['efiitg_gb'], bins=bins, color='orange', histtype='step', label='candidates', density=True,lw=2)
-        plt.hist(train_sample.data['efiitg_gb'],bins=bins, color='blue', alpha=0.2, label='train', density=True)
-        plt.hist(holdout_plot.data['efiitg_gb'], bins=bins, color='red',histtype='step',label='test', density=True,lw=2)
-        plt.title(f'iteration number {i}')       
+       # bins = np.arange(-50,150)
+       # plt.hist(candidates.data['efiitg_gb'], bins=bins, color='orange', histtype='step', label='candidates', density=True,lw=2)
+       # plt.hist(train_sample.data['efiitg_gb'],bins=bins, color='blue', alpha=0.2, label='train', density=True)
+       # plt.hist(holdout_plot.data['efiitg_gb'], bins=bins, color='red',histtype='step',label='test', density=True,lw=2)
+       # plt.title(f'iteration number {i}')       
 
         # --- get new scaler from enriched training set, rescale them with new scaler
         scaler = StandardScaler()
         scaler.fit(train_sample.data.drop(["stable_label","index"], axis=1))
         train_sample.scale(scaler)
+        candidates.scale(scaler)
         train_classifier.scale(scaler)
         unlabelled_pool.scale(scaler)
         valid_dataset.scale(scaler)
@@ -431,44 +439,66 @@ def ALpipeline(cfg):
             logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
             logging.info(f"{FLUX} test loss unscaled norm: {hold_loss_unscaled_norm}")
   
-            plt.hist(hold_pred_after, bins=bins, color='magenta',histtype='step',label='pred', density=True,lw=2)
-            plt.title(f'iter {i}, task {j}')
-            plt.legend()
-            plt.savefig(f"debug/hist/CL/{cfg['acquisition']}/hist{i}_{j}_{cfg['acquisition']}.png")
-            plt.close()
+           # plt.hist(hold_pred_after, bins=bins, color='magenta',histtype='step',label='pred', density=True,lw=2)
+           # plt.title(f'iter {i}, task {j}')
+           # plt.legend()
+           # plt.savefig(f"debug/hist/CL/{cfg['acquisition']}/hist{i}_{j}_{cfg['acquisition']}.png")
+           # plt.close()
 
 
-            bins = np.arange(-20,80)
-            plt.scatter(holdout_plot.data['efiitg_gb'].values,hold_pred_after)
-            plt.ylabel('yhat')
-            plt.xlabel('y')
-            plt.plot(bins,bins, lw=4, color='red')
-            plt.savefig(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/debug/scatter/CL/{cfg['acquisition']}/scatter{i}_{j}_{cfg['acquisition']}.png")
-            plt.close()
+           # bins = np.arange(0,3,0.1)
+           # plt.scatter(candidates_uncert_before)
+           # plt.ylabel('yhat')
+           # plt.xlabel('y')
+           # plt.plot(bins,bins, lw=4, color='red')
+           # plt.savefig(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/debug/uncert/{cfg['acquisition']}/scatter{i}_{j}_{cfg['acquisition']}.png")
+           # plt.close()
 
-#        candidates_uncerts_after, data_idxs_after = [], []
+        candidates_uncerts_after, data_idxs_after = [], []
 
-#        for FLUX in FLUXES:
-#            temp_uncert, temp_idx = pt.get_uncertainty(
-#                candidates,
-#                models[FLUX]["Regressor"],
-#                n_runs=cfg["MC_dropout_runs"],
-#                device=device,
-#            )#àà
-#
-#            candidates_uncerts_after.append(temp_uncert)
-#            data_idxs_after.append(temp_idx)
-        
-#        candidates_uncert_after = pt.reorder_arrays(
-#            candidates_uncerts_after,
-#            data_idxs_after,
-#            data_idx
-#            )
-        
-#        candidates_uncert_after = np.array(candidates_uncert_after)
-#        candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
+        for FLUX in FLUXES:
+            temp_uncert, temp_idx = pt.get_uncertainty(
+                candidates,
+                models[FLUX]["Regressor"],
+                n_runs=cfg["MC_dropout_runs"],
+                device=device,
+            )
 
-        logging.info("Change in uncertainty for most uncertain data points:")
+            candidates_uncerts_after.append(temp_uncert)
+            data_idxs_after.append(temp_idx)
+            
+            candidates_uncert_after = pt.reorder_arrays(
+                candidates_uncerts_after,
+                data_idxs_after,
+                data_idx
+                )
+            
+            candidates_uncert_after = np.array(candidates_uncert_after)
+            candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
+            pt.plot_scatter(
+                candidates_uncert_before,
+                candidates_uncert_after,
+                "Novel data",
+                i,
+                f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/debug/uncert/")
+
+            test_uncert, _ =  pt.get_uncertainty(
+                holdout_set,
+                models[FLUX]["Regressor"],
+                n_runs=cfg["MC_dropout_runs"],
+                device=device,
+            )
+
+            fig, ax = plt.subplots(1,1)
+            ax.hist(test_uncert, bins=np.arange(0,0.5,0.01))
+            ax.axvline(np.median(test_uncert),color='red')
+            ax.set_xlabel('test uncert')
+            ax.set_title(f"iteration {i}")
+            fig.savefig(f'./debug/uncert/test_uncert{i}.png')
+            fig.clf()
+
+
+            #logging.info("Change in uncertainty for most uncertain data points:")
 
 #        output_dict["d_novel_uncert"].append(
 #            pt.uncertainty_change(
@@ -580,7 +610,7 @@ if __name__=='__main__':
     Ntrain = cfg["hyperparams"]["train_size"]
     Niter = cfg["iterations"]
     Ncand = cfg["hyperparams"]["candidate_size"]
-
+    keep = cfg['keep_prob']
     retrain = cfg["retrain_classifier"]
 
     if Nbootstraps>1:
@@ -608,5 +638,5 @@ if __name__=='__main__':
     #output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_noscaling.pkl","wb") as f:
+    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_keepprob{keep}.pkl","wb") as f:
         pickle.dump(output,f)               

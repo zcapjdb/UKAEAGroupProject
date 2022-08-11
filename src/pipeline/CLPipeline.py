@@ -342,7 +342,7 @@ if __name__=='__main__':
     elif not use_AL:
         func = CLPipeline
 
-    seeds = [np.random.randint(0,2**32-1) for i in range(Nbootstraps)]
+    seeds = [i for i in range(Nbootstraps)]
     inp = []
     for s in seeds:
         inp.append([s, config_tasks,CL_mode,f'/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/', 

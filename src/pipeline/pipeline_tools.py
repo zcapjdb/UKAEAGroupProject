@@ -7,7 +7,11 @@ from scipy.spatial.distance import cdist
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 import copy
 import logging
@@ -504,6 +508,55 @@ def retrain_regressor(
     return train_loss, val_loss, train_loss_unscaled, val_loss_unscaled
 
 
+def plot_TSNE(
+    uncert: ITGDatasetDF,
+    train: ITGDatasetDF,
+    iter_num: int,
+) -> None:
+    temp_train = copy.deepcopy(train)
+    start_of_uncert_index = len(temp_train)
+    temp_uncert = copy.deepcopy(uncert)
+    temp_train.add(temp_uncert)
+    temp_train.index = np.arange(len(temp_train))
+
+    print('RUNNING TSNE')
+    temp_train =  temp_train.data.drop(["stable_label","index"], axis=1)
+   # tsne = TSNE(random_state=42, perplexity=50,learning_rate='auto' )
+   # X = tsne.fit_transform(temp_train.values)
+
+#    fig, ax = plt.subplots(4,4, figsize=(24,24))
+#    for h,(a,c) in enumerate(zip(ax.ravel(),temp_train.columns)):
+#        im = a.scatter(X[0:start_of_uncert_index,0],X[0:start_of_uncert_index,1], s=5, c=temp_train.iloc[0:start_of_uncert_index,h].values)
+#        a.scatter(X[start_of_uncert_index:,0],X[start_of_uncert_index:,1], s=5, color='red',label='selection')
+#        divider = make_axes_locatable(a)
+#        cax = divider.append_axes('right', size='5%', pad=0.05)
+#        cbar = fig.colorbar(im, cax=cax, orientation='vertical')        
+#        cbar.set_label(c)
+#        #plt.legend()
+#        a.set_xlabel('x1')
+#        a.set_ylabel('x2')
+#    fig.subplots_adjust(wspace=0.3)
+#    fig.savefig(f'./debug/uncert/tsne{iter_num}.png')
+#    fig.clf()
+
+    fig, ax = plt.subplots(4,4, figsize=(24,24))
+    bins = np.arange(-5,5,0.5)
+    for h,(a,c) in enumerate(zip(ax.ravel(),temp_train.columns)):
+        a.hist(temp_train.iloc[0:start_of_uncert_index,h].values,bins=bins,color='blue',lw=3, histtype='step', density=True)
+        a.axvline(np.median(temp_train.iloc[0:start_of_uncert_index,h].values), color='blue', ls=':', lw=3)
+        a.hist(temp_train.iloc[start_of_uncert_index:,h].values,bins=bins,color='red', histtype='step',lw=3, density=True)
+        a.axvline(np.median(temp_train.iloc[start_of_uncert_index:,h].values), color='red', ls='--', lw=3)
+        a.set_xlabel(c,fontsize=40)
+    fig.subplots_adjust(wspace=0.3)
+    ax[0][0].text(-4,0.4,f"iter: {iter_num}", fontsize=25)
+    fig.tight_layout()
+    fig.savefig(f'./debug/hist/hist{iter_num}.png')
+    
+    fig.clf()        
+    return 
+
+
+
 def get_uncertainty(
     dataset: ITGDatasetDF,
     regressor: Regressor,
@@ -511,6 +564,7 @@ def get_uncertainty(
     order_idx: Union[None, list, np.array] = None,
     train_data: bool = False,
     plot: bool = False,
+    iter_num: int = None,
     device: torch.device = None,
 ) -> (np.array, np.array):
 
@@ -572,8 +626,8 @@ def get_uncertainty(
             tag = "Initial"
         else:
             tag = "Final"
-        keep = 1.0
-        plot_uncertainties(out_std, keep, tag)
+        keep = 0.25
+        plot_uncertainties(out_std, keep, tag,i=iter_num)
 
     if order_idx is not None:
         # matching the real indices to the array position
@@ -702,7 +756,7 @@ def get_most_uncertain(
     logging.debug(f"NaN inputs selected:{nans.isna().sum()}")
     logging.debug(f"Number of selected points {len(out_idx)} ")
 
-    return data_copy, total_std[uncertain_list_indices], idx_arrays[0][uncertain_list_indices], unlabelled_pool
+    return data_copy, total_std[uncertain_list_indices], uncertain_data_idx, unlabelled_pool
 
 
 def regressor_uncertainty(
@@ -715,6 +769,7 @@ def regressor_uncertainty(
     order_idx: Union[None, list, np.array] = None,
     unlabelled_pool: Union[None, ITGDataset] = None,
     device: torch.device = None,
+    iter_num: int=None
 ) -> (ITGDatasetDF, np.array, np.array):
     """
     Calculates the uncertainty of the regressor on the points in the dataloader.
@@ -798,7 +853,7 @@ def regressor_uncertainty(
         else:
             tag = "Initial"
 
-        plot_uncertainties(out_std, keep, tag)
+        plot_uncertainties(out_std, keep,iter_num)
 
     if order_idx is not None:
         # matching the real indices to the array position
@@ -962,29 +1017,31 @@ def uncertainty_change(
     return perc_change
 
 
-def plot_uncertainties(out_std: np.ndarray, keep: float, tag=None) -> None:
+def plot_uncertainties(out_std: np.ndarray, keep: float,path:str=None, tag=None,i:int=None,) -> None:
     """
     Plot the histogram of standard deviations of the the predictions,
     plotting the most uncertain points in a separate plot.
     """
 
     print("plotting...")
-    plt.figure()
-    plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=50)
+    plt.figure(figsize=(8,8))
 
-    name_uncertain = "standard_deviation_histogram_most_uncertain"
-    if tag is not None:
-        name_uncertain = f"{name_uncertain}_{tag}"
-    plt.savefig(f"{name_uncertain}.png")
-    plt.clf()
+#    name_uncertain = "standard_deviation_histogram_most_uncertain"
+#    if tag is not None:
+#        name_uncertain = f"{name_uncertain}_{tag}"
+#    plt.savefig(f"{name_uncertain}.png")
+#    plt.clf()
 
-    plt.figure()
-    plt.hist(out_std, bins=50)
+    plt.hist(out_std,bins=np.arange(0,0.5,0.01), color='blue', histtype='step', lw=5)
+    plt.axvline(np.median(out_std), color='blue')
+    plt.hist(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]], bins=np.arange(0,0.5,0.01),ls=':' , lw=5, color='red',histtype='step')
+    plt.axvline(np.median(out_std[np.argsort(out_std)[-int(len(out_std) * keep) :]]), color='red')
 
+    plt.title(f"iteration {i}")
     name = "standard_deviation_histogram"
     if tag is not None:
         name = f"{name}_{tag}"
-    plt.savefig(f"{name}.png")
+    plt.savefig(f"./debug/uncert/{name}_{i}.png")
     plt.clf()
 
 
@@ -996,19 +1053,28 @@ def plot_scatter(
     """
     logging.debug(f" plot x shape: {initial_std.shape}")
     logging.debug(f" plot y shape: {final_std.shape}")
-    sns.jointplot(initial_std, final_std, kind="reg")
+    
+    #plot = sns.jointplot(initial_std, final_std, kind="reg")
+    plt.figure(figsize=(8,8))
+    plt.scatter(initial_std, final_std)
+    plt.xlabel("before")
+    plt.ylabel("after")    
+    plt.xlim(0,0.5)
+    plt.ylim(0,0.5)
+    xx = np.arange(0,0.5,0.1)
+    plt.plot(xx,xx, ls=':', color='red',lw=2)
 
-    plt.plot(
-        [initial_std.min(), final_std.max()],
-        [initial_std.min(), final_std.max()],
-        "k--",
-        lw=2,
-    )
-    plt.xlabel("Initial Standard Deviation")
-    plt.ylabel("Final Standard Deviation")
-    plt.title(title)
+#    plt.plot(
+#        [initial_std.min(), final_std.max()],
+#        [initial_std.min(), final_std.max()],
+#        "k--",
+#        lw=2,
+#    )
+
+    plt.title(f"iteration {it}")
     save_path = os.path.join(save_dest, f"{it}_scatter_plot.png")
     plt.savefig(save_path)
+    plt.close()
 
 
 def plot_mse_change(
