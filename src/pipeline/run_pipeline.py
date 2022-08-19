@@ -27,7 +27,8 @@ def get_seeds(seed):
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)     
-    return 
+    seed_byteTensor = torch.random.get_rng_state()
+    return seed_byteTensor
 
 def ALpipeline(cfg):
 
@@ -41,7 +42,7 @@ def ALpipeline(cfg):
             SAVE_PATHS["outputs"] = cfg[2]
             SAVE_PATHS["plots"] = cfg[3]
             cfg = cfg[1]        
-            get_seeds(seed)           
+            seed_byteTensor = get_seeds(seed)           
             first_CL_iter = False
         else:
             cfg = cfg['cfg']
@@ -67,7 +68,7 @@ def ALpipeline(cfg):
             first_CL_iter = cfg[6]
             j = cfg[7]
             cfg = cfg[1]
-            get_seeds(seed)
+            seed_byteTensor = get_seeds(seed)
         else:
             raise ValueError('for CL a list is always expected')
 
@@ -97,6 +98,7 @@ def ALpipeline(cfg):
     CLASSIFIER = True  #CLASSIFIER = cfg["use_classifier"]
     dropout = cfg["hyperparams"]["dropout"]
     keep_prob = cfg['keep_prob']
+    from_scratch = cfg['from_scratch']
 
     # Dictionary to store results of the classifier and regressor for later use
     output_dict = pt.output_dict
@@ -329,8 +331,20 @@ def ALpipeline(cfg):
                     classifier_buffer.scale(scaler, unscale=True)
 
         # --- train data is enriched by new unstable candidate points
-        logging.info(f"Enriching training data with {len(candidates)} new points")
+        #total = cfg['hyperparams']['train_size'] + cfg['hyperparams']['valid_size'] + cfg['hyperparams']['test_size']
+        #train_add = candidates.sample(int(len(candidates)*cfg['hyperparams']['train_size']/total))
+        #candidates.remove(train_add.data.index)
+        #valid_add = candidates.sample(int(len(candidates)*cfg['hyperparams']['valid_size']/total))
+        #candidates.remove(valid_add.data.index)
+        #test_add = candidates.sample(int(len(candidates)*cfg['hyperparams']['test_size']/total))
+        #candidates.remove(test_add.data.index)
+
+      #  logging.info(f"Enriching training data with {len(train_add)} new points")
+
         train_sample.add(candidates)
+        #train_sample.add(train_add)
+        #valid_dataset.add(valid_add)
+        #holdout_set.add(test_add)
         # ---  compute the mean for the loss function
         mean_train = np.mean(train_sample.data['efiitg_gb']) # ---- ToDo =====>>>>> need to upgrade to two outputs
 
@@ -362,11 +376,9 @@ def ALpipeline(cfg):
                 models[FLUX][model].scaler = scaler
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
-            if buffer_size >= cfg["hyperparams"]["buffer_size"]:
-                #classifier_buffer.scale(scaler)
-                train_classifier.add(classifier_buffer)
-                logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
-                # retrain the classifier on the misclassified points
+            if from_scratch:
+                torch.random.set_rng_state(seed_byteTensor)
+                classifier = Classifier(device)
                 losses, accs = pt.retrain_classifier(
                     classifier_buffer,
                     train_classifier,
@@ -377,28 +389,47 @@ def ALpipeline(cfg):
                     lam=lam,
                     patience=cfg["patience"],
                 )
-
-                output_dict["class_train_loss"].append(losses[0])
-                output_dict["class_val_loss"].append(losses[1])
-                output_dict["class_missed_loss"].append(losses[2])
-                output_dict["class_train_acc"].append(accs[0])
-                output_dict["class_val_acc"].append(accs[1])
-                output_dict["class_missed_acc"].append(accs[2])
-
-                _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
-                output_dict['holdout_class_loss'].append(holdout_class_losses[0])
-                output_dict['holdout_class_acc'].append(holdout_class_losses[1])
-                output_dict['holdout_class_precision'].append(holdout_class_losses[2])
-                output_dict['holdout_class_recall'].append(holdout_class_losses[3])
-                output_dict['holdout_class_f1'].append(holdout_class_losses[4])
-                output_dict['holdout_class_auc'].append(holdout_class_losses[5])
+                classifier_buffer = None
 
                 # record which iterations the classifier was retrained on
-                output_dict['class_retrain_iterations'].append(i)
+            else:                
+                if buffer_size >= cfg["hyperparams"]["buffer_size"]:
+                    #classifier_buffer.scale(scaler)
+                    train_classifier.add(classifier_buffer)
+                    logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
+                    # retrain the classifier on the misclassified points
+                    losses, accs = pt.retrain_classifier(
+                        classifier_buffer,
+                        train_classifier,
+                        valid_classifier,
+                        models[FLUXES[0]]["Classifier"],
+                        batch_size=batch_size,
+                        epochs=epochs,
+                        lam=lam,
+                        patience=cfg["patience"],
+                    )
+                    classifier_buffer = None
+                    buffer_size = 0
+
+                    #output_dict["class_train_loss"].append(losses[0])
+                    #output_dict["class_val_loss"].append(losses[1])
+                    #output_dict["class_missed_loss"].append(losses[2])
+                    #output_dict["class_train_acc"].append(accs[0])
+                    #output_dict["class_val_acc"].append(accs[1])
+                    #output_dict["class_missed_acc"].append(accs[2])
+
+        _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
+        output_dict['holdout_class_loss'].append(holdout_class_losses[0])
+        output_dict['holdout_class_acc'].append(holdout_class_losses[1])
+        output_dict['holdout_class_precision'].append(holdout_class_losses[2])
+        output_dict['holdout_class_recall'].append(holdout_class_losses[3])
+        output_dict['holdout_class_f1'].append(holdout_class_losses[4])
+        output_dict['holdout_class_auc'].append(holdout_class_losses[5])
+
+        # record which iterations the classifier was retrained on
+        output_dict['class_retrain_iterations'].append(i)
 
                 # reset buffer
-                classifier_buffer = None
-                buffer_size = 0
 
         holdout_pred_before = []
         train_losses, val_losses = [], []
@@ -406,9 +437,18 @@ def ALpipeline(cfg):
         holdout_pred_after, holdout_loss, holdout_loss_unscaled,holdout_loss_unscaled_norm = [], [], [],[]
         for FLUX in FLUXES:
             # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
-            preds, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale=False)
-            holdout_pred_before.append(preds)
+#            preds, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale=False)
+#            holdout_pred_before.append(preds)
 
+            if from_scratch: 
+                torch.random.set_rng_state(seed_byteTensor)
+                models[FLUX]['Regressor'] = Regressor(
+                            device=device, 
+                            scaler=scaler, 
+                            flux=FLUX, 
+                            dropout=dropout,
+                            model_size=cfg['hyperparams']['model_size']
+                            )
             retrain_losses = pt.retrain_regressor(
                 train_sample,
                 valid_dataset,
@@ -454,48 +494,48 @@ def ALpipeline(cfg):
            # plt.savefig(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/debug/uncert/{cfg['acquisition']}/scatter{i}_{j}_{cfg['acquisition']}.png")
            # plt.close()
 
-        candidates_uncerts_after, data_idxs_after = [], []
+ #       candidates_uncerts_after, data_idxs_after = [], []#
 
-        for FLUX in FLUXES:
-            temp_uncert, temp_idx = pt.get_uncertainty(
-                candidates,
-                models[FLUX]["Regressor"],
-                n_runs=cfg["MC_dropout_runs"],
-                device=device,
-            )
+#        for FLUX in FLUXES:
+#            temp_uncert, temp_idx = pt.get_uncertainty(
+#                candidates,
+#                models[FLUX]["Regressor"],
+#                n_runs=cfg["MC_dropout_runs"],
+#                device=device,
+#            )
 
-            candidates_uncerts_after.append(temp_uncert)
-            data_idxs_after.append(temp_idx)
+#            candidates_uncerts_after.append(temp_uncert)
+#            data_idxs_after.append(temp_idx)
+#            
+#            candidates_uncert_after = pt.reorder_arrays(
+#                candidates_uncerts_after,
+#                data_idxs_after,
+#                data_idx
+#                )
             
-            candidates_uncert_after = pt.reorder_arrays(
-                candidates_uncerts_after,
-                data_idxs_after,
-                data_idx
-                )
-            
-            candidates_uncert_after = np.array(candidates_uncert_after)
-            candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
-            pt.plot_scatter(
-                candidates_uncert_before,
-                candidates_uncert_after,
-                "Novel data",
-                i,
-                f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/debug/uncert/")
+        #    candidates_uncert_after = np.array(candidates_uncert_after)
+        #    candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
+        #    pt.plot_scatter(
+        #        candidates_uncert_before,
+        #        candidates_uncert_after,
+        #        "Novel data",
+        #        i,
+        #        f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/debug/uncert/")#
 
-            test_uncert, _ =  pt.get_uncertainty(
-                holdout_set,
-                models[FLUX]["Regressor"],
-                n_runs=cfg["MC_dropout_runs"],
-                device=device,
-            )
+#            test_uncert, _ =  pt.get_uncertainty(
+#                holdout_set,
+#                models[FLUX]["Regressor"],
+#                n_runs=cfg["MC_dropout_runs"],
+#                device=device,
+#            )##
 
-            fig, ax = plt.subplots(1,1)
-            ax.hist(test_uncert, bins=np.arange(0,0.5,0.01))
-            ax.axvline(np.median(test_uncert),color='red')
-            ax.set_xlabel('test uncert')
-            ax.set_title(f"iteration {i}")
-            fig.savefig(f'./debug/uncert/test_uncert{i}.png')
-            fig.clf()
+#            fig, ax = plt.subplots(1,1)
+#            ax.hist(test_uncert, bins=np.arange(0,0.5,0.01))
+#            ax.axvline(np.median(test_uncert),color='red')
+#            ax.set_xlabel('test uncert')
+#            ax.set_title(f"iteration {i}")
+#            fig.savefig(f'./debug/uncert/test_uncert{i}.png')
+#            fig.clf()
 
 
             #logging.info("Change in uncertainty for most uncertain data points:")
@@ -519,15 +559,15 @@ def ALpipeline(cfg):
 #        )  # these two are probably the only important ones
 #        output_dict["holdout_pred_after"].append(holdout_pred_after)
 #        output_dict["holdout_ground_truth"].append(holdout_set.target)
-        output_dict["retrain_losses"].append(train_losses)
-        output_dict["retrain_val_losses"].append(val_losses)
-        output_dict["retrain_losses_unscaled"].append(train_losses_unscaled)
-        output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
-        output_dict["post_test_loss"].append(holdout_loss)
+#        output_dict["retrain_losses"].append(train_losses)
+#        output_dict["retrain_val_losses"].append(val_losses)
+#        output_dict["retrain_losses_unscaled"].append(train_losses_unscaled)
+#        output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
+#        output_dict["post_test_loss"].append(holdout_loss)
         output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
-        output_dict["post_test_loss_unscaled_norm"].append(holdout_loss_unscaled_norm)
-        output_dict["scale_scaler"].append(models[FLUXES[0]]["Regressor"].scaler.scale_)
-        output_dict["mean_scaler"].append(models[FLUXES[0]]["Regressor"].scaler.mean_)
+#        output_dict["post_test_loss_unscaled_norm"].append(holdout_loss_unscaled_norm)
+#        output_dict["scale_scaler"].append(models[FLUXES[0]]["Regressor"].scaler.scale_)
+#        output_dict["mean_scaler"].append(models[FLUXES[0]]["Regressor"].scaler.mean_)
 
 #        try:
 #            output_dict["mse_before"].append(
@@ -544,19 +584,19 @@ def ALpipeline(cfg):
         logging.info(f"Number of training points at end of iteration {i + 1}: {n_train}")
 
     if run_mode == 'AL':   #we don't necessarily want this in CL for the moment
-        # --- Save at end of iteration
-        output_path = os.path.join(
-            save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl"
-        )
-        with open(output_path, "wb") as f:
-            pickle.dump(output_dict, f)
-        
-        for FLUX in FLUXES:
-            regressor_path = os.path.join(save_dest, f"{FLUX}_regressor_lam_{lam}_iteration_{i}.pkl")
-            torch.save(models[FLUX]["Regressor"].state_dict(), regressor_path)
-        
-        classifier_path = os.path.join(save_dest, f"{FLUXES[0]}_classifier_lam_{lam}_iteration_{i}.pkl")
-        torch.save(models[FLUXES[0]]["Classifier"].state_dict(), classifier_path)
+#        # --- Save at end of iteration
+#        output_path = os.path.join(
+#            save_dest, f"pipeline_outputs_lam_{lam}_iteration_{i}.pkl"
+#        )
+#        with open(output_path, "wb") as f:
+#            pickle.dump(output_dict, f)
+#        
+#        for FLUX in FLUXES:
+#            regressor_path = os.path.join(save_dest, f"{FLUX}_regressor_lam_{lam}_iteration_{i}.pkl")
+#            torch.save(models[FLUX]["Regressor"].state_dict(), regressor_path)
+#        
+#        classifier_path = os.path.join(save_dest, f"{FLUXES[0]}_classifier_lam_{lam}_iteration_{i}.pkl")
+#        torch.save(models[FLUXES[0]]["Classifier"].state_dict(), classifier_path)
         return output_dict
 
     else:
@@ -612,6 +652,8 @@ if __name__=='__main__':
     Ncand = cfg["hyperparams"]["candidate_size"]
     keep = cfg['keep_prob']
     retrain = cfg["retrain_classifier"]
+    from_scratch = cfg['from_scratch']
+    acquisition =  cfg["acquisition"]
 
     if Nbootstraps>1:
         #cfg = np.repeat(cfg,Nbootstraps)
@@ -638,5 +680,7 @@ if __name__=='__main__':
     #output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_keepprob{keep}.pkl","wb") as f:
+    print(f'Done. Saving to {output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}_fromscratch_{from_scratch}.pkl')
+    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}_fromscratch_{from_scratch}.pkl","wb") as f:
         pickle.dump(output,f)               
+    print('Done.')
