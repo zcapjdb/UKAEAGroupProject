@@ -100,6 +100,8 @@ def ALpipeline(cfg):
     keep_prob = cfg['keep_prob']
     from_scratch = cfg['from_scratch']
 
+
+
     # Dictionary to store results of the classifier and regressor for later use
     output_dict = pt.output_dict
 
