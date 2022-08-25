@@ -460,6 +460,65 @@ class Regressor(nn.Module):
         return pred, average_loss
 
 
+
+class EnsembleRegressor:
+    def __init__(self,num_estimators,device, scaler, flux, model_size='deep', dropout=0.1):
+        self.num_estimators = num_estimators
+        self.regressorlist = []
+        self.device = device
+        self.type = 'ensemble'
+        for i in range(self.num_estimators):
+            self.regressorlist.append(
+                Regressor(device, scaler, flux, model_size='deep', dropout=0.1)
+            )
+    def predict_avg_std(self,dataloader):
+        runs = []
+        idx_list = []
+        for i,this_regressor in enumerate(self.num_estimators):
+            this_prediction = []
+            for step, (x, y, z, idx) in enumerate(dataloader):
+                x = x.to(self.device)
+                predictions = this_regressor(x.float()).detach().cpu().numpy()
+                this_prediction.append(predictions)
+                if i==0:
+                    idx_list.append(idx.detach().cpu().numpy())
+            flat_list = [item for sublist in this_prediction for item in sublist]
+            flattened_predictions = np.array(flat_list).flatten()
+            runs.append(flattened_predictions)
+
+        idx_array = [item for sublist in idx_list for item in sublist]
+        idx_array = np.asarray(idx_array, dtype=object).flatten()
+
+        out_std = np.std(np.array(runs), axis=0)
+        out_avg = np.mean(np.array(runs), axis=0)
+        return out_std, out_avg, idx_array
+
+    def predict(self,dataloader):
+        pred, average_loss, unscaled_avg_loss, popback = [], [], [], []
+        for i,this_regressor in enumerate(self.num_estimators):
+            pred_, average_loss_, unscaled_avg_loss_, popback_ = this_regressor.predict(dataloader, unscale=True)
+            pred.append(pred_)
+            average_loss.append(average_loss_)
+            unscaled_avg_loss.append(unscaled_avg_loss_)
+            popback.append(popback_)
+
+        pred = [item for sublist in pred for item in sublist]
+        pred = np.asarray(pred, dtype=object).flatten()
+        average_loss = [item for sublist in average_loss for item in sublist]
+        average_loss = np.asarray(average_loss, dtype=object).flatten()
+        unscaled_avg_loss = [item for sublist in unscaled_avg_loss for item in sublist]
+        unscaled_avg_loss = np.asarray(unscaled_avg_loss, dtype=object).flatten()
+        popback = [item for sublist in popback for item in sublist]
+        popback = np.asarray(popback, dtype=object).flatten()                
+
+        pred = np.mean(np.array(pred), axis=0)
+        average_loss = np.mean(np.array(average_loss), axis=0)
+        unscaled_avg_loss = np.mean(np.array(unscaled_avg_loss), axis=0)
+        popback = np.mean(np.array(popback), axis=0)
+
+        return pred, average_loss, unscaled_avg_loss, popback
+        
+
 class ITGDataset(Dataset):
     def __init__(self, X, y, z=None, indices=None):
         self.X = X
