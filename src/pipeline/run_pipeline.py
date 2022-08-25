@@ -233,11 +233,7 @@ def ALpipeline(cfg):
        # pt.plot_TSNE(candidates, train_sample, iter_num=i)
         
         logging.debug(f"Number of most uncertain {len(data_idx)}")
-        prediction_candidates_before = []
-        for FLUX in FLUXES:
-            prediction_candidates_before.append(
-                models[FLUX]["Regressor"].predict(candidates, unscale=False)
-            )
+  
 
         # =================== >>>>>>>>>> Here goes the Qualikiz acquisition <<<<<<<<<<<<< ==================
 
