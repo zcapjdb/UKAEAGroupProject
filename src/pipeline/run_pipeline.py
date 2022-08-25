@@ -604,6 +604,6 @@ if __name__=='__main__':
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
     print(f'Done. Saving to {output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}.pkl')
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}.pkl","wb") as f:
+    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}_7f38089e29175663899af598fd3a2408a6d768a0.pkl","wb") as f:
         pickle.dump(output,f)               
     print('Done.')

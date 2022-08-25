@@ -517,7 +517,7 @@ class EnsembleRegressor:
         popback = np.mean(np.array(popback), axis=0)
 
         return pred, average_loss, unscaled_avg_loss, popback
-        
+
 
 class ITGDataset(Dataset):
     def __init__(self, X, y, z=None, indices=None):
@@ -767,10 +767,10 @@ def train_model(
         torch.save(model.state_dict(), save_path)
 
     if model.type == "classifier":
-        return model, [losses, train_accuracy, validation_losses, val_accuracy]
+        return model#, [losses, train_accuracy, validation_losses, val_accuracy]
 
     elif model.type == "regressor":
-        return model, [losses, losses_unscaled, validation_losses, validation_losses_unscaled] 
+        return model#, [losses, losses_unscaled, validation_losses, validation_losses_unscaled] 
 
 
 def load_model(model, save_path, device, scaler, flux, dropout):

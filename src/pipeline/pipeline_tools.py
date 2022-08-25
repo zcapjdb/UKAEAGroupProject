@@ -34,6 +34,7 @@ output_dict = {
     "mean_scaler": [],
     "scale_scaler": [],
     "n_train_points": [],
+    "n_candidates_classifier":[],
     
     "mse_before": [],
     "mse_after": [],
