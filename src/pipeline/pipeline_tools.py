@@ -448,6 +448,30 @@ def reorder_arrays(arrays:list, orders:list, arrangement:np.array):
     
     return arrays
 
+def retrain_ensemble(    
+    new_dataset: ITGDatasetDF,
+    val_dataset: ITGDatasetDF,
+    ensemble: EnsembleRegressor,
+    learning_rate: int = 1e-4,
+    epochs: int = 10,
+    validation_step: bool = True,
+    lam: Union[float, int] = 1,
+    loc: float = 0.0,
+    scale: float = 0.01,
+    patience: Union[None, int] = None,
+    batch_size: int = 1024,
+    disable_tqdm: bool = True):
+    for regressor in ensemble.regressors:
+        retrain_regressor(new_dataset,
+                val_dataset,
+                regressor,
+                learning_rate=learning_rate,
+                epochs=epochs,
+                validation_step=validation_step,
+                lam=lam,
+                patience=patience,
+                batch_size=batch_size)
+        
 
 def retrain_regressor(
     new_dataset: ITGDatasetDF,
@@ -468,6 +492,21 @@ def retrain_regressor(
     Data for retraining is taken from the combined training and uncertain datasets.
     Returns the losses of the training and validation steps.
     """
+
+
+    if model.type=='ensemble':
+        retrain_ensemble(
+            new_dataset,
+            val_dataset,
+            model,
+            learning_rate=learning_rate,
+            epochs=epochs,
+            validation_step=True,
+            lam=lam,
+            patience=patience,
+            batch_size=batch_size,
+            )        
+        return
 
     logging.info(f"Retraining {model.flux} regressor...\n")
     logging.log(15, f"Training on {len(new_dataset)} points")
@@ -538,7 +577,7 @@ def retrain_regressor(
                 logging.log(15, "Early stopping criterion reached")
                 break
 
-    return train_loss, val_loss, train_loss_unscaled, val_loss_unscaled
+    return #train_loss, val_loss, train_loss_unscaled, val_loss_unscaled
 
 
 def plot_TSNE(
