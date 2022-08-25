@@ -251,18 +251,25 @@ def ALpipeline(cfg):
             uncertainty=candidates_uncert_before, 
             indices=data_idx
             )
-        buffer_size += num_misclassified
-        if classifier_buffer is None:
-            classifier_buffer = md.ITGDatasetDF(
-                misclassified_data, FLUXES[0], keep_index=True
-            )             
-        else:
-            misclassified_data = md.ITGDatasetDF(
-                misclassified_data, FLUXES[0], keep_index=True
-            )                             
-            classifier_buffer.add(misclassified_data)   
-        logging.info(f"Misclassified data: {num_misclassified}")
-        logging.info(f"Total Buffer size: {buffer_size}")
+
+        if cfg['retrain_classifier']:
+            if classifier_buffer is None:
+                classifier_buffer = md.ITGDatasetDF(
+                    misclassified_data, FLUXES[0], keep_index=True
+                )             
+            else:
+                misclassified_data = md.ITGDatasetDF(
+                    misclassified_data, FLUXES[0], keep_index=True
+                )                             
+                classifier_buffer.add(misclassified_data) 
+            # --- add the candidates (i.e. the unstable) to misclassified set (i.e. the stable)
+            # --- so the classifier is trained with both stable and unstable new points
+            # --- hopefully  if the manifold is smooth even the points that the classifier got right are informative
+            # --- in fact some of these points are probably still very uncertain:
+            # --- ToDo:===>>> potentially add only the most uncertain candidates
+            buffer_from_candidates = candidates.sample(len(misclassified_data))
+            classifier_buffer.add(buffer_from_candidates)  
+            buffer_size += len(misclassified_data) + len(buffer_from_candidates)
         
 
         # --- set up retraining by rescaling all points according to new training data --------------------
@@ -297,7 +304,6 @@ def ALpipeline(cfg):
         #valid_dataset.add(valid_add)
         #holdout_set.add(test_add)
         # ---  compute the mean for the loss function
-        mean_train = np.mean(train_sample.data['efiitg_gb']) # ---- ToDo =====>>>>> need to upgrade to two outputs
 
        # bins = np.arange(-50,150)
        # plt.hist(candidates.data['efiitg_gb'], bins=bins, color='orange', histtype='step', label='candidates', density=True,lw=2)
@@ -344,13 +350,6 @@ def ALpipeline(cfg):
                 classifier_buffer = None
                 buffer_size = 0
 
-                #output_dict["class_train_loss"].append(losses[0])
-                #output_dict["class_val_loss"].append(losses[1])
-                #output_dict["class_missed_loss"].append(losses[2])
-                #output_dict["class_train_acc"].append(accs[0])
-                #output_dict["class_val_acc"].append(accs[1])
-                #output_dict["class_missed_acc"].append(accs[2])
-
         _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
         output_dict['holdout_class_loss'].append(holdout_class_losses[0])
         output_dict['holdout_class_acc'].append(holdout_class_losses[1])
@@ -367,7 +366,7 @@ def ALpipeline(cfg):
         holdout_pred_before = []
         train_losses, val_losses = [], []
         train_losses_unscaled, val_losses_unscaled = [], []
-        holdout_pred_after, holdout_loss, holdout_loss_unscaled,holdout_loss_unscaled_norm = [], [], [],[]
+        holdout_pred_after, holdout_loss, holdout_loss_unscaled,popback = [], [], [],[]
         for FLUX in FLUXES:
             # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
 #            preds, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale=False)
@@ -393,86 +392,15 @@ def ALpipeline(cfg):
             
             logging.info(f"Running prediction on validation data set")
             # --- validation on holdout set after regressor is retrained
-            hold_pred_after, hold_loss, hold_loss_unscaled, hold_loss_unscaled_norm = models[FLUX]["Regressor"].predict(holdout_set, unscale=True, mean=mean_train)
+            hold_pred_after, hold_loss, hold_loss_unscaled, popback_ = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
             holdout_pred_after.append(hold_pred_after)
             holdout_loss.append(hold_loss)
             holdout_loss_unscaled.append(hold_loss_unscaled)
-            holdout_loss_unscaled_norm.append(hold_loss_unscaled_norm)
+            popback.append(popback_)
             logging.info(f"{FLUX} test loss: {hold_loss}")
             logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
-            logging.info(f"{FLUX} test loss unscaled norm: {hold_loss_unscaled_norm}")
+            logging.info(f"{FLUX} test loss unscaled norm: {popback_}")
   
-           # plt.hist(hold_pred_after, bins=bins, color='magenta',histtype='step',label='pred', density=True,lw=2)
-           # plt.title(f'iter {i}, task {j}')
-           # plt.legend()
-           # plt.savefig(f"debug/hist/CL/{cfg['acquisition']}/hist{i}_{j}_{cfg['acquisition']}.png")
-           # plt.close()
-
-
-           # bins = np.arange(0,3,0.1)
-           # plt.scatter(candidates_uncert_before)
-           # plt.ylabel('yhat')
-           # plt.xlabel('y')
-           # plt.plot(bins,bins, lw=4, color='red')
-           # plt.savefig(f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/debug/uncert/{cfg['acquisition']}/scatter{i}_{j}_{cfg['acquisition']}.png")
-           # plt.close()
-
- #       candidates_uncerts_after, data_idxs_after = [], []#
-
-#        for FLUX in FLUXES:
-#            temp_uncert, temp_idx = pt.get_uncertainty(
-#                candidates,
-#                models[FLUX]["Regressor"],
-#                n_runs=cfg["MC_dropout_runs"],
-#                device=device,
-#            )
-
-#            candidates_uncerts_after.append(temp_uncert)
-#            data_idxs_after.append(temp_idx)
-#            
-#            candidates_uncert_after = pt.reorder_arrays(
-#                candidates_uncerts_after,
-#                data_idxs_after,
-#                data_idx
-#                )
-            
-        #    candidates_uncert_after = np.array(candidates_uncert_after)
-        #    candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
-        #    pt.plot_scatter(
-        #        candidates_uncert_before,
-        #        candidates_uncert_after,
-        #        "Novel data",
-        #        i,
-        #        f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/debug/uncert/")#
-
-#            test_uncert, _ =  pt.get_uncertainty(
-#                holdout_set,
-#                models[FLUX]["Regressor"],
-#                n_runs=cfg["MC_dropout_runs"],
-#                device=device,
-#            )##
-
-#            fig, ax = plt.subplots(1,1)
-#            ax.hist(test_uncert, bins=np.arange(0,0.5,0.01))
-#            ax.axvline(np.median(test_uncert),color='red')
-#            ax.set_xlabel('test uncert')
-#            ax.set_title(f"iteration {i}")
-#            fig.savefig(f'./debug/uncert/test_uncert{i}.png')
-#            fig.clf()
-
-
-            #logging.info("Change in uncertainty for most uncertain data points:")
-
-#        output_dict["d_novel_uncert"].append(
-#            pt.uncertainty_change(
-#                x=candidates_uncert_before,
-#                y=candidates_uncert_after,
-#                plot_title="Novel data",
-#                iteration=i,
-#                save_path=save_dest,
-#            )
-#       )
-#
 
 #        output_dict["novel_uncert_before"].append(candidates_uncert_before)
 #        output_dict["novel_uncert_after"].append(candidates_uncert_after)
@@ -488,19 +416,10 @@ def ALpipeline(cfg):
 #        output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
 #        output_dict["post_test_loss"].append(holdout_loss)
         output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
-#        output_dict["post_test_loss_unscaled_norm"].append(holdout_loss_unscaled_norm)
+        output_dict["popback"].append(popback)
 #        output_dict["scale_scaler"].append(models[FLUXES[0]]["Regressor"].scaler.scale_)
 #        output_dict["mean_scaler"].append(models[FLUXES[0]]["Regressor"].scaler.mean_)
 
-#        try:
-#            output_dict["mse_before"].append(
-#                train_mse_before
-#            )  # these three relate to the training MSE, probably not so useful to inspect
-#            output_dict["mse_after"].append(train_mse_after)
-#            output_dict["d_mse"].append(delta_mse)
-#        except:
-#            pass
-        
 
         n_train = len(train_sample)
         output_dict["n_train_points"].append(n_train)
