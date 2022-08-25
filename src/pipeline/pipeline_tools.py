@@ -16,11 +16,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import copy
 import logging
 from scripts.utils import train_keys, target_keys
-from pipeline.Models import ITGDatasetDF, ITGDataset, Classifier, Regressor
+from pipeline.Models import ITGDatasetDF, ITGDataset, Classifier, Regressor, EnsembleRegressor
 from typing import Union
 import os
-
-logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 output_dict = {
     "train_loss_init": [],  # Regressor performance before pipeline
@@ -32,7 +30,7 @@ output_dict = {
     "retrain_val_losses_unscaled": [],
     "post_test_loss": [],  # regressor performance after retraining
     "post_test_loss_unscaled": [],  # regressor performance after retraining, unscaled
-    "post_test_loss_unscaled_norm": [],  # regressor performance after retraining, unscaled, normalised
+    "popback": [],  # regressor performance after retraining, unscaled, normalised
     "mean_scaler": [],
     "scale_scaler": [],
     "n_train_points": [],
@@ -71,6 +69,7 @@ output_dict = {
     "holdout_class_auc": [],
     "class_retrain_iterations": [],
 }
+
 
 
 # Data preparation functions
@@ -229,6 +228,38 @@ def get_data(cfg,scaler=None,apply_scaler=True,j=None):
         train_regr, train_class, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler = scale_data(train_regr, train_class, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, scaler=scaler)
         print('LEN TEST SET AT START', len(holdout_set)) 
     return train_regr, train_class, valid_dataset, valid_classifier, unlabelled_pool, holdout_set, holdout_classifier, saved_tests, scaler
+
+
+
+def get_regressor_model(
+    regressor_type,
+    device,
+    scaler,
+    flux,
+    dropout,
+    model_size,
+    num_estimators = None):
+        if regressor_type=='Regressor':
+            print('WARNING: passed num_estimators but single regressor is trained')
+            return Regressor(
+            device=device, 
+            scaler=scaler, 
+            flux=flux, 
+            dropout=dropout,
+            model_size=model_size
+            ) 
+        elif regressor_type == 'EnsembleRegressor':
+            if num_estimators is not None:
+                return EnsembleRegressor(
+                num_estimators = 10,
+                device=device, 
+                scaler=scaler, 
+                flux=flux, 
+                dropout=dropout,
+                model_size=model_size
+                )    
+            else:
+                raise ValueError('EnsembleRegressor needs number of estimators >1')
 
 # classifier tools
 def select_unstable_data(
@@ -683,6 +714,7 @@ def get_most_uncertain(
     n_candidates = out_stds[0].shape[0]
 
     if len(out_stds) > 1:
+        print('BAZINGA')
         assert len(idx_arrays) == len(out_stds), "N indices doesn't match N stds"
         pred_list = []
         # reorder idx_arrays to match the order of idx_arrays[0]
@@ -711,7 +743,7 @@ def get_most_uncertain(
     else:
         total_std = out_stds[0]
         data_copy.data = data_copy.data.loc[idx_arrays[0]]
-        pred_array, _ = model.predict(data_copy)    
+    #    pred_array, _ = model.predict(data_copy)    
 
     #TODO: how to best choose alpha?
     if acquisition == "distance_penalty":
