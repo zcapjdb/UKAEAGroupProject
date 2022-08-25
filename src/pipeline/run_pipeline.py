@@ -371,7 +371,7 @@ def ALpipeline(cfg):
             # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
 #            preds, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale=False)
 
-            retrain_losses = pt.retrain_regressor(
+            pt.retrain_regressor(
                 train_sample,
                 valid_dataset,
                 models[FLUX]["Regressor"],
@@ -383,12 +383,6 @@ def ALpipeline(cfg):
                 batch_size=batch_size,
             )
 
-            train_loss, val_loss, train_loss_unscaled, val_loss_unscaled = retrain_losses
-
-            train_losses.append(train_loss)
-            val_losses.append(val_loss)
-            train_losses_unscaled.append(train_loss_unscaled)
-            val_losses_unscaled.append(val_loss_unscaled)
             
             logging.info(f"Running prediction on validation data set")
             # --- validation on holdout set after regressor is retrained
@@ -523,6 +517,6 @@ if __name__=='__main__':
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
     print(f'Done. Saving to {output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}.pkl')
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}_7f38089e29175663899af598fd3a2408a6d768a0.pkl","wb") as f:
+    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}_f26e6ffdb41607d3aa7c6ba670fe89d0007699d3.pkl","wb") as f:
         pickle.dump(output,f)               
     print('Done.')
