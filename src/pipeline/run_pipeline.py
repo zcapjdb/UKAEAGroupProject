@@ -190,6 +190,8 @@ def ALpipeline(cfg):
         unlabelled_pool.remove(candidates.data.index)
 
         # --- See Issue #37 --- candidates are only those that the classifier selects as unstable.
+
+        # MODIFY HERE FOR ENSEMBLE
         candidates = pt.select_unstable_data(
             candidates,
             batch_size=batch_size,
