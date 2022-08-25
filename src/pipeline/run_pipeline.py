@@ -82,24 +82,17 @@ def ALpipeline(cfg):
 
     # Logging levels, DEBUG = 10, VERBOSE = 15, INFO = 20, NOTICE = 25, WARNING = 30, SUCCESS = 35, ERROR = 40, CRITICAL = 50
 
-    FLUXES = cfg["flux"]  # is now a list of the relevant fluxes
-    PRETRAINED = cfg["pretrained"]
-    PATHS = cfg["data"]
 
-    sample_size = cfg[
-        "sample_size_debug"
-    ]  # percentage of data to use - lower for debugging
+    FLUXES = cfg["flux"]  # is now a list of the relevant fluxes
     lam = cfg["hyperparams"]["lambda"]
-    train_size = cfg["hyperparams"]["train_size"]
-    valid_size = cfg["hyperparams"]["valid_size"]
-    test_size = cfg["hyperparams"]["test_size"]
     batch_size = cfg["hyperparams"]["batch_size"]
     candidate_size = cfg["hyperparams"]["candidate_size"]
-    CLASSIFIER = True  #CLASSIFIER = cfg["use_classifier"]
     dropout = cfg["hyperparams"]["dropout"]
     keep_prob = cfg['keep_prob']
-    from_scratch = cfg['from_scratch']
-
+    regressor_type = cfg['regressor_type'] # 'Regressor','EnsembleRegressor'
+    num_estimators = cfg['num_estimators']
+    # Dictionary to store results of the classifier and regressor for later use
+    output_dict = pt.output_dict
     # Dictionary to store results of the classifier and regressor for later use
     output_dict = pt.output_dict
 
@@ -129,85 +122,48 @@ def ALpipeline(cfg):
     # ------------------------------------------- Load or train first models ------------------------------------------
     if run_mode == 'AL'  or (run_mode=='CL' and first_CL_iter):
         models = {f:{} for f in FLUXES}
-        
-        for model in PRETRAINED:
-            if model == "Regressor":
-                for FLUX in FLUXES:
-                    if PRETRAINED[model][FLUX]["trained"] == True:
-                        trained_model = md.load_model(
-                            model, PRETRAINED[model][FLUX]["save_path"], device, scaler, FLUX, dropout
-                        )
-                        if FLUX not in models.keys():
-                            models[FLUX] = {model: trained_model.to(device)}
-                        else:
-                            models[FLUX][model] = trained_model.to(device)
-
-                    else:
-                        logging.info(f"{FLUX} {model} not trained - training now")
-
-                        models[FLUX][model] = Regressor(
-                            device=device, 
-                            scaler=scaler, 
-                            flux=FLUX, 
-                            dropout=dropout,
-                            model_size=cfg['hyperparams']['model_size']
-                            )
-        
-                        models[FLUX][model], losses = md.train_model(
-                            models[FLUX][model],
-                            train_sample,
-                            valid_dataset,
-                            save_path=PRETRAINED[model][FLUX]["save_path"],
-                            epochs=cfg["train_epochs"],
-                            patience=cfg["train_patience"],
-                        )
-                        
-                        train_loss, train_loss_unscaled, valid_loss, valid_loss_unscaled = losses
-                        output_dict["train_loss_init"].append(train_loss)
-
-                            # if model == "Classifier":  --- not used currently
-                            #    losses, train_accuracy, validation_losses, val_accuracy = losses
-      
-
-            elif CLASSIFIER:
-                if PRETRAINED[model][FLUXES[0]]["trained"] == True:
-                    trained_model = md.load_model(
-                        model, PRETRAINED[model][FLUXES[0]]["save_path"], device, scaler, FLUXES[0], dropout
-                    )
-                    models[FLUXES[0]] = {model: trained_model.to(device)} 
-                else: 
-                    logging.info(f"{FLUXES[0]} {model} not trained - training now")
-                    models[FLUXES[0]][model] = Classifier(device)
-
-                    models[FLUXES[0]][model], losses = md.train_model(
-                            models[FLUXES[0]][model],
-                            train_classifier,
-                            valid_classifier,
-                            save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
-                            epochs=cfg["train_epochs"],
-                            patience=cfg["train_patience"],
-                        )
-
         for FLUX in FLUXES:
-            logging.debug(f"Models for {FLUX} : {models[FLUX].keys()}")
+            models[FLUX]['Regressor'] = pt.get_regressor_model(
+                    regressor_type,
+                    device,
+                    scaler,
+                    FLUX,
+                    dropout,
+                    model_size,
+                    num_estimators)
 
-        # ---- Losses before the pipeline starts #TODO: Fix output dict to be able to handle multiple variables
-        for FLUX in FLUXES:
+            models[FLUX]['Regressor'] = md.train_model(
+                models[FLUX]['Regressor'],
+                train_sample,
+                valid_dataset,
+               # save_path=PRETRAINED[model][FLUX]["save_path"], #change!!!
+                epochs=cfg["train_epochs"],
+                patience=cfg["train_patience"],
+            )    
             logging.info(f"Test loss for {FLUX} before pipeline:")
-            _, holdout_loss, holdout_loss_unscaled, holdout_loss_unscaled_norm = models[FLUX]["Regressor"].predict(holdout_set, unscale=True, mean=None )
+            _, holdout_loss, holdout_loss_unscaled, popback = models[FLUX]["Regressor"].predict(holdout_set, unscale=True )
             logging.info(f"Holdout Loss: {holdout_loss}")
             logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
             output_dict["test_loss_init"].append(holdout_loss)
             output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
-        if CLASSIFIER:   
-            _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
-            output_dict['class_test_acc_init'].append(holdout_class_losses[1])
-            output_dict['class_precision_init'].append(holdout_class_losses[2])
-            output_dict['class_recall_init'].append(holdout_class_losses[3])
-            output_dict['class_f1_init'].append(holdout_class_losses[4])
-            output_dict['class_auc_init'].append(holdout_class_losses[5])
+
+        models[FLUXES[0]]['Classifier'] = Classifier(device)
+        models[FLUXES[0]]['Classifier'] = md.train_model(
+                models[FLUXES[0]]['Classifier'],
+                train_classifier,
+                valid_classifier,
+              #  save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
+                epochs=cfg["train_epochs"],
+                patience=cfg["train_patience"],
+            )            
+        _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
+        output_dict['class_test_acc_init'].append(holdout_class_losses[1])
+        output_dict['class_precision_init'].append(holdout_class_losses[2])
+        output_dict['class_recall_init'].append(holdout_class_losses[3])
+        output_dict['class_f1_init'].append(holdout_class_losses[4])
+        output_dict['class_auc_init'].append(holdout_class_losses[5])
     else:
-        pass # --- models are passed from CL pipeline            
+        pass # --- models are passed from CL pipeline     
 
     # Create logger object for use in pipeline
     verboselogs.install()
@@ -234,14 +190,14 @@ def ALpipeline(cfg):
         unlabelled_pool.remove(candidates.data.index)
 
         # --- See Issue #37 --- candidates are only those that the classifier selects as unstable.
-        if CLASSIFIER: # if we are using the classifier use it to remove stable labels
-            candidates = pt.select_unstable_data(
-                candidates,
-                batch_size=batch_size,
-                classifier=models[FLUXES[0]]["Classifier"],
-                device=device,
-            ) 
-            logging.info(f"{len(candidates)} candidates selected")
+        candidates = pt.select_unstable_data(
+            candidates,
+            batch_size=batch_size,
+            classifier=models[FLUXES[0]]["Classifier"],
+            device=device,
+        ) 
+        logging.info(f"{len(candidates)} candidates selected")
+        output_dict['n_candidates_classifier'].append(len(candidates))
 
 
         # ---  get most uncertain candidate inputs as decided by regressor   --- NEW AL FRAMEWORK GOES HERE
@@ -290,29 +246,24 @@ def ALpipeline(cfg):
 
         # ToDo ===========>>>> Now we do have the labels because Qualikiz gave them to us!  Need to discard misclassified data from enriched_train_loader, and retrain the classifier if buffer_size is big enough
         # check for misclassified data in candidates and add them to the buffer
-        if CLASSIFIER:
-            candidates, misclassified_data, num_misclassified, data_idx, candidates_uncert_before = pt.check_for_misclassified_data(
-                candidates, 
-                uncertainty=candidates_uncert_before, 
-                indices=data_idx
-                )
-            buffer_size += num_misclassified
-            if classifier_buffer is None:
-                classifier_buffer = md.ITGDatasetDF(
-                    misclassified_data, FLUXES[0], keep_index=True
-                )             
-            else:
-                misclassified_data = md.ITGDatasetDF(
-                    misclassified_data, FLUXES[0], keep_index=True
-                )                             
-                classifier_buffer.add(misclassified_data)   
-            logging.info(f"Misclassified data: {num_misclassified}")
-            logging.info(f"Total Buffer size: {buffer_size}")
+        candidates, misclassified_data, num_misclassified, data_idx, candidates_uncert_before = pt.check_for_misclassified_data(
+            candidates, 
+            uncertainty=candidates_uncert_before, 
+            indices=data_idx
+            )
+        buffer_size += num_misclassified
+        if classifier_buffer is None:
+            classifier_buffer = md.ITGDatasetDF(
+                misclassified_data, FLUXES[0], keep_index=True
+            )             
+        else:
+            misclassified_data = md.ITGDatasetDF(
+                misclassified_data, FLUXES[0], keep_index=True
+            )                             
+            classifier_buffer.add(misclassified_data)   
+        logging.info(f"Misclassified data: {num_misclassified}")
+        logging.info(f"Total Buffer size: {buffer_size}")
         
-        elif len(FLUXES)>1:
-            # at this stage we know which of the inputs give a stable label or not so we can drop the stable values
-            #  
-            pass 
 
         # --- set up retraining by rescaling all points according to new training data --------------------
        # --- unscale all datasets, 
@@ -372,13 +323,14 @@ def ALpipeline(cfg):
              
         # --- update scaler in the models
         for FLUX in FLUXES:
-            for model in PRETRAINED:
-                models[FLUX][model].scaler = scaler
+            models[FLUX]['Regressor'].scaler = scaler
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
-            if from_scratch:
-                torch.random.set_rng_state(seed_byteTensor)
-                classifier = Classifier(device)
+            if buffer_size >= cfg["hyperparams"]["buffer_size"]:
+                #classifier_buffer.scale(scaler)
+                train_classifier.add(classifier_buffer)
+                logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
+                # retrain the classifier on the misclassified points
                 losses, accs = pt.retrain_classifier(
                     classifier_buffer,
                     train_classifier,
@@ -390,33 +342,14 @@ def ALpipeline(cfg):
                     patience=cfg["patience"],
                 )
                 classifier_buffer = None
+                buffer_size = 0
 
-                # record which iterations the classifier was retrained on
-            else:                
-                if buffer_size >= cfg["hyperparams"]["buffer_size"]:
-                    #classifier_buffer.scale(scaler)
-                    train_classifier.add(classifier_buffer)
-                    logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
-                    # retrain the classifier on the misclassified points
-                    losses, accs = pt.retrain_classifier(
-                        classifier_buffer,
-                        train_classifier,
-                        valid_classifier,
-                        models[FLUXES[0]]["Classifier"],
-                        batch_size=batch_size,
-                        epochs=epochs,
-                        lam=lam,
-                        patience=cfg["patience"],
-                    )
-                    classifier_buffer = None
-                    buffer_size = 0
-
-                    #output_dict["class_train_loss"].append(losses[0])
-                    #output_dict["class_val_loss"].append(losses[1])
-                    #output_dict["class_missed_loss"].append(losses[2])
-                    #output_dict["class_train_acc"].append(accs[0])
-                    #output_dict["class_val_acc"].append(accs[1])
-                    #output_dict["class_missed_acc"].append(accs[2])
+                #output_dict["class_train_loss"].append(losses[0])
+                #output_dict["class_val_loss"].append(losses[1])
+                #output_dict["class_missed_loss"].append(losses[2])
+                #output_dict["class_train_acc"].append(accs[0])
+                #output_dict["class_val_acc"].append(accs[1])
+                #output_dict["class_missed_acc"].append(accs[2])
 
         _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
         output_dict['holdout_class_loss'].append(holdout_class_losses[0])
@@ -438,17 +371,7 @@ def ALpipeline(cfg):
         for FLUX in FLUXES:
             # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
 #            preds, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale=False)
-#            holdout_pred_before.append(preds)
 
-            if from_scratch: 
-                torch.random.set_rng_state(seed_byteTensor)
-                models[FLUX]['Regressor'] = Regressor(
-                            device=device, 
-                            scaler=scaler, 
-                            flux=FLUX, 
-                            dropout=dropout,
-                            model_size=cfg['hyperparams']['model_size']
-                            )
             retrain_losses = pt.retrain_regressor(
                 train_sample,
                 valid_dataset,
@@ -680,7 +603,7 @@ if __name__=='__main__':
     #output_dir = f"/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/{total}_{Ntrain}/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
-    print(f'Done. Saving to {output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}_fromscratch_{from_scratch}.pkl')
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}_fromscratch_{from_scratch}.pkl","wb") as f:
+    print(f'Done. Saving to {output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}.pkl')
+    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}.pkl","wb") as f:
         pickle.dump(output,f)               
     print('Done.')
