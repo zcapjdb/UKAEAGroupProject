@@ -250,24 +250,25 @@ def ALpipeline(cfg):
             indices=data_idx
             )
 
-        if cfg['retrain_classifier']:
-            if classifier_buffer is None:
-                classifier_buffer = md.ITGDatasetDF(
-                    misclassified_data, FLUXES[0], keep_index=True
-                )             
-            else:
-                misclassified_data = md.ITGDatasetDF(
-                    misclassified_data, FLUXES[0], keep_index=True
-                )                             
-                classifier_buffer.add(misclassified_data) 
-            # --- add the candidates (i.e. the unstable) to misclassified set (i.e. the stable)
-            # --- so the classifier is trained with both stable and unstable new points
-            # --- hopefully  if the manifold is smooth even the points that the classifier got right are informative
-            # --- in fact some of these points are probably still very uncertain:
-            # --- ToDo:===>>> potentially add only the most uncertain candidates
-            buffer_from_candidates = candidates.sample(len(misclassified_data))
-            classifier_buffer.add(buffer_from_candidates)  
-            buffer_size += len(misclassified_data) + len(buffer_from_candidates)
+#        if cfg['retrain_classifier']:
+#            classifier_buffer = copy.deepcopy(candidates)
+#            if classifier_buffer is None:
+#                classifier_buffer = md.ITGDatasetDF(
+#                    misclassified_data, FLUXES[0], keep_index=True
+#                )             
+#            else:
+#                misclassified_data = md.ITGDatasetDF(
+#                    misclassified_data, FLUXES[0], keep_index=True
+#                )                             
+#                classifier_buffer.add(misclassified_data) 
+#            # --- add the candidates (i.e. the unstable) to misclassified set (i.e. the stable)
+#            # --- so the classifier is trained with both stable and unstable new points
+#            # --- hopefully  if the manifold is smooth even the points that the classifier got right are informative
+#            # --- in fact some of these points are probably still very uncertain:
+#            # --- ToDo:===>>> potentially add only the most uncertain candidates
+#            buffer_from_candidates = candidates.sample(len(misclassified_data))
+#            classifier_buffer.add(buffer_from_candidates)  
+#            buffer_size += len(misclassified_data) + len(buffer_from_candidates)
         
 
         # --- set up retraining by rescaling all points according to new training data --------------------
@@ -281,10 +282,10 @@ def ALpipeline(cfg):
         holdout_set.scale(scaler, unscale=True)
         holdout_classifier.scale(scaler, unscale=True)
 
-        if classifier_buffer is not None:
-            print('len classifier buffer at unscale:',len(classifier_buffer))
-            if len(classifier_buffer)>0:
-                    classifier_buffer.scale(scaler, unscale=True)
+#        if classifier_buffer is not None:
+#            print('len classifier buffer at unscale:',len(classifier_buffer))
+#            if len(classifier_buffer)>0:
+#                    classifier_buffer.scale(scaler, unscale=True)
 
         # --- train data is enriched by new unstable candidate points
         #total = cfg['hyperparams']['train_size'] + cfg['hyperparams']['valid_size'] + cfg['hyperparams']['test_size']
@@ -320,9 +321,9 @@ def ALpipeline(cfg):
         valid_classifier.scale(scaler)
         holdout_set.scale(scaler)
         holdout_classifier.scale(scaler)
-        if classifier_buffer is not None:
-            if len(classifier_buffer)>0:            
-                classifier_buffer.scale(scaler)
+#        if classifier_buffer is not None:
+#            if len(classifier_buffer)>0:            
+#                classifier_buffer.scale(scaler)
                 
              
         # --- update scaler in the models
@@ -330,23 +331,23 @@ def ALpipeline(cfg):
             models[FLUX]['Regressor'].scaler = scaler
         # --- Classifier retraining:
         if cfg["retrain_classifier"]:
-            if buffer_size >= cfg["hyperparams"]["buffer_size"]:
-                #classifier_buffer.scale(scaler)
-                train_classifier.add(classifier_buffer)
-                logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
-                # retrain the classifier on the misclassified points
-                losses, accs = pt.retrain_classifier(
-                    classifier_buffer,
-                    train_classifier,
-                    valid_classifier,
-                    models[FLUXES[0]]["Classifier"],
-                    batch_size=batch_size,
-                    epochs=epochs,
-                    lam=lam,
-                    patience=cfg["patience"],
-                )
-                classifier_buffer = None
-                buffer_size = 0
+          #  if buffer_size >= cfg["hyperparams"]["buffer_size"]:
+            #classifier_buffer.scale(scaler)
+            train_classifier.add(candidates)
+            logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
+            # retrain the classifier on the misclassified points
+            losses, accs = pt.retrain_classifier(
+                classifier_buffer,
+                train_classifier,
+                valid_classifier,
+                models[FLUXES[0]]["Classifier"],
+                batch_size=batch_size,
+                epochs=epochs,
+                lam=lam,
+                patience=cfg["patience"],
+            )
+         #   classifier_buffer = None
+         #   buffer_size = 0
 
         _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
         output_dict['holdout_class_loss'].append(holdout_class_losses[0])
