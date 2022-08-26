@@ -339,7 +339,6 @@ def check_for_misclassified_data(
 
 # Function to retrain the classifier on the misclassified points
 def retrain_classifier(
-    misclassified_dataset: ITGDatasetDF,
     training_dataset: ITGDatasetDF,
     valid_dataset: ITGDataset,
     classifier: Classifier,
@@ -360,15 +359,11 @@ def retrain_classifier(
     """
 
     logging.info("Retraining classifier...\n")
-    data_size = len(misclassified_dataset) + len(training_dataset)
-    logging.log(15, f"Training on {data_size} points")
 
     train = copy.deepcopy(training_dataset)
-    #train.add(misclassified_dataset)
 
     # create data loaders
     train_loader = pandas_to_numpy_data(train, batch_size=batch_size, shuffle=True)
-    missed_loader = pandas_to_numpy_data(misclassified_dataset, shuffle=True)
     valid_loader = pandas_to_numpy_data(valid_dataset)
 
     # By default passing lambda = 1 corresponds to a warm start (loc and scale are ignored in this case)
@@ -416,17 +411,14 @@ def retrain_classifier(
             val_loss.append(validation_loss)
             val_acc.append(validation_accuracy)
 
-            logging.debug(f"Evaluating on just the misclassified points")
-            miss_loss, miss_acc = classifier.validation_step(missed_loader)
-            missed_loss.append(miss_loss)
-            missed_acc.append(miss_acc)
+
 
         if len(val_loss) > patience:
             if np.mean(val_acc[-patience:]) > val_acc[-1]:
                 logging.debug("Early stopping criterion reached")
                 break
 
-    return [train_loss, val_loss, missed_loss], [train_acc, val_acc, missed_acc]
+    return [train_loss, val_loss], [train_acc, val_acc]
 
 
 # Regressor tools

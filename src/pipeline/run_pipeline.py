@@ -334,10 +334,9 @@ def ALpipeline(cfg):
           #  if buffer_size >= cfg["hyperparams"]["buffer_size"]:
             #classifier_buffer.scale(scaler)
             train_classifier.add(candidates)
-            logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
+            #logging.info(f"Buffer full, retraining classifier with {len(classifier_buffer)} points")
             # retrain the classifier on the misclassified points
             losses, accs = pt.retrain_classifier(
-                classifier_buffer,
                 train_classifier,
                 valid_classifier,
                 models[FLUXES[0]]["Classifier"],
@@ -516,6 +515,6 @@ if __name__=='__main__':
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
     print(f'Done. Saving to {output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}.pkl')
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}_f26e6ffdb41607d3aa7c6ba670fe89d0007699d3.pkl","wb") as f:
+    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}_8cf5eba32f32ef1ead3fc8c061843bd21baf1301.pkl","wb") as f:
         pickle.dump(output,f)               
     print('Done.')
