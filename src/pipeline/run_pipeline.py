@@ -21,6 +21,7 @@ from pipeline.Models import Classifier, Regressor
 import argparse
 import pandas as pd
 import numpy as np 
+import wandb
 from multiprocessing import Pool
 
 def get_seeds(seed):
@@ -244,30 +245,31 @@ def ALpipeline(cfg):
 
         # ToDo ===========>>>> Now we do have the labels because Qualikiz gave them to us!  Need to discard misclassified data from enriched_train_loader, and retrain the classifier if buffer_size is big enough
         # check for misclassified data in candidates and add them to the buffer
-        candidates, misclassified_data, num_misclassified, data_idx, candidates_uncert_before = pt.check_for_misclassified_data(
-            candidates, 
-            uncertainty=candidates_uncert_before, 
-            indices=data_idx
-            )
+#        candidates, misclassified_data, num_misclassified, data_idx, candidates_uncert_before = pt.check_for_misclassified_data(
+#            candidates, 
+#            uncertainty=candidates_uncert_before, 
+#            indices=data_idx
+#            )
 
         if cfg['retrain_classifier']:
-            if classifier_buffer is None:
-                classifier_buffer = md.ITGDatasetDF(
-                    misclassified_data, FLUXES[0], keep_index=True
-                )             
-            else:
-                misclassified_data = md.ITGDatasetDF(
-                    misclassified_data, FLUXES[0], keep_index=True
-                )                             
-                classifier_buffer.add(misclassified_data) 
+            classifier_buffer = copy.deepcopy(candidates)
+#            if classifier_buffer is None:
+#                classifier_buffer = md.ITGDatasetDF(
+#                    misclassified_data, FLUXES[0], keep_index=True
+                #)             
+#            else:
+#                misclassified_data = md.ITGDatasetDF(
+#                    misclassified_data, FLUXES[0], keep_index=True
+#                )                             
+#                classifier_buffer.add(misclassified_data) 
             # --- add the candidates (i.e. the unstable) to misclassified set (i.e. the stable)
             # --- so the classifier is trained with both stable and unstable new points
             # --- hopefully  if the manifold is smooth even the points that the classifier got right are informative
             # --- in fact some of these points are probably still very uncertain:
             # --- ToDo:===>>> potentially add only the most uncertain candidates
-            buffer_from_candidates = candidates.sample(len(misclassified_data))
-            classifier_buffer.add(buffer_from_candidates)  
-            buffer_size += len(misclassified_data) + len(buffer_from_candidates)
+#            buffer_from_candidates = candidates.sample(len(misclassified_data))
+#            classifier_buffer.add(buffer_from_candidates)  
+#            buffer_size += len(misclassified_data) + len(buffer_from_candidates)
         
 
         # --- set up retraining by rescaling all points according to new training data --------------------
