@@ -426,6 +426,13 @@ class Regressor(nn.Module):
         losses = []
         losses_unscaled = []
         zs = []
+        loss_0_5 = []
+        loss_20_25 = []
+        loss_40_45 = []
+        loss_60_65 = []
+        loss_60_65 = []
+        loss_80_85 = []
+        popback = []
         for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
             x = x.to(self.device)
             z = z.to(self.device)
@@ -433,16 +440,39 @@ class Regressor(nn.Module):
             loss = self.loss_function(z.unsqueeze(-1).float(), z_hat, unscale=unscale, test=True)
             z_hat = z_hat.squeeze().detach().cpu().numpy()
             if unscale:  
-                losses_unscaled.append(loss[1].item())
+                tmp = loss[1].item()
+                losses_unscaled.append(tmp)
                 loss = loss[0]
                 z = self.unscale(z.squeeze().detach().cpu().numpy())
                 z_hat = self.unscale(z_hat)
-                if mean is not None:
-                    z = z-mean
+                popback.append(len(z_hat[z_hat<0]))
+                z_hat[z_hat<0] = 0
                 try:
-                    zs.extend(z)
+                    m = np.ma.masked_inside(tmp,0,5).mask
+                    loss_0_5.append(tmp[m])
                 except:
-                    zs.extend([z])
+                    pass
+                try:
+                    m = np.ma.masked_inside(tmp,20,25).mask
+                    loss_20_25.append(tmp[m])
+                except:
+                    pass       
+                try:
+                    m = np.ma.masked_inside(tmp,40,45).mask
+                    loss_40_45.append(tmp[m])
+                except:
+                    pass                         
+                try:
+                    m = np.ma.masked_inside(tmp,60,65).mask
+                    loss_60_65.append(tmp[m])
+                except:
+                    pass     
+                try:
+                    m = np.ma.masked_inside(tmp,80,85).mask
+                    loss_80_85.append(tmp[m])
+                except:
+                    pass                     
+
             losses.append(loss.item())
             try:
                 pred.extend(z_hat)
@@ -450,13 +480,12 @@ class Regressor(nn.Module):
                 pred.extend([z_hat])
 
         average_loss = np.sum(losses) / size
-
+        popback = np.sum(popback)/size
         pred = np.asarray(pred, dtype=object).flatten()
-
+        losses_binned = [loss_0_5,loss_20_25,loss_40_45,loss_60_65,loss_80_85]
         if unscale:
             unscaled_avg_loss = np.sum(losses_unscaled) / size
-            unscaled_avg_loss_norm = unscaled_avg_loss/np.sum(np.power(zs,2))*size   #--- MSE/mean_groundtruth is the relative mean squared error
-            return pred, average_loss, unscaled_avg_loss, unscaled_avg_loss_norm
+            return pred, average_loss, unscaled_avg_loss, popback, losses_binned
         return pred, average_loss
 
 
@@ -464,11 +493,11 @@ class Regressor(nn.Module):
 class EnsembleRegressor:
     def __init__(self,num_estimators,device, scaler, flux, model_size='deep', dropout=0.1):
         self.num_estimators = num_estimators
-        self.regressorlist = []
+        self.regressors = []
         self.device = device
         self.type = 'ensemble'
         for i in range(self.num_estimators):
-            self.regressorlist.append(
+            self.regressors.append(
                 Regressor(device, scaler, flux, model_size='deep', dropout=0.1)
             )
     def predict_avg_std(self,dataloader):

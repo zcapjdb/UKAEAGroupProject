@@ -35,7 +35,11 @@ output_dict = {
     "scale_scaler": [],
     "n_train_points": [],
     "n_candidates_classifier":[],
-    
+    "loss_0_5":[],
+    "loss_20_25":[],
+    "loss_40_45":[],
+    "loss_60_65":[],
+    "loss_80_85":[],
     "mse_before": [],
     "mse_after": [],
     "d_mse": [],
@@ -744,6 +748,8 @@ def get_most_uncertain(
     logging.debug(f"Getting most uncertain for: {model.flux}")
     data_copy = copy.deepcopy(dataset)
     n_candidates = out_stds[0].shape[0]
+    #keep = int(n_candidates*keep)
+    keep = 500
 
     if len(out_stds) > 1:
         print('BAZINGA')
@@ -791,13 +797,17 @@ def get_most_uncertain(
     if acquisition == "random":
         logging.info("Using random acquisition")
         # choose random indices
-        uncertain_list_indices = np.random.choice(n_candidates, int(keep * n_candidates), replace=False)
+        #uncertain_list_indices = np.random.choice(n_candidates, int(keep * n_candidates), replace=False)
+        uncertain_list_indices = np.random.choice(n_candidates, keep, replace=False)
         #random_certain is all the indices not in random_idx
         certain_list_indices = np.array(list(set(range(n_candidates)) - set(uncertain_list_indices)))
         
     else:
-        uncertain_list_indices = np.argsort(total_std)[-int(n_candidates*keep):]
-        certain_list_indices = np.argsort(total_std)[:n_candidates-int(n_candidates*keep)]
+        #uncertain_list_indices = np.argsort(total_std)[-int(n_candidates*keep):]
+        uncertain_list_indices = np.argsort(total_std)[-keep:]
+        #certain_list_indices = np.argsort(total_std)[:n_candidates-int(n_candidates*keep)]
+        certain_list_indices = np.argsort(total_std)[:n_candidates-keep)]
+
 
 
     certain_data_idx = idx_arrays[0][certain_list_indices]

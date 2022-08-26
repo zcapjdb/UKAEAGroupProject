@@ -141,7 +141,7 @@ def ALpipeline(cfg):
                 patience=cfg["train_patience"],
             )    
             logging.info(f"Test loss for {FLUX} before pipeline:")
-            _, holdout_loss, holdout_loss_unscaled, popback = models[FLUX]["Regressor"].predict(holdout_set, unscale=True )
+            _, holdout_loss, holdout_loss_unscaled, popback, losses_binned = models[FLUX]["Regressor"].predict(holdout_set, unscale=True )
             logging.info(f"Holdout Loss: {holdout_loss}")
             logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
             output_dict["test_loss_init"].append(holdout_loss)
@@ -365,6 +365,13 @@ def ALpipeline(cfg):
         train_losses, val_losses = [], []
         train_losses_unscaled, val_losses_unscaled = [], []
         holdout_pred_after, holdout_loss, holdout_loss_unscaled,popback = [], [], [],[]
+        loss_0_5 = []
+        loss_20_25 = []
+        loss_40_45 = []
+        loss_60_65 = []
+        loss_60_65 = []
+        loss_80_85 = []        
+
         for FLUX in FLUXES:
             # --- validation on holdout set before regressor is retrained (this is what's needed for AL)
 #            preds, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale=False)
@@ -384,11 +391,17 @@ def ALpipeline(cfg):
             
             logging.info(f"Running prediction on validation data set")
             # --- validation on holdout set after regressor is retrained
-            hold_pred_after, hold_loss, hold_loss_unscaled, popback_ = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
+            hold_pred_after, hold_loss, hold_loss_unscaled, popback_ , losses_binned = models[FLUX]["Regressor"].predict(holdout_set, unscale=True)
             holdout_pred_after.append(hold_pred_after)
             holdout_loss.append(hold_loss)
             holdout_loss_unscaled.append(hold_loss_unscaled)
             popback.append(popback_)
+            loss_0_5.append(losses_binned[0])
+            loss_20_25.append(losses_binned[1])
+            loss_40_45.append(losses_binned[2])
+            loss_60_65.append(losses_binned[3])
+            loss_80_85.append(losses_binned[4]) 
+
             logging.info(f"{FLUX} test loss: {hold_loss}")
             logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
             logging.info(f"{FLUX} test loss unscaled norm: {popback_}")
@@ -407,6 +420,13 @@ def ALpipeline(cfg):
 #        output_dict["retrain_losses_unscaled"].append(train_losses_unscaled)
 #        output_dict["retrain_val_losses_unscaled"].append(val_losses_unscaled)
 #        output_dict["post_test_loss"].append(holdout_loss)
+        output_dict["loss_0_5"].append(loss_0_5)
+        output_dict["loss_20_25"].append(loss_20_25)
+        output_dict["loss_40_45"].append(loss_40_45)
+        output_dict["loss_60_65"].append(loss_60_65)
+        output_dict["loss_80_85"].append(loss_80_85)
+        
+
         output_dict["post_test_loss_unscaled"].append(holdout_loss_unscaled)
         output_dict["popback"].append(popback)
 #        output_dict["scale_scaler"].append(models[FLUXES[0]]["Regressor"].scaler.scale_)
@@ -515,6 +535,6 @@ if __name__=='__main__':
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
     print(f'Done. Saving to {output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}.pkl')
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{keep}_8cf5eba32f32ef1ead3fc8c061843bd21baf1301.pkl","wb") as f:
+    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{acquisition}_classretrain_{retrain}_keepprob{500}_8cf5eba32f32ef1ead3fc8c061843bd21baf1301.pkl","wb") as f:
         pickle.dump(output,f)               
     print('Done.')
