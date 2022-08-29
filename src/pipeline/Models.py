@@ -432,6 +432,12 @@ class Regressor(nn.Module):
         loss_60_65 = []
         loss_60_65 = []
         loss_80_85 = []
+        len_0_5 = []
+        len_20_25 = []
+        len_40_45 = []
+        len_60_65 = []
+        len_60_65 = []
+        len_80_85 = []        
         popback = []
         for batch, (x, y, z, idx) in enumerate(tqdm(dataloader)):
             x = x.to(self.device)
@@ -447,29 +453,35 @@ class Regressor(nn.Module):
                 z_hat = self.unscale(z_hat)
                 popback.append(len(z_hat[z_hat<0]))
                 z_hat[z_hat<0] = 0
+
                 try:
-                    m = np.ma.masked_inside(tmp,0,5).mask
-                    loss_0_5.append(tmp[m])
+                    m = np.ma.masked_inside(z,0,5).mask
+                    loss_0_5.append(np.sum(np.abs(z_hat[m]/z[m]-1)))# self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m])).item())
+                    len_0_5.append(len(z[m]))
                 except:
                     pass
                 try:
-                    m = np.ma.masked_inside(tmp,20,25).mask
-                    loss_20_25.append(tmp[m])
+                    m = np.ma.masked_inside(z,20,25).mask
+                    loss_20_25.append(np.sum(np.abs(z_hat[m]/z[m]-1))) #append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m])).item())
+                    len_20_25.append(len(z[m]))
                 except:
                     pass       
                 try:
-                    m = np.ma.masked_inside(tmp,40,45).mask
-                    loss_40_45.append(tmp[m])
+                    m = np.ma.masked_inside(z,40,45).mask
+                    loss_40_45.append(np.sum(np.abs(z_hat[m]/z[m]-1)))#append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m])).item())
+                    len_40_45.append(len(z[m]))
                 except:
                     pass                         
                 try:
-                    m = np.ma.masked_inside(tmp,60,65).mask
-                    loss_60_65.append(tmp[m])
+                    m = np.ma.masked_inside(z,60,65).mask
+                    loss_60_65.append(np.sum(np.abs(z_hat[m]/z[m]-1)))#append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m]) ).item())
+                    len_60_65.append(len(z[m]))
                 except:
                     pass     
                 try:
-                    m = np.ma.masked_inside(tmp,80,85).mask
-                    loss_80_85.append(tmp[m])
+                    m = np.ma.masked_inside(z,80,85).mask
+                    loss_80_85.append(np.sum(np.abs(z_hat[m]/z[m]-1)))#append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m]) ).item())
+                    len_80_85.append(len(z[m]))
                 except:
                     pass                     
 
@@ -482,7 +494,12 @@ class Regressor(nn.Module):
         average_loss = np.sum(losses) / size
         popback = np.sum(popback)/size
         pred = np.asarray(pred, dtype=object).flatten()
-        losses_binned = [loss_0_5,loss_20_25,loss_40_45,loss_60_65,loss_80_85]
+        losses_binned = [
+            np.sum(loss_0_5)/np.sum(len_0_5),
+            np.sum(loss_20_25)/np.sum(len_20_25), 
+            np.sum(loss_40_45)/np.sum(len_40_45),
+            np.sum(loss_60_65)/np.sum(len_60_65),
+            np.sum(loss_80_85)/np.sum(len_80_85)]
         if unscale:
             unscaled_avg_loss = np.sum(losses_unscaled) / size
             return pred, average_loss, unscaled_avg_loss, popback, losses_binned
