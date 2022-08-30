@@ -748,8 +748,8 @@ def get_most_uncertain(
     logging.debug(f"Getting most uncertain for: {model.flux}")
     data_copy = copy.deepcopy(dataset)
     n_candidates = out_stds[0].shape[0]
-    #keep = int(n_candidates*keep)
-    keep = 500
+    keep = int(n_candidates*keep)
+    #keep = 500
 
     if len(out_stds) > 1:
         print('BAZINGA')
@@ -806,7 +806,7 @@ def get_most_uncertain(
         #uncertain_list_indices = np.argsort(total_std)[-int(n_candidates*keep):]
         uncertain_list_indices = np.argsort(total_std)[-keep:]
         #certain_list_indices = np.argsort(total_std)[:n_candidates-int(n_candidates*keep)]
-        certain_list_indices = np.argsort(total_std)[:n_candidates-keep)]
+        certain_list_indices = np.argsort(total_std)[:n_candidates-keep]
 
 
 
@@ -1027,7 +1027,7 @@ def mse_change(
     else:
         pred_before = prediction_before
         pred_after = prediction_after
-        ground_truth = ground_truth[uncertain_dataste.target]
+        ground_truth = ground_truth[uncertain_dataset.target]
         ground_truth = ground_truth.to_numpy()
 
     mse_before = get_mse(pred_before, ground_truth_subset)

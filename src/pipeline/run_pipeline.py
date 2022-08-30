@@ -118,7 +118,12 @@ def ALpipeline(cfg):
 
     buffer_size = 0
     classifier_buffer = None
-
+    loss_0_5 = []
+    loss_20_25 = []
+    loss_40_45 = []
+    loss_60_65 = []
+    loss_60_65 = []
+    loss_80_85 = []        
     # ------------------------------------------- Load or train first models ------------------------------------------
     if run_mode == 'AL'  or (run_mode=='CL' and first_CL_iter):
         models = {f:{} for f in FLUXES}
@@ -132,7 +137,7 @@ def ALpipeline(cfg):
                     model_size,
                     num_estimators)
 
-            models[FLUX]['Regressor'] = md.train_model(
+            models[FLUX]['Regressor'], losses = md.train_model(
                 models[FLUX]['Regressor'],
                 train_sample,
                 valid_dataset,
@@ -140,6 +145,12 @@ def ALpipeline(cfg):
                 epochs=cfg["train_epochs"],
                 patience=cfg["train_patience"],
             )    
+            output_dict["loss_0_5"].append(losses[-1][0])
+            output_dict["loss_20_25"].append(losses[-1][1])
+            output_dict["loss_40_45"].append(losses[-1][2])
+            output_dict["loss_60_65"].append(losses[-1][3])
+            output_dict["loss_80_85"].append(losses[-1][4])
+
             logging.info(f"Test loss for {FLUX} before pipeline:")
             _, holdout_loss, holdout_loss_unscaled, popback, losses_binned = models[FLUX]["Regressor"].predict(holdout_set, unscale=True )
             logging.info(f"Holdout Loss: {holdout_loss}")
@@ -147,21 +158,21 @@ def ALpipeline(cfg):
             output_dict["test_loss_init"].append(holdout_loss)
             output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
 
-        models[FLUXES[0]]['Classifier'] = Classifier(device)
-        models[FLUXES[0]]['Classifier'] = md.train_model(
-                models[FLUXES[0]]['Classifier'],
-                train_classifier,
-                valid_classifier,
+#        models[FLUXES[0]]['Classifier'] = Classifier(device)
+#        models[FLUXES[0]]['Classifier'] = md.train_model(
+#                models[FLUXES[0]]['Classifier'],
+#                train_classifier,
+#                valid_classifier,
               #  save_path=PRETRAINED[model][FLUXES[0]]["save_path"],
-                epochs=cfg["train_epochs"],
-                patience=cfg["train_patience"],
-            )            
-        _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
-        output_dict['class_test_acc_init'].append(holdout_class_losses[1])
-        output_dict['class_precision_init'].append(holdout_class_losses[2])
-        output_dict['class_recall_init'].append(holdout_class_losses[3])
-        output_dict['class_f1_init'].append(holdout_class_losses[4])
-        output_dict['class_auc_init'].append(holdout_class_losses[5])
+#                epochs=cfg["train_epochs"],
+#                patience=cfg["train_patience"],
+ #           )            
+ #       _, holdout_class_losses = models[FLUXES[0]]["Classifier"].predict(holdout_classifier) 
+ #       output_dict['class_test_acc_init'].append(holdout_class_losses[1])
+ #       output_dict['class_precision_init'].append(holdout_class_losses[2])
+ #       output_dict['class_recall_init'].append(holdout_class_losses[3])
+ #       output_dict['class_f1_init'].append(holdout_class_losses[4])
+ #       output_dict['class_auc_init'].append(holdout_class_losses[5])
     else:
         pass # --- models are passed from CL pipeline     
 
@@ -308,7 +319,7 @@ def ALpipeline(cfg):
        # plt.hist(candidates.data['efiitg_gb'], bins=bins, color='orange', histtype='step', label='candidates', density=True,lw=2)
        # plt.hist(train_sample.data['efiitg_gb'],bins=bins, color='blue', alpha=0.2, label='train', density=True)
        # plt.hist(holdout_plot.data['efiitg_gb'], bins=bins, color='red',histtype='step',label='test', density=True,lw=2)
-       # plt.title(f'iteration number {i}')       
+       # plt.title(f'iteration number {i}')       32.807171
 
         # --- get new scaler from enriched training set, rescale them with new scaler
         scaler = StandardScaler()

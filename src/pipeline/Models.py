@@ -749,6 +749,7 @@ def train_model(
     losses_unscaled = []
     validation_losses = []
     validation_losses_unscaled = []
+    validation_losses_binned = []
     train_accuracy = []
     val_accuracy = []
 
@@ -758,7 +759,12 @@ def train_model(
     if model.type not in ["classifier", "regressor"]:
         raise ValueError("Model type not recognised")
 
-
+    loss_0_5 = []
+    loss_20_25 = []
+    loss_40_45 = []
+    loss_60_65 = []
+    loss_60_65 = []
+    loss_80_85 = []       
     for epoch in  range(epochs):
 
         logging.debug(f"Epoch: {epoch}")
@@ -781,9 +787,15 @@ def train_model(
             losses_unscaled.append(loss_unscaled)
             print(losses, losses_unscaled)
 
-            val_loss, val_loss_unscaled = model.validation_step(val_loader)
+            pred,val_loss, val_loss_unscaled,_,losses_binned = model.predict(val_loader, unscale= True)
             validation_losses.append(val_loss)
             validation_losses_unscaled.append(val_loss_unscaled)
+            loss_0_5.append(losses_binned[0])
+            loss_20_25.append(losses_binned[1])
+            loss_40_45.append(losses_binned[2])
+            loss_60_65.append(losses_binned[3])
+            loss_80_85.append(losses_binned[4])
+
 
             stopping_metric = np.asarray(validation_losses)
         # if validation metric is not better than the average of the last n losses then stop
@@ -816,7 +828,8 @@ def train_model(
         return model#, [losses, train_accuracy, validation_losses, val_accuracy]
 
     elif model.type == "regressor":
-        return model#, [losses, losses_unscaled, validation_losses, validation_losses_unscaled] 
+        validation_losses_binned = [loss_0_5,loss_20_25,loss_40_45,loss_60_65,loss_80_85]
+        return model, [losses, losses_unscaled, validation_losses, validation_losses_unscaled, validation_losses_binned] 
 
 
 def load_model(model, save_path, device, scaler, flux, dropout):
