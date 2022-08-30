@@ -150,6 +150,7 @@ def ALpipeline(cfg):
             output_dict["loss_40_45"].append(losses[-1][2])
             output_dict["loss_60_65"].append(losses[-1][3])
             output_dict["loss_80_85"].append(losses[-1][4])
+            output_dict["retrain_val_losses_unscaled"].append(losses[-2])
 
             logging.info(f"Test loss for {FLUX} before pipeline:")
             _, holdout_loss, holdout_loss_unscaled, popback, losses_binned = models[FLUX]["Regressor"].predict(holdout_set, unscale=True )
@@ -157,6 +158,7 @@ def ALpipeline(cfg):
             logging.info(f"Holdout Loss Unscaled: {holdout_loss_unscaled}")
             output_dict["test_loss_init"].append(holdout_loss)
             output_dict["test_loss_init_unscaled"].append(holdout_loss_unscaled)
+            
 
 #        models[FLUXES[0]]['Classifier'] = Classifier(device)
 #        models[FLUXES[0]]['Classifier'] = md.train_model(
