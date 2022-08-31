@@ -456,31 +456,31 @@ class Regressor(nn.Module):
 
                 try:
                     m = np.ma.masked_inside(z,0,5).mask
-                    loss_0_5.append(np.sum(np.abs(z_hat[m]/z[m]-1)))# self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m])).item())
+                    loss_0_5.append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m])).item())
                     len_0_5.append(len(z[m]))
                 except:
                     pass
                 try:
                     m = np.ma.masked_inside(z,20,25).mask
-                    loss_20_25.append(np.sum(np.abs(z_hat[m]/z[m]-1))) #append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m])).item())
+                    loss_20_25.append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m])).item())
                     len_20_25.append(len(z[m]))
                 except:
                     pass       
                 try:
                     m = np.ma.masked_inside(z,40,45).mask
-                    loss_40_45.append(np.sum(np.abs(z_hat[m]/z[m]-1)))#append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m])).item())
+                    loss_40_45.append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m])).item())
                     len_40_45.append(len(z[m]))
                 except:
                     pass                         
                 try:
                     m = np.ma.masked_inside(z,60,65).mask
-                    loss_60_65.append(np.sum(np.abs(z_hat[m]/z[m]-1)))#append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m]) ).item())
+                    loss_60_65.append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m]) ).item())
                     len_60_65.append(len(z[m]))
                 except:
                     pass     
                 try:
                     m = np.ma.masked_inside(z,80,85).mask
-                    loss_80_85.append(np.sum(np.abs(z_hat[m]/z[m]-1)))#append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m]) ).item())
+                    loss_80_85.append(self.loss_function(torch.Tensor(z[m]), torch.Tensor(z_hat[m]) ).item())
                     len_80_85.append(len(z[m]))
                 except:
                     pass                     
