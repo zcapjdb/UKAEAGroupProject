@@ -1,4 +1,3 @@
-from email.policy import default
 import coloredlogs, verboselogs, logging
 import matplotlib.pylab as plt
 from multiprocessing import Pool
@@ -109,6 +108,8 @@ def ALpipeline(cfg):
     holdout_set.data = holdout_set.data.drop(holdout_set.data[holdout_set.data["stable_label"] == 0].index)
     holdout_plot = copy.deepcopy(holdout_set)
     holdout_plot.scale(scaler, unscale=True)
+
+    output_dict["holdout_real"] = holdout_set
 
     eval_regressor = copy.deepcopy(eval_dataset)
     eval_regressor.data = eval_regressor.data.drop(eval_regressor.data[eval_regressor.data["stable_label"] == 0].index)
@@ -307,7 +308,7 @@ def ALpipeline(cfg):
         holdout_set.scale(scaler, unscale=True)
         holdout_classifier.scale(scaler, unscale=True)
 
-       # bins = np.arange(-50,100)
+       #bins = np.arange(-50,100)
        # plt.hist(candidates.data['efiitg_gb'], bins=bins, color='orange', histtype='step', label='candidates', density=True,lw=2)
        # plt.hist(train_sample.data['efiitg_gb'],bins=bins, color='blue', alpha=0.2, label='train', density=True)
        # plt.hist(holdout_plot.data['efiitg_gb'], bins=bins, color='red',histtype='step',label='test - at beginning', density=True,lw=4)
@@ -315,7 +316,12 @@ def ALpipeline(cfg):
         
 
         if classifier_buffer is not None:
-            classifier_buffer.scale(scaler, unscale=True)        
+            try:
+                classifier_buffer.scale(scaler, unscale=True)     
+
+            except:
+                logging.debug("classifier buffer is empty")
+                pass   
 
         # --- train data is enriched by new unstable candidate points
         logging.info(f"Enriching training data with {len(candidates)} new points")
@@ -337,8 +343,17 @@ def ALpipeline(cfg):
         #--- update scaler in the models
        #  TODO: WHY does this make it worse???
         if scaleregressor:
+            labels, scales, means = [], [], []
             for FLUX in FLUXES:
                 models[FLUX]["Regressor"].scaler = scaler
+
+                labels.append(scaler.feature_names_in_)
+                scales.append(scaler.scale_)
+                means.append(scaler.mean_)
+
+            output_dict["scaler_labels"].append(labels)
+            output_dict["scaler_scale"].append(scales)
+            output_dict["scaler_mean"].append(means)
 
 
         # --- Classifier retraining:
@@ -386,7 +401,7 @@ def ALpipeline(cfg):
         train_losses_unscaled, val_losses_unscaled = [], []
         holdout_pred_after, holdout_loss, holdout_loss_unscaled = [], [], []
         for FLUX in FLUXES:
-            preds, _ = models[FLUX]["Regressor"].predict(holdout_set)
+            TEST, preds, _, _ = models[FLUX]["Regressor"].predict(holdout_set, unscale = True)
             holdout_pred_before.append(preds)
 
             retrain_losses = pt.retrain_regressor(
@@ -418,43 +433,43 @@ def ALpipeline(cfg):
             logging.info(f"{FLUX} test loss unscaled: {hold_loss_unscaled}")
   
 
-        candidates_uncerts_after, data_idxs_after = [], []
+        # candidates_uncerts_after, data_idxs_after = [], []
 
-        for FLUX in FLUXES:
-            temp_uncert, temp_idx = pt.get_uncertainty(
-                candidates,
-                models[FLUX]["Regressor"],
-                n_runs=cfg["MC_dropout_runs"],
-                device=device,
-            )
+        # for FLUX in FLUXES:
+        #     temp_uncert, temp_idx = pt.get_uncertainty(
+        #         candidates,
+        #         models[FLUX]["Regressor"],
+        #         n_runs=cfg["MC_dropout_runs"],
+        #         device=device,
+        #     )
 
-            candidates_uncerts_after.append(temp_uncert)
-            data_idxs_after.append(temp_idx)
+        #     candidates_uncerts_after.append(temp_uncert)
+        #     data_idxs_after.append(temp_idx)
         
-        candidates_uncert_after = pt.reorder_arrays(
-            candidates_uncerts_after,
-            data_idxs_after,
-            data_idx
-            )
+        # candidates_uncert_after = pt.reorder_arrays(
+        #     candidates_uncerts_after,
+        #     data_idxs_after,
+        #     data_idx
+        #     )
         
-        candidates_uncert_after = np.array(candidates_uncert_after)
-        candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
+        # candidates_uncert_after = np.array(candidates_uncert_after)
+        # candidates_uncert_after = np.sum(candidates_uncert_after, axis = 0)
 
-        logging.info("Change in uncertainty for most uncertain data points:")
+        # logging.info("Change in uncertainty for most uncertain data points:")
 
-        output_dict["d_novel_uncert"].append(
-            pt.uncertainty_change(
-                x=candidates_uncert_before,
-                y=candidates_uncert_after,
-                plot_title="Novel data",
-                iteration=i,
-                save_path=save_dest,
-            )
-        )
+        # output_dict["d_novel_uncert"].append(
+        #     pt.uncertainty_change(
+        #         x=candidates_uncert_before,
+        #         y=candidates_uncert_after,
+        #         plot_title="Novel data",
+        #         iteration=i,
+        #         save_path=save_dest,
+        #     )
+        # )
 
 
-        output_dict["novel_uncert_before"].append(candidates_uncert_before)
-        output_dict["novel_uncert_after"].append(candidates_uncert_after)
+        # output_dict["novel_uncert_before"].append(candidates_uncert_before)
+        # output_dict["novel_uncert_after"].append(candidates_uncert_after)
 
         output_dict["holdout_pred_before"].append(
             holdout_pred_before
@@ -473,10 +488,10 @@ def ALpipeline(cfg):
             os.makedirs(outdir, exist_ok=True)
 
                             
-        plt.hist(holdout_pred_after, bins=bins, color='magenta',histtype='step',label='prediction', density=True, ls='--', lw=4)
-        plt.legend()
-        plt.savefig(f'{outdir}/hist{i}_{scaling}.png')
-        plt.close()
+        #plt.hist(holdout_pred_after, bins=50, color='magenta',histtype='step',label='prediction', density=True, ls='--', lw=4)
+        #plt.legend()
+        #plt.savefig(f'{outdir}/hist{i}_{scaling}.png')
+        #plt.close()
         
 #        outdir = f"./debug/deltahist/"
 #        if not os.path.exists(outdir):
@@ -505,13 +520,16 @@ def ALpipeline(cfg):
 
         holdout_plot_2 = copy.deepcopy(holdout_set)
         holdout_plot_2.scale(scaler, unscale=True) 
-        plt.scatter(holdout_plot.data['efiitg_gb'],hold_pred_after) 
-        plt.ylabel('yhat')
-        plt.ylim(-50,150)
-        plt.xlabel('y ')
-        plt.plot(bins,bins, lw=4, color='red')
-        plt.savefig(f'{outdir}/scatter{i}_{scaling}.png')
-        plt.close()
+        #plt.scatter(holdout_plot.data['efiitg_gb'],hold_pred_after) 
+        #plt.ylabel('yhat')
+        #plt.ylim(-50,150)
+        #plt.xlabel('y ')
+        #plt.plot(
+        #    np.linspace(holdout_plot.data['efiitg_gb'].min(), holdout_plot.data['efiitg_gb'].max()),
+        #    np.linspace(holdout_plot.data['efiitg_gb'].min(), holdout_plot.data['efiitg_gb'].max()),
+        #    lw=4, color='red')
+        #plt.savefig(f'{outdir}/scatter{i}_{scaling}.png')
+        #plt.close()
 
         try:
             output_dict["mse_before"].append(
@@ -610,11 +628,14 @@ if __name__=='__main__':
     
     if args.output_dir is None:
         total = int(Ntrain+0.2*Ncand*0.25*Niter)  #--- assuming ITG (20%) and current strategy for the acquisition (upper quartile of uncertainty)
-        output_dir = f"../.../outputs/{total}_{Ntrain}/"
+        #output_dir = f"../.../outputs/{total}_{Ntrain}/"
+        output_dir = SAVE_PATHS["outputs"]
 
     else:
         output_dir = args.output_dir
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
-    with open(f"{output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_{scaling}.pkl","wb") as f:
+    
+    logging.info(f"Saving outputs to {output_dir}bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_{scaling}.pkl")
+    with open(f"{output_dir}/bootstrapped_AL_lam_{lam}_{model_size}_classretrain_{retrain}_{scaling}.pkl","wb") as f:
         pickle.dump(output,f)                                

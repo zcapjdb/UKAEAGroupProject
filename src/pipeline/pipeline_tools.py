@@ -62,6 +62,10 @@ output_dict = {
     "holdout_class_f1": [],
     "holdout_class_auc": [],
     "class_retrain_iterations": [],
+    "scaler_scale": [],
+    "scaler_mean": [],
+    "scaler_labels": [],
+    "holdout_real": [],
 }
 
 

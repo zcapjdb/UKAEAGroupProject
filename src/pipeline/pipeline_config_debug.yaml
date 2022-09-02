@@ -1,48 +1,52 @@
 flux: [efiitg_gb] #, efeitg_gb_div_efiitg_gb]
 
 data:
-  train: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/train_data_clipped.pkl"
-  validation: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/valid_data_clipped.pkl"
-  test: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/data/test_data_clipped.pkl"
+  train: /share/rcifdata/jbarr/UKAEAGroupProject/qlk/train_data_clipped_new.pkl
+  validation: /share/rcifdata/jbarr/UKAEAGroupProject/qlk/valid_data_clipped_new.pkl
+  test: /share/rcifdata/jbarr/UKAEAGroupProject/qlk/test_data_clipped_new.pkl
 save_paths:
-  plots: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/plots/"
-  outputs: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/outputs/"
+  plots: /share/rcifdata/jbarr/UKAEAGroupProject/plots/ICML/no_class_rand_100
+  outputs: /share/rcifdata/jbarr/UKAEAGroupProject/outputs/ICML/no_class_rand_100
 
 Nbootstraps: 10
 retrain_classifier: True
 retrain_regressor: True
-use_classifier: True
+use_classifier: False
 scaling: "withscaling"
 
 # Use pre-trained model or train from scratch
 pretrained:
   Classifier:
       efiitg_gb:
-          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ITGclassifier.pt"
+          save_path: /share/rcifdata/jbarr/UKAEAGroupProject/models/new/class_debug.pt
           trained: False
       efetem_gb:
-          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/TEMclassifier.pt"
-          trained: False
+          save_path: /share/rcifdata/jbarr/UKAEAGroupProject/models/v1/etg_class_20K.pt
+          trained: True
       efeetg_gb:
-          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ETGclassifier.pt"
-          trained: False
+          save_path: /share/rcifdata/jbarr/UKAEAGroupProject/models/v1/tem_class_20K.pt
+          trained: True
   Regressor:
       efiitg_gb:
-          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ITGregressor.pt"
+          save_path: /share/rcifdata/jbarr/UKAEAGroupProject/models/new/itg_reg_20K_new.pt
           trained: False
       efetem_gb:
-          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/TEMclassifier.pt"
-          trained: False
-      efeetg_gb:
-          save_path: "/home/ir-zani1/rds/rds-ukaea-ap001/ir-zani1/qualikiz/UKAEAGroupProject/saved/ETGclassifier.pt"
+          save_path: /share/rcifdata/jbarr/UKAEAGroupProject/models/v1/etg_reg_20K.pt
           trained: True
+      efeetg_gb:
+          save_path: /share/rcifdata/jbarr/UKAEAGroupProject/models/v1/tem_reg_50K.pt
+          trained: True
+      efeitg_gb_div_efiitg_gb:
+          save_path: /share/rcifdata/jbarr/UKAEAGroupProject/models/new/class_debug.pt
+          #/share/rcifdata/tmadula/data/UKAEA/baselines/regressors/random_efeitg_gb_div_efiitg_gb_5286_regressor.pt
+          trained: False
 
 hyperparams:
     train_size: 5_000
     valid_size: 10_000
     test_size:  50_000
-    candidate_size: 10_000 
-    batch_size: 256
+    candidate_size: 2_100 #10_000 
+    batch_size: 1024
     lambda: 1
     buffer_size: 200
     dropout: 0.1
@@ -50,13 +54,13 @@ hyperparams:
 
 logging_level: DEBUG
 # Pipeline parameters
-iterations: 20
+iterations: 100
 initial_epochs: 100
 MC_dropout_runs: 50
 keep_prob: 0.25 
 patience: 30
 learning_rate: 0.001
-acquisition: individual_uncertainty # add_uncertainties #, random, distance_penalty
+acquisition:  random #individual_uncertainty # add_uncertainties #, random, distance_penalty
 
 # if training models from scratch, the hyperparameters below are used
 sample_size_debug: 0.1
